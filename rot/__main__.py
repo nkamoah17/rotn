@@ -314,10 +314,50 @@ def _cmd_check_mcp(args):
     return report.exit_code()
 
 
+def _cmd_check_manifest(args):
+    """Audit an MCP Manifest v1 (``--manifest``); Phase B, B2.
+
+    Parses and validates the manifest (:mod:`rot.mcp_manifest`), runs the two
+    structural checks (field permission + tenant isolation) via
+    :func:`rot.mcp_adapter.audit_manifest`, writes the JSON artifact, and
+    renders the blog-ready narrative. The exit code is the report's gate
+    outcome (0 PASS / 1 BLOCK).
+    """
+    import rot.mcp_adapter as mcp
+    import rot.mcp_manifest as mm
+
+    manifest_path = args.manifest
+    try:
+        manifest = mm.parse_manifest_file(manifest_path)
+    except (mm.McpManifestError, OSError) as exc:
+        print("ERROR: %s" % exc, file=sys.stderr)
+        return EXIT_ERROR
+
+    report = mcp.audit_manifest(manifest)
+
+    # Write the JSON artifact (the MCP/CI artifact).
+    out_dir = args.out or os.path.join(_repo_root(), "out")
+    _ensure_dir(out_dir)
+    report_path = os.path.join(out_dir, "mcp_findings.json")
+    with open(report_path, "w") as fh:
+        fh.write(report.to_json() + "\n")
+
+    if not getattr(args, "quiet", False):
+        print(mcp.render_narrative(report))
+        print("  report    : %s" % report_path)
+    return report.exit_code()
+
+
 def cmd_check(args):
     """Verify a policy; on VIOLATED emit narrative + attack.jsonl."""
     if getattr(args, "mcp", False):
         return _cmd_check_mcp(args)
+    if getattr(args, "manifest", None):
+        return _cmd_check_manifest(args)
+    if not args.policy:
+        print("ERROR: specify --policy FILE or --manifest FILE",
+              file=sys.stderr)
+        return EXIT_ERROR
     policy = args.policy
     import rot.frontends.policy as fe
     try:
@@ -523,6 +563,9 @@ def _sarif(status, prop, witness, policy):
 def cmd_ci(args):
     """CI gate: verdict + JUnit XML + SARIF artifacts."""
     policy = args.policy
+    if not policy:
+        print("ERROR: rot ci requires --policy FILE", file=sys.stderr)
+        return EXIT_ERROR
     import rot.frontends.policy as fe
     try:
         ir = _build_ir(policy, args)
@@ -833,7 +876,7 @@ def _corpus_matrix_markdown(report):
 # ---------------------------------------------------------------------------
 
 def _add_policy_opts(p):
-    p.add_argument("--policy", required=True, metavar="FILE",
+    p.add_argument("--policy", default=None, metavar="FILE",
                    help="policy file (.dw / .cedar / .json)")
     p.add_argument("--max-inflight", type=int, default=None, metavar="K",
                    help="bounded concurrency pool K (spend-cap .dw policies)")
@@ -874,6 +917,9 @@ def main(argv=None):
     p.add_argument("--tools", default=None, metavar="FILE",
                    help="tools catalog (tools.json) enabling the --mcp "
                         "'unreachable rules' structural check")
+    p.add_argument("--manifest", default=None, metavar="FILE",
+                   help="MCP Manifest v1 JSON file (Phase B, B2): field and "
+                        "tenant structural checks via rot.mcp_adapter")
     p.add_argument("--quiet", action="store_true",
                    help="suppress the human summary")
 

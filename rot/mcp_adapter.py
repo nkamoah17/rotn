@@ -506,6 +506,162 @@ def audit_mcp(allowed, denied, tools=None, horizon=12, max_states=200000):
         any_unknown=any_unknown,
     )
 
+# ---------------------------------------------------------------------------
+# MCP Manifest v1 (Phase B, B2): field/tenant structural checks
+# ---------------------------------------------------------------------------
+
+def _field_tenant(field):
+    """The tenant a field is namespaced under, or ``None`` if it is global.
+
+    A field namespaced under a tenant uses the same ``tenant:<id>`` namespace
+    as ``tenant_scope`` (e.g. ``tenant:acme.account.balance``). A field with
+    no such prefix (e.g. ``account.balance``) is *global* (shared data) and
+    belongs to no tenant, so it is never a cross-tenant read.
+    """
+    if isinstance(field, str) and field.startswith("tenant:"):
+        rest = field[len("tenant:"):]
+        dot = rest.find(".")
+        return "tenant:" + (rest[:dot] if dot >= 0 else rest)
+    return None
+
+
+def _is_cross_tenant(field, scope):
+    """True if reading ``field`` is *outside* the tool's ``scope``.
+
+    A global field (no tenant namespace) is never cross-tenant. A
+    tenant-namespaced field is cross-tenant unless its tenant is exactly the
+    tool's effective ``scope`` (a ``None`` scope means the tool is not bound
+    to any tenant, so a tenant-namespaced read is out of scope).
+    """
+    ft = _field_tenant(field)
+    if ft is None:
+        return False
+    return ft != scope
+
+
+def _manifest_hash(manifest):
+    """A deterministic SHA-256 over the manifest's canonical dict."""
+    import hashlib
+    canonical = json.dumps(manifest.to_dict(), sort_keys=True,
+                           default=_json_default)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def manifest_findings(manifest):
+    """Cedar-AR structural findings for an MCP Manifest v1.
+
+    Two checks, both **Overly Permissive**:
+
+    * **field permission** -- a tool's ``write_fields`` must be a subset of
+      the manifest's ``allowed_write_fields`` (the tenant's write set).
+      ``write_fields ⊄ allowed_write_fields`` -> Overly Permissive. (An
+      empty/absent write set permits no writes -- fail-closed.)
+    * **tenant isolation** -- a tool's ``read_fields`` must stay within its
+      (effective) ``tenant_scope``. A read field namespaced under a *different*
+      tenant is a cross-tenant read -> Overly Permissive.
+
+    Parameters
+    ----------
+    manifest : rot.mcp_manifest.McpManifest
+        A validated manifest (see :mod:`rot.mcp_manifest`).
+
+    Returns
+    -------
+    list[Finding]
+        The findings in a stable order (tools in manifest order; field
+        permission before tenant isolation per tool).
+    """
+    findings = []
+    allowed_write = set(manifest.allowed_write_fields)
+
+    for tool in manifest.tools:
+        scope = manifest.effective_tenant_scope(tool)
+
+        # 1. Field permission: write_fields must be a subset of the write set.
+        over_write = sorted(set(tool.write_fields) - allowed_write)
+        if over_write:
+            findings.append(Finding(
+                finding=FINDING_OVERLY_PERMISSIVE,
+                facet="policy",
+                severity=SEVERITY_ERROR,
+                property_name="field_write_permission",
+                message=("tool %r writes field(s) %s not in the tenant's "
+                         "allowed write set %s"
+                         % (tool.name, over_write, sorted(allowed_write))),
+                witness={
+                    "tool": tool.name,
+                    "write_fields": list(tool.write_fields),
+                    "allowed_write_fields": sorted(allowed_write),
+                    "over_permission": over_write,
+                },
+                evidence={"check": "write_fields ⊆ allowed_write_fields"},
+            ))
+
+        # 2. Tenant isolation: read_fields must stay within tenant_scope.
+        cross = sorted(f for f in tool.read_fields
+                       if _is_cross_tenant(f, scope))
+        if cross:
+            findings.append(Finding(
+                finding=FINDING_OVERLY_PERMISSIVE,
+                facet="policy",
+                severity=SEVERITY_ERROR,
+                property_name="tenant_read_isolation",
+                message=("tool %r reads cross-tenant field(s) %s outside its "
+                         "tenant_scope %r"
+                         % (tool.name, cross, scope)),
+                witness={
+                    "tool": tool.name,
+                    "read_fields": list(tool.read_fields),
+                    "tenant_scope": scope,
+                    "cross_tenant_fields": cross,
+                },
+                evidence={"check": "read_fields within tenant_scope"},
+            ))
+
+    return findings
+
+
+def audit_manifest(manifest):
+    """Run the MCP Manifest v1 structural audit (Phase B, B2).
+
+    This is the single entry point for the ``rot check --manifest`` adoption
+    surface. It performs the two pure structural checks (field permission and
+    tenant isolation) over the manifest's tool catalog and maps them to the
+    Cedar-AR ``Overly Permissive`` finding. It does not run the temporal
+    (three-facet) audit -- that is the ``--mcp`` (allowed/denied) surface.
+
+    Parameters
+    ----------
+    manifest : rot.mcp_manifest.McpManifest
+        A validated manifest (see :mod:`rot.mcp_manifest`).
+
+    Returns
+    -------
+    McpFindingsReport
+        The findings report (``facets`` are ``skipped`` stubs -- the manifest
+        audit is structural, not temporal).
+    """
+    findings = manifest_findings(manifest)
+    policy_info = {
+        "server": manifest.server,
+        "version": manifest.version,
+        "tenant_scope": manifest.tenant_scope,
+        "allowed_write_fields": sorted(manifest.allowed_write_fields),
+        "hash": _manifest_hash(manifest),
+    }
+    return McpFindingsReport(
+        policy=policy_info,
+        tools=manifest.tool_names(),
+        facets=_skipped_facets(
+            "manifest audit is structural (no temporal model)"),
+        findings=findings,
+        any_unknown=False,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Human-readable (blog-ready) rendering
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Human-readable (blog-ready) rendering
@@ -520,8 +676,18 @@ def render_narrative(report):
     lines = []
     lines.append("ROTN MCP findings  (Cedar-AR vocabulary, temporal proof)")
     lines.append("=" * 52)
-    lines.append("policy   allowed=%s" % (report.policy.get("allowed", []),))
-    lines.append("         denied=%s" % (report.policy.get("denied", []),))
+    policy = report.policy or {}
+    is_manifest = ("allowed" not in policy and "denied" not in policy)
+    if is_manifest:
+        # A manifest report (Phase B, B2) carries manifest provenance.
+        lines.append("manifest server=%s  version=%s"
+                     % (policy.get("server"), policy.get("version")))
+        lines.append("         tenant_scope=%s  allowed_write_fields=%s"
+                     % (policy.get("tenant_scope"),
+                        policy.get("allowed_write_fields", [])))
+    else:
+        lines.append("policy   allowed=%s" % (policy.get("allowed", []),))
+        lines.append("         denied=%s" % (policy.get("denied", []),))
     if report.tools:
         lines.append("tools    %s" % ", ".join(report.tools))
     lines.append("")
@@ -530,6 +696,9 @@ def render_narrative(report):
         if report.any_unknown:
             lines.append("RESULT: OUT_OF_SCOPE -- the bounded search did not "
                          "complete; no definite finding, but not a proof")
+        elif is_manifest:
+            lines.append("RESULT: PASS -- field and tenant structural checks "
+                         "clean; no Cedar-AR findings")
         else:
             lines.append("RESULT: PASS -- all three facets proven; no "
                          "Cedar-AR findings")

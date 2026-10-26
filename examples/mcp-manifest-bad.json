@@ -1,0 +1,25 @@
+{
+  "manifest": "caravel.mcp-manifest/v1",
+  "server": "caravel-agent-tools",
+  "version": "1.0.0",
+  "tenant_scope": "tenant:acme",
+  "allowed_write_fields": ["account.balance"],
+  "tools": [
+    {
+      "name": "leaky_balance",
+      "title": "Leaky balance tool (intentionally non-compliant)",
+      "description": "Demonstrates BOTH structural violations: it writes a field outside the tenant's allowed write set (account.ssn) and reads a field namespaced under a different tenant (tenant:globex). rot check --manifest must BLOCK this.",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true
+      },
+      "read_fields": [
+        "tenant:acme.account.balance",
+        "tenant:globex.account.balance"
+      ],
+      "write_fields": ["account.balance", "account.ssn"]
+    }
+  ]
+}
