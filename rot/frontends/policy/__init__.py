@@ -54,7 +54,7 @@ def _split_ext(path):
 
 
 def build_ir(policy_path, tools_path=None, n_steps=1, kind=None,
-             max_inflight=None, amount=None, cap=None):
+             max_inflight=None, amount=None, cap=None, window=None):
     """Build a ``ProtocolIR`` from a policy file.
 
     Parameters
@@ -89,6 +89,11 @@ def build_ir(policy_path, tools_path=None, n_steps=1, kind=None,
     cap : int or None
         The policy's cap (``.dw`` SPENDCAP family only); ``None`` uses the
         policy's own cap (or :data:`rot.spendcap.CAP` for a document).
+    window : int or None
+        The temporal window as a bounded event count ``W`` (``.dw`` SPENDCAP
+        family only).  ``None`` uses :data:`rot.spendcap.MAX_WINDOW` (4).
+        A ``FormerlyWithin`` window is approximated as "the last ``W``
+        events"; recorded in the IR metadata (``window`` / ``dw_window``).
 
     Returns
     -------
@@ -152,7 +157,7 @@ def build_ir(policy_path, tools_path=None, n_steps=1, kind=None,
         from . import dw as _dw
         return _dw.build_ir(policy_path, tools_path=tools_path,
                             n_steps=n_steps, max_inflight=max_inflight,
-                            amount=amount, cap=cap)
+                            amount=amount, cap=cap, window=window)
     if ext == ".json":
         from . import dogwood as _dogwood
         return _dogwood.build_ir(policy_path, tools_path=tools_path,

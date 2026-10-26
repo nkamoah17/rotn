@@ -71,6 +71,7 @@ __all__ = [
     "AMOUNT",
     "CAP",
     "MAX_INFLIGHT",
+    "MAX_WINDOW",
     "build_ir",
     "spend_ok_guard_buggy",
     "spend_ok_guard_correct",
@@ -87,6 +88,19 @@ CAP = 200
 #: not the policy.  Overridable per run via :func:`build_ir`
 #: (``max_inflight=K``) / the CLI (``--max-inflight K``).
 MAX_INFLIGHT = 4
+
+
+#: Default temporal-window bound (``W``).  Dogwood's ``formerly within
+#: <window>`` is a *time* bound (e.g. ``24h``) that finite model checking
+#: cannot represent -- the model is time-free, so the window is approximated
+#: as a *bounded event count*: "at most ``W`` events are live inside the
+#: window".  A modeling parameter (like :data:`MAX_INFLIGHT`), recorded in the
+#: IR metadata (``window``) and surfaced in the verdict's
+#: ``abstraction_manifest`` so reports state the discretization a verdict was
+#: produced under.  The original time token (e.g. ``"24h"``) is preserved
+#: verbatim as the ``dw_window`` provenance tag.  Overridable per run via
+#: :func:`build_ir` (``window=W``) / the CLI (``--window W``).
+MAX_WINDOW = 4
 
 
 def spend_ok_guard_buggy(amount=AMOUNT, cap=CAP):
@@ -136,7 +150,8 @@ def within_cap_property(amount=AMOUNT, cap=CAP):
                     ir.C(cap))
 
 
-def build_ir(n=1, buggy=False, max_inflight=MAX_INFLIGHT, amount=AMOUNT, cap=CAP):
+def build_ir(n=1, buggy=False, max_inflight=MAX_INFLIGHT, amount=AMOUNT, cap=CAP,
+             window=MAX_WINDOW):
     """Build the spendcap IR.
 
     ``n`` is accepted for registry uniformity (this slice is a single
@@ -168,6 +183,11 @@ def build_ir(n=1, buggy=False, max_inflight=MAX_INFLIGHT, amount=AMOUNT, cap=CAP
         raise ValueError(
             "max_inflight (K) must be an integer >= 1 (got %r)"
             % (max_inflight,))
+    w = int(window)
+    if w < 1:
+        raise ValueError(
+            "window (W) must be an integer >= 1 (got %r)"
+            % (window,))
     if buggy:
         name = "spendcap-buggy"
         decision = spend_ok_guard_buggy(amount, cap)
@@ -231,5 +251,5 @@ def build_ir(n=1, buggy=False, max_inflight=MAX_INFLIGHT, amount=AMOUNT, cap=CAP
         source_path="tests/fixtures/aws_dogwood/spendcap",
         metadata={"protocol": "SPENDCAP", "target": "spendcap",
                   "buggy": buggy, "amount": amount, "cap": cap,
-                  "max_inflight": k},
+                  "max_inflight": k, "window": w},
     )

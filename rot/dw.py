@@ -194,7 +194,8 @@ class DwPolicy(object):
         return self.is_buggy == bool(buggy)
 
     # -- bridge to the IR ---------------------------------------------------
-    def to_ir(self, max_inflight=spendcap.MAX_INFLIGHT, amount=None, cap=None):
+    def to_ir(self, max_inflight=spendcap.MAX_INFLIGHT, amount=None, cap=None,
+              window=None):
         """Build the :class:`rot.ir.ProtocolIR` this policy describes.
 
         Delegates to the derivation-based lowering
@@ -217,6 +218,7 @@ class DwPolicy(object):
         """
         k = spendcap.MAX_INFLIGHT if max_inflight is None else max_inflight
         amt = spendcap.AMOUNT if amount is None else amount
+        w = spendcap.MAX_WINDOW if window is None else window
         if cap is None:
             if self.cap != spendcap.CAP:
                 raise DwParseError(
@@ -225,7 +227,8 @@ class DwPolicy(object):
             cp = self.cap
         else:
             cp = cap
-        model = lower_policy(self.when, amount=amt, cap=cp, max_inflight=k)
+        model = lower_policy(self.when, amount=amt, cap=cp, max_inflight=k,
+                             window=w)
         model.metadata.update({
             "dw_policy_id": self.policy_id,
             "dw_event_kind": self.event_kind,
@@ -434,7 +437,8 @@ class Policy(Node):
         return [("id", self.id), ("effect", self.effect),
                 ("scope", self.scope), ("when", self.when)]
 
-    def to_ir(self, max_inflight=spendcap.MAX_INFLIGHT, amount=None, cap=None):
+    def to_ir(self, max_inflight=spendcap.MAX_INFLIGHT, amount=None, cap=None,
+              window=None):
         """Lower this policy to the :class:`rot.ir.ProtocolIR`.
 
         Delegates to the derivation-based lowering
@@ -453,7 +457,9 @@ class Policy(Node):
         k = spendcap.MAX_INFLIGHT if max_inflight is None else max_inflight
         amt = spendcap.AMOUNT if amount is None else amount
         cp = spendcap.CAP if cap is None else cap
-        model = lower_policy(self.when, amount=amt, cap=cp, max_inflight=k)
+        w = spendcap.MAX_WINDOW if window is None else window
+        model = lower_policy(self.when, amount=amt, cap=cp, max_inflight=k,
+                             window=w)
         event_ref = _find_event_ref(self.when)
         model.metadata.update({
             "dw_policy_id": self.id,
@@ -483,7 +489,8 @@ class Document(Node):
         return [("policies", self.policies), ("defs", self.defs),
                 ("source", self.source)]
 
-    def to_ir(self, max_inflight=spendcap.MAX_INFLIGHT, amount=None, cap=None):
+    def to_ir(self, max_inflight=spendcap.MAX_INFLIGHT, amount=None, cap=None,
+              window=None):
         """Lower this document to the :class:`rot.ir.ProtocolIR`.
 
         Finds the policy with a ``sum``/``count`` aggregate (the spend-cap
@@ -502,6 +509,7 @@ class Document(Node):
         k = spendcap.MAX_INFLIGHT if max_inflight is None else max_inflight
         amt = spendcap.AMOUNT if amount is None else amount
         cp = spendcap.CAP if cap is None else cap
+        w = spendcap.MAX_WINDOW if window is None else window
         policy = None
         for p in self.policies:
             if _has_aggregation(p.when):
@@ -510,7 +518,8 @@ class Document(Node):
         if policy is None:
             policy = self.policies[0] if self.policies else None
         when = policy.when if policy is not None else None
-        model = lower_policy(when, amount=amt, cap=cp, max_inflight=k)
+        model = lower_policy(when, amount=amt, cap=cp, max_inflight=k,
+                             window=w)
         event_ref = _find_event_ref(when) if when else None
         model.metadata.update({
             "dw_policy_id": policy.id if policy else None,

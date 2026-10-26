@@ -76,6 +76,42 @@ def _find_event_kind(node):
     return None
 
 
+def _find_window(node):
+    """Locate the first ``FormerlyWithin`` window token in a ``.dw`` ``when`` tree.
+
+    Duck-typed on purpose: a window token is the first node that carries a
+    non-``None`` ``window`` attribute (the :class:`rot.dw.FormerlyWithin`
+    shape, e.g. ``"24h"``).  We recurse through the known child slots of the
+    ``.dw`` AST node classes (``BinaryOp`` / ``UnaryOp`` / ``Sum`` / ``Count``
+    / ``Exists`` / ``FormerlyWithin`` / ``LetCall``) without importing
+    :mod:`rot.dw`, which would create a circular import (``rot.dw`` imports
+    this module).
+
+    Returns the window token (e.g. ``"24h"``) or ``None`` if no
+    ``FormerlyWithin`` node is present (the policy is not time-bounded).
+    """
+    if node is None:
+        return None
+    window = getattr(node, "window", None)
+    if window is not None:
+        return window
+    for attr in ("left", "right", "operand", "where", "body",
+                 "summand", "args", "coll"):
+        child = getattr(node, attr, None)
+        if child is None:
+            continue
+        if isinstance(child, (list, tuple)):
+            for item in child:
+                found = _find_window(item)
+                if found is not None:
+                    return found
+        else:
+            found = _find_window(child)
+            if found is not None:
+                return found
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Duck-typed shape predicates (no :mod:`rot.dw` import -- see module docstring)
 # ---------------------------------------------------------------------------
@@ -235,7 +271,7 @@ def _event_ref_signature(ref):
 # Shape 1: spend-cap (``Sum + <= cap``)
 # ---------------------------------------------------------------------------
 
-def _lower_spendcap(node, amount, cap, max_inflight):
+def _lower_spendcap(node, amount, cap, max_inflight, window=None, dw_window=None):
     """Lower the spend-cap shape (``Sum + <= cap``) to a :class:`ProtocolIR`.
 
     This is the original shape; see the module docstring for the event-kind
@@ -326,7 +362,8 @@ def _lower_spendcap(node, amount, cap, max_inflight):
         source_path="tests/fixtures/aws_dogwood/spendcap",
         metadata={"protocol": "SPENDCAP", "target": "spendcap",
                   "buggy": buggy, "amount": amount, "cap": cap,
-                  "max_inflight": k},
+                  "max_inflight": k, "window": window,
+                  "dw_window": dw_window},
     )
 
 
@@ -371,7 +408,7 @@ def _norm_action_name(name):
 
 
 
-def _lower_count_window(node, detected):
+def _lower_count_window(node, detected, window=None, dw_window=None):
     """Lower the count-window shape to a :class:`ProtocolIR`.
 
     ``detected`` is the ``(cap, open_ref, close_ref)`` tuple from
@@ -434,7 +471,8 @@ def _lower_count_window(node, detected):
                   "open_event": "%s::%s" % (open_action,
                                            getattr(open_ref, "kind", "?")),
                   "close_event": "%s::%s" % (close_action,
-                                             getattr(close_ref, "kind", "?"))},
+                                             getattr(close_ref, "kind", "?")),
+                  "window": window, "dw_window": dw_window},
     )
 
 
@@ -581,7 +619,7 @@ def _detect_exists_sum(node):
 
 
 
-def _lower_exists_sum(node, detected, k):
+def _lower_exists_sum(node, detected, k, window=None, dw_window=None):
     """Lower the exists-sum shape to a :class:`ProtocolIR`.
 
     ``detected`` is the ``(op, cap, sum_node)`` tuple from
@@ -684,7 +722,8 @@ def _lower_exists_sum(node, detected, k):
                   "max_inflight": k, "buggy": buggy,
                   "dw_event_kind": kind,
                   "event": "%s::%s" % ref_sig,
-                  "context_bound": _has_context_ref(sum_node)},
+                  "context_bound": _has_context_ref(sum_node),
+                  "window": window, "dw_window": dw_window},
     )
 
 
@@ -727,7 +766,7 @@ def _detect_refund_budget(node):
 
 
 
-def _lower_refund_budget(node, detected):
+def _lower_refund_budget(node, detected, window=None, dw_window=None):
     """Lower the refund-budget shape to a :class:`ProtocolIR`.
 
     ``detected`` is the ``(op, cap, sum_node, context_ref)`` tuple from
@@ -794,14 +833,15 @@ def _lower_refund_budget(node, detected):
         metadata={"protocol": "REFUND_BUDGET", "target": "refund_budget",
                   "op": op, "cap": cap,
                   "event": "%s::%s" % ref_sig,
-                  "context_ref": ".".join(context_ref.parts)},
+                  "context_ref": ".".join(context_ref.parts),
+                  "window": window, "dw_window": dw_window},
     )
 
 # ---------------------------------------------------------------------------
 # Public dispatcher
 # ---------------------------------------------------------------------------
 
-def lower_policy(node, amount=None, cap=None, max_inflight=None):
+def lower_policy(node, amount=None, cap=None, max_inflight=None, window=None):
     """Lower a parsed ``when`` expression to a :class:`rot.ir.ProtocolIR`.
 
     The four temporal-policy shapes are tried in order, most specific first:
@@ -834,18 +874,29 @@ def lower_policy(node, amount=None, cap=None, max_inflight=None):
     amt = spendcap.AMOUNT if amount is None else amount
     cp = spendcap.CAP if cap is None else cap
     k = spendcap.MAX_INFLIGHT if max_inflight is None else max_inflight
+    # The temporal window is approximated as a bounded event count ``W`` (the
+    # model is time-free); the original time token (e.g. ``"24h"``) is
+    # preserved verbatim as provenance.  Both are recorded in the IR metadata
+    # for every shape so the abstraction manifest states the discretization a
+    # verdict was produced under (see :data:`rot.spendcap.MAX_WINDOW`).
+    w = spendcap.MAX_WINDOW if window is None else int(window)
+    dw_window = _find_window(node)
 
     detected = _detect_count_window(node)
     if detected is not None:
-        return _lower_count_window(node, detected)
+        return _lower_count_window(node, detected,
+                                   window=w, dw_window=dw_window)
 
     detected = _detect_refund_budget(node)
     if detected is not None:
-        return _lower_refund_budget(node, detected)
+        return _lower_refund_budget(node, detected,
+                                    window=w, dw_window=dw_window)
 
     detected = _detect_exists_sum(node)
     if detected is not None:
-        return _lower_exists_sum(node, detected, k)
+        return _lower_exists_sum(node, detected, k,
+                                 window=w, dw_window=dw_window)
 
     # Fallback: the basic spend-cap shape (``Sum <op> cap``).
-    return _lower_spendcap(node, amt, cp, k)
+    return _lower_spendcap(node, amt, cp, k,
+                           window=w, dw_window=dw_window)

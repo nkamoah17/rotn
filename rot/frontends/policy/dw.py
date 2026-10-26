@@ -53,7 +53,7 @@ class DwFrontendError(ValueError):
 
 
 def build_ir(policy_path, tools_path=None, n_steps=1, max_inflight=None,
-             amount=None, cap=None):
+             amount=None, cap=None, window=None):
     """Lower a ``.dw`` spend-cap policy into a validated ``ProtocolIR``.
 
     Parameters
@@ -78,6 +78,12 @@ def build_ir(policy_path, tools_path=None, n_steps=1, max_inflight=None,
     cap : int or None
         The policy's cap; ``None`` uses the policy's own cap (or
         :data:`rot.spendcap.CAP` for a document).  Threaded into the model.
+    window : int or None
+        The temporal window as a bounded event count ``W`` (the model is
+        time-free; a ``FormerlyWithin`` window is approximated as "the last
+        ``W`` events").  ``None`` uses :data:`rot.spendcap.MAX_WINDOW` (4).
+        Recorded in the IR metadata (``window`` / ``dw_window``) so reports
+        state the discretization a verdict was produced under.
 
     Returns
     -------
@@ -95,11 +101,13 @@ def build_ir(policy_path, tools_path=None, n_steps=1, max_inflight=None,
         raise DwFrontendError("policy file not found: %s" % policy_path)
 
     k = spendcap.MAX_INFLIGHT if max_inflight is None else max_inflight
+    w = spendcap.MAX_WINDOW if window is None else window
     # Parse + lowering is owned by rot.dw (rot.spendcap builds the model);
     # this front-end only pins the property and records provenance.
     try:
         model = dw.parse_file(policy_path).to_ir(max_inflight=k,
-                                                 amount=amount, cap=cap)
+                                                 amount=amount, cap=cap,
+                                                 window=w)
     except dw.DwParseError as exc:
         raise DwFrontendError(str(exc))
 

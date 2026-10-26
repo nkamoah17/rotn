@@ -54,6 +54,7 @@ def _build_ir(policy_path, args):
         max_inflight=getattr(args, "max_inflight", None),
         amount=getattr(args, "amount", None),
         cap=getattr(args, "cap", None),
+        window=getattr(args, "window", None),
     )
 
 
@@ -363,6 +364,10 @@ def cmd_check(args):
         }
         if ir.metadata.get("max_inflight") is not None:
             report["max_inflight"] = ir.metadata["max_inflight"]
+        if ir.metadata.get("window") is not None:
+            report["window"] = ir.metadata["window"]
+        if ir.metadata.get("dw_window") is not None:
+            report["dw_window"] = ir.metadata["dw_window"]
         if note:
             report["note"] = note
         with open(report_path, "w") as f:
@@ -836,6 +841,10 @@ def _add_policy_opts(p):
                    help="per-request amount override (spend-cap .dw policies)")
     p.add_argument("--cap", type=int, default=None, metavar="N",
                    help="spend cap override (spend-cap .dw policies)")
+    p.add_argument("--window", type=int, default=None, metavar="W",
+                   help="temporal window as a bounded event count W "
+                        "(spend-cap .dw policies; the model is time-free so a "
+                        "'within W' is approximated as the last W events)")
     p.add_argument("--kind", default=None,
                    choices=["safety", "realizability", "liveness"],
                    help="property kind [default: auto-route by extension]")

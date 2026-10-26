@@ -27,9 +27,10 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from rot.spendcap import (AMOUNT, CAP, MAX_INFLIGHT, build_ir,
+from rot.spendcap import (AMOUNT, CAP, MAX_INFLIGHT, MAX_WINDOW, build_ir,
                           spend_ok_guard_buggy, spend_ok_guard_correct,
                           within_cap_property)
+from rot.dw import parse_file
 from rot.linearization import linearize
 from rot.symbolic import SymbolicEngine, PROVEN, VIOLATED
 from rot.ir import Expr
@@ -39,6 +40,12 @@ try:
     _Z3_AVAILABLE = True
 except ImportError:
     _Z3_AVAILABLE = False
+
+
+# The canonical buggy spend-cap .dw fixture (carries `formerly within 24h`).
+_POLICY_BUGGY = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "fixtures", "aws_dogwood", "spendcap", "policies", "spendcap-buggy.dw")
 
 
 def _check(prop, ir):
@@ -519,6 +526,97 @@ class MaxInflightCliTests(unittest.TestCase):
         self.assertEqual(data["verdict"], "violated")
         self.assertEqual(data.get("max_inflight"), 3)
         self.assertEqual(data["witness"], {"completed": 0, "inflight": 3})
+
+
+class WindowTests(unittest.TestCase):
+    """The ``window`` (``W``) discretization: provenance + threading.
+
+    The model is time-free, so a ``FormerlyWithin`` window is approximated as
+    a bounded event count ``W`` and recorded in the IR metadata (``window``)
+    so reports state the discretization a verdict was produced under.  The
+    original time token (e.g. ``"24h"``) is preserved verbatim as
+    ``dw_window``.  The window is a *modeling parameter* (like
+    ``max_inflight``): it does not change the state space -- the within-window
+    semantics live in the ``inflight`` / ``completed`` counters -- so the
+    verdict is independent of ``W`` (Phase 2 adds true time via the TLA+
+    history oracle).
+    """
+
+    def test_metadata_records_window(self):
+        for W in (2, 4, 8, 16):
+            ir = build_ir(buggy=True, window=W)
+            self.assertEqual(ir.metadata.get("window"), W,
+                             "window must be recorded in metadata for W=%d" % W)
+
+    def test_default_window_is_module_constant(self):
+        ir = build_ir(buggy=True)
+        self.assertEqual(ir.metadata.get("window"), MAX_WINDOW)
+
+    def test_window_rejects_non_positive(self):
+        for bad in (0, -1):
+            with self.assertRaises(ValueError):
+                build_ir(buggy=True, window=bad)
+
+    def test_verdict_independent_of_window(self):
+        # The window is a provenance tag, not a state-space knob: the
+        # within-window semantics live in the inflight/completed counters, so
+        # the verdict (PROVEN correct / VIOLATED buggy) and the witness are
+        # the same for any W.
+        for W in (2, 4, 8):
+            res_ok = _check(within_cap_property(),
+                            build_ir(buggy=False, window=W))
+            self.assertEqual(res_ok.status, PROVEN, "W=%d correct" % W)
+            res_bad = _check(within_cap_property(),
+                             build_ir(buggy=True, window=W))
+            self.assertEqual(res_bad.status, VIOLATED, "W=%d buggy" % W)
+            self.assertEqual(res_bad.witness, {"completed": 0, "inflight": 3},
+                             "W=%d buggy witness unchanged" % W)
+
+    def test_dw_policy_threads_window_and_token(self):
+        # The .dw policy carries the original time token ("24h"); the bound W
+        # is the discretization.  Both must be recorded in the IR metadata so
+        # the provenance is transparent.
+        p = parse_file(_POLICY_BUGGY)
+        self.assertEqual(p.window, "24h")
+        ir = p.to_ir(window=8)
+        self.assertEqual(ir.metadata.get("window"), 8)
+        self.assertEqual(ir.metadata.get("dw_window"), "24h")
+        # And the default (no override) uses the module constant.
+        ir_default = p.to_ir()
+        self.assertEqual(ir_default.metadata.get("window"), MAX_WINDOW)
+        self.assertEqual(ir_default.metadata.get("dw_window"), "24h")
+
+
+class WindowCliTests(unittest.TestCase):
+    """End-to-end: the CLI ``--window`` flag threads ``W`` into the report."""
+
+    def _run(self, W):
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        out_dir = tempfile.mkdtemp(prefix="rot-window-")
+        try:
+            proc = subprocess.run(
+                [sys.executable, os.path.join(repo_root, "pipeline.py"),
+                 "--policy", _POLICY_BUGGY, "--window", str(W),
+                 "--out", out_dir, "--quiet"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
+            self.assertEqual(proc.returncode, 1,
+                             "buggy policy must be VIOLATED (got %d)\n%s"
+                             % (proc.returncode, proc.stdout[-1500:]))
+            jpath = os.path.join(
+                out_dir, "policy-spendcap-buggy.dw_spendcap_within_cap.json")
+            with open(jpath, encoding="utf-8") as f:
+                return json.load(f)
+        finally:
+            shutil.rmtree(out_dir, ignore_errors=True)
+
+    def test_window_threaded_into_report(self):
+        for W in (4, 8, 16):
+            data = self._run(W)
+            self.assertEqual(data.get("window"), W,
+                             "report must surface window=%d" % W)
+            self.assertEqual(data.get("dw_window"), "24h",
+                             "report must surface the original token")
+            self.assertEqual(data["verdict"], "violated")
 
 
 if __name__ == "__main__":
