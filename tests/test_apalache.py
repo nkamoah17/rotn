@@ -4,7 +4,8 @@
 These tests drive the REAL ``ApalacheEngine.check()`` code path -- command
 build, subprocess launch, output parsing, witness recovery, timeout handling --
 without a real Apalache jar or a Java 21 runtime, by substituting a *fake*
-``java`` executable (a ``.bat`` that runs a small Python script).  The fake's
+``java`` executable (a native launcher -- ``.bat`` on Windows, ``#!/bin/sh``
+on POSIX -- that runs a small Python script).  The fake's
 behaviour is selected by the ``FAKE_APALACHE_MODE`` environment variable:
 
 * ``proven``             -> prints ``The outcome is: NoError``, exit 0
@@ -92,17 +93,32 @@ sys.exit(1)
 
 
 class _FakeJava(object):
-    """Creates a fake ``java`` executable (``.bat`` -> python) + a dummy jar."""
+    """Creates a fake ``java`` executable (a native launcher -> python) + jar.
+
+    Cross-platform launcher: on Windows the launcher is a ``.bat``; on POSIX
+    it is a ``#!/bin/sh`` script with the executable bit set.  (A ``.bat`` is
+    not executable on Linux, so the fake must be born a native launcher --
+    this is exactly what broke the CI test suite on the Linux runner.)
+    ``self.bat`` is kept as an alias for the launcher path.
+    """
 
     def __init__(self):
         self.tmp = tempfile.mkdtemp(prefix="rotn_fakejava_")
         self.impl = os.path.join(self.tmp, "fakejava_impl.py")
         with open(self.impl, "w") as f:
             f.write(_FAKEJAVA_IMPL)
-        self.bat = os.path.join(self.tmp, "fakejava.bat")
-        with open(self.bat, "w") as f:
-            f.write('@echo off\r\n"%s" "%s" %%*\r\n'
-                    % (sys.executable, self.impl))
+        if os.name == "nt":
+            self.executable = os.path.join(self.tmp, "fakejava.bat")
+            with open(self.executable, "w") as f:
+                f.write('@echo off\r\n"%s" "%s" %%*\r\n'
+                        % (sys.executable, self.impl))
+        else:
+            self.executable = os.path.join(self.tmp, "fakejava")
+            with open(self.executable, "w") as f:
+                f.write('#!/bin/sh\nexec "%s" "%s" "$@"\n'
+                        % (sys.executable, self.impl))
+            os.chmod(self.executable, 0o755)
+        self.bat = self.executable
         # A dummy jar so Config.apalache_jar_path() resolves to a real file.
         self.jar = os.path.join(self.tmp, "apalache.jar")
         with open(self.jar, "w") as f:
