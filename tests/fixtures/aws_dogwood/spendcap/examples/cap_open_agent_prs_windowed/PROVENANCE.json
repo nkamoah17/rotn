@@ -1,0 +1,59 @@
+{
+  "source_repo": "https://github.com/dogwood-policy/dogwood",
+  "commit": "4ec5e2c01b44ff3882a231ae5d315b330b38fa25",
+  "source_path": "dogwood-docs/examples/cap_open_agent_prs_windowed",
+  "source_url": "https://github.com/dogwood-policy/dogwood/tree/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/cap_open_agent_prs_windowed",
+  "fetch_date": "2026-10-21",
+  "license": "Apache-2.0 (see repo LICENSE)",
+  "files": [
+    {
+      "name": "README.md",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/cap_open_agent_prs_windowed/README.md",
+      "blob_sha": "60f14e5805b5fa27cb1a4f0782ae99e2a4e5a8ab",
+      "sha_verified": true,
+      "size_bytes": 2751
+    },
+    {
+      "name": "expected.out",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/cap_open_agent_prs_windowed/expected.out",
+      "blob_sha": "5d80611d483f7703fa3b048683ce54921430c065",
+      "sha_verified": true,
+      "size_bytes": 201
+    },
+    {
+      "name": "explain.out",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/cap_open_agent_prs_windowed/explain.out",
+      "blob_sha": "b8d92fb061541eafa8e053a9d399a66dd97af5fd",
+      "sha_verified": true,
+      "size_bytes": 305
+    },
+    {
+      "name": "policy.dw",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/cap_open_agent_prs_windowed/policy.dw",
+      "blob_sha": "7571ba4b13ba590f75937c69b0802ed1b14c7a79",
+      "sha_verified": true,
+      "size_bytes": 1121
+    },
+    {
+      "name": "requires-experimental-arithmetic",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/cap_open_agent_prs_windowed/requires-experimental-arithmetic",
+      "blob_sha": "6253abead493f841805a47535213f9ab21769e98",
+      "sha_verified": true,
+      "size_bytes": 203
+    },
+    {
+      "name": "schema.cedarschema",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/cap_open_agent_prs_windowed/schema.cedarschema",
+      "blob_sha": "55e91ead4e79a1fbba325e666c87641241feba1a",
+      "sha_verified": true,
+      "size_bytes": 763
+    },
+    {
+      "name": "trace.log",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/cap_open_agent_prs_windowed/trace.log",
+      "blob_sha": "e8d5f3c034ff9601682d55433c6609f220e89321",
+      "sha_verified": true,
+      "size_bytes": 2660
+    }
+  ]
+}

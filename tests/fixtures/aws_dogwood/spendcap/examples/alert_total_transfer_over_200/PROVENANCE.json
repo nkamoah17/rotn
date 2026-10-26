@@ -1,0 +1,52 @@
+{
+  "source_repo": "https://github.com/dogwood-policy/dogwood",
+  "commit": "4ec5e2c01b44ff3882a231ae5d315b330b38fa25",
+  "source_path": "dogwood-docs/examples/alert_total_transfer_over_200",
+  "source_url": "https://github.com/dogwood-policy/dogwood/tree/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/alert_total_transfer_over_200",
+  "fetch_date": "2026-10-21",
+  "license": "Apache-2.0 (see repo LICENSE)",
+  "files": [
+    {
+      "name": "README.md",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/alert_total_transfer_over_200/README.md",
+      "blob_sha": "d6491084c67c9cea338bfd4efcef965cabbb4a48",
+      "sha_verified": true,
+      "size_bytes": 1686
+    },
+    {
+      "name": "expected.out",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/alert_total_transfer_over_200/expected.out",
+      "blob_sha": "7085e41d3b03f9739c97ae8723d82af4629a6144",
+      "sha_verified": true,
+      "size_bytes": 148
+    },
+    {
+      "name": "explain.out",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/alert_total_transfer_over_200/explain.out",
+      "blob_sha": "4e32265c09fc650689b2c65d38f945a120af0a41",
+      "sha_verified": true,
+      "size_bytes": 272
+    },
+    {
+      "name": "policy.dw",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/alert_total_transfer_over_200/policy.dw",
+      "blob_sha": "18dce0b30191e0e1ac59d93a4d4d9d31faf83ba8",
+      "sha_verified": true,
+      "size_bytes": 459
+    },
+    {
+      "name": "schema.cedarschema",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/alert_total_transfer_over_200/schema.cedarschema",
+      "blob_sha": "315e1f34403d91c891854de4b435e22cfc85d1d7",
+      "sha_verified": true,
+      "size_bytes": 2945
+    },
+    {
+      "name": "trace.log",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/alert_total_transfer_over_200/trace.log",
+      "blob_sha": "3d1ba998609a341ed1244e50b7c60a04c3c3c393",
+      "sha_verified": true,
+      "size_bytes": 3285
+    }
+  ]
+}

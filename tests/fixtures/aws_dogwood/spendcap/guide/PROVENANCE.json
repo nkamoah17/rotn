@@ -1,0 +1,17 @@
+{
+  "source_repo": "https://github.com/dogwood-policy/dogwood",
+  "commit": "4ec5e2c01b44ff3882a231ae5d315b330b38fa25",
+  "source_path": "dogwood-docs/guide/08-formal-specification.md",
+  "source_url": "https://github.com/dogwood-policy/dogwood/tree/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/guide/08-formal-specification.md",
+  "fetch_date": "2026-10-21",
+  "license": "Apache-2.0 (see repo LICENSE)",
+  "files": [
+    {
+      "name": "08-formal-specification.md",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/guide/08-formal-specification.md",
+      "blob_sha": "35e27100c4da5839c8d96721fba734f3e315ef62",
+      "sha_verified": true,
+      "size_bytes": 72409
+    }
+  ]
+}

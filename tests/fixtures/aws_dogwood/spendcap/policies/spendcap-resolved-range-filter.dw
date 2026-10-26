@@ -1,0 +1,30 @@
+// UNSAFE spend-cap policy — promoted from corpus 0301_sum_resolved_range_filter.
+// Sums over Transfer::response rows (settled completions only) with a RANGE
+// filter (`a > 100 && a < 500`). In-flight (issued, not-yet-responded)
+// transfers are invisible to the sum, so a parallel burst of fires can
+// overshoot the cap.
+//
+// This is an UNSEEN policy (not one of the two endpoints): it carries a range
+// filter and a forbid/permit document shape, yet the same sound core
+// classifies it UNSAFE with the same (completed=0, inflight=3) witness. The
+// classification is driven by the event kind the sum quantifies over
+// (response -> settled-only accounting), not by the filter or the threshold.
+//
+// See: corpus/0301_sum_resolved_range_filter/policy_1.dw (the upstream source),
+//      spendcap-buggy.dw (the response-sum idiom without a filter).
+
+forbid (
+    principal,
+    action == Drupe::Action::"Read",
+    resource
+)
+when temporal {
+    exists (total: Long). ((sum a for (a: Long), (t: Timepoint). where (formerly within 1h (Drupe::Action::"Transfer"::response{ input.user: context.input.user, output.amount: a } && a > 100 && a < 500 && tp(t)))) == total && total > 1000)};
+permit (
+    principal,
+    action == Drupe::Action::"Read",
+    resource
+)
+when temporal {
+    formerly within 1h Drupe::Action::"Login"::request{ input.user: context.input.user }
+};

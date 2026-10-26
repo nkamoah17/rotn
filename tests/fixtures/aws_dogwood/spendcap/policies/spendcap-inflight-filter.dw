@@ -1,0 +1,31 @@
+// SAFE spend-cap policy — the request-sum mirror of corpus 0299.
+// Sums over Transfer::request rows (ALL issued transfers, including in-flight)
+// with the same `a > 0` filter and the same forbid/permit document shape as
+// spendcap-resolved-filter.dw. Because the temporal window is closed and
+// reflexive, the current request being decided is already in the sum, so the
+// in-flight amount is charged against the cap *before* any response settles.
+//
+// This is an UNSEEN policy (not one of the two endpoints): it carries a filter
+// and a forbid/permit document shape, yet the same sound core classifies it
+// SAFE — the exact mirror of spendcap-resolved-filter.dw with `request` in
+// place of `response`. The classification is driven by the event kind the sum
+// quantifies over (request -> in-flight accounting), not by the filter.
+//
+// See: spendcap-resolved-filter.dw (the UNSAFE response-sum twin),
+//      spendcap-correct.dw (the request-sum idiom without a filter).
+
+forbid (
+    principal,
+    action == Drupe::Action::"Read",
+    resource
+)
+when temporal {
+    exists (total: Long). ((sum a for (a: Long), (t: Timepoint). where (formerly within 1h (Drupe::Action::"Transfer"::request{ input.user: context.input.user, input.amount: a } && a > 0 && tp(t)))) == total && total > 1000)};
+permit (
+    principal,
+    action == Drupe::Action::"Read",
+    resource
+)
+when temporal {
+    formerly within 1h Drupe::Action::"Login"::request{ input.user: context.input.user }
+};

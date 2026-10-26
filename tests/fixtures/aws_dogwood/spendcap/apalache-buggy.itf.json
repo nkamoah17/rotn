@@ -1,0 +1,18 @@
+{
+  "#meta": {
+    "format": "Apalache ITF (replay fixture)",
+    "engine": "apalache-itf",
+    "provenance": "counterexample trace for spendcap-buggy.dw: three 100-unit spend requests in flight before any settlement; 0 + 3*100 = 300 > 200 refutes spendcap_within_cap",
+    "varTypes": {
+      "completed": "Int",
+      "inflight": "Int"
+    }
+  },
+  "vars": ["completed", "inflight"],
+  "states": [
+    {"completed": 0, "inflight": 0},
+    {"completed": 0, "inflight": 1},
+    {"completed": 0, "inflight": 2},
+    {"completed": 0, "inflight": 3}
+  ]
+}

@@ -1,0 +1,12 @@
+Manifest-Version: 1.0
+Main-Class: at.forsyte.apalache.tla.Tool
+Specification-Title: apalache
+Specification-Version: 0.62.3
+Specification-Vendor: Apalache Development Team
+Implementation-Title: apalache
+Implementation-Version: 0.62.3
+Implementation-Vendor: Apalache Development Team
+Implementation-Vendor-Id: org.apalache-mc
+Implementation-URL: https://github.com/apalache-mc/apalache
+Enable-Native-Access: ALL-UNNAMED
+

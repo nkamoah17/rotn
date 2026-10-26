@@ -1,0 +1,122 @@
+{
+  "source_repo": "https://github.com/dogwood-policy/dogwood",
+  "commit": "4ec5e2c01b44ff3882a231ae5d315b330b38fa25",
+  "source_path": "dogwood-language/tests/passing/macros/corpus/mcagg_0299_sum_resolved_filter",
+  "source_url": "https://github.com/dogwood-policy/dogwood/tree/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-language/tests/passing/macros/corpus/mcagg_0299_sum_resolved_filter",
+  "fetch_date": "2026-10-21",
+  "license": "Apache-2.0 (see repo LICENSE)",
+  "files": [
+    {
+      "name": "expected_1.out",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-language/tests/passing/macros/corpus/mcagg_0299_sum_resolved_filter/expected_1.out",
+      "blob_sha": "d0cf3834d7d04b0d13b667768ed6fbe7e07105eb",
+      "sha_verified": true,
+      "size_bytes": 129
+    },
+    {
+      "name": "expected_2.out",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-language/tests/passing/macros/corpus/mcagg_0299_sum_resolved_filter/expected_2.out",
+      "blob_sha": "9ff8ccd5e833d3531ee0cbfdeb933b74699c5acf",
+      "sha_verified": true,
+      "size_bytes": 102
+    },
+    {
+      "name": "expected_3.out",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-language/tests/passing/macros/corpus/mcagg_0299_sum_resolved_filter/expected_3.out",
+      "blob_sha": "d0cf3834d7d04b0d13b667768ed6fbe7e07105eb",
+      "sha_verified": true,
+      "size_bytes": 129
+    },
+    {
+      "name": "expected_4.out",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-language/tests/passing/macros/corpus/mcagg_0299_sum_resolved_filter/expected_4.out",
+      "blob_sha": "d0cf3834d7d04b0d13b667768ed6fbe7e07105eb",
+      "sha_verified": true,
+      "size_bytes": 129
+    },
+    {
+      "name": "expected_5.out",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-language/tests/passing/macros/corpus/mcagg_0299_sum_resolved_filter/expected_5.out",
+      "blob_sha": "11924a7402f815cd6c0c668ac7c3f5c99eacdd5e",
+      "sha_verified": true,
+      "size_bytes": 103
+    },
+    {
+      "name": "expected_6.out",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-language/tests/passing/macros/corpus/mcagg_0299_sum_resolved_filter/expected_6.out",
+      "blob_sha": "11924a7402f815cd6c0c668ac7c3f5c99eacdd5e",
+      "sha_verified": true,
+      "size_bytes": 103
+    },
+    {
+      "name": "expected_7.out",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-language/tests/passing/macros/corpus/mcagg_0299_sum_resolved_filter/expected_7.out",
+      "blob_sha": "9ff8ccd5e833d3531ee0cbfdeb933b74699c5acf",
+      "sha_verified": true,
+      "size_bytes": 102
+    },
+    {
+      "name": "policy_1.dw",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-language/tests/passing/macros/corpus/mcagg_0299_sum_resolved_filter/policy_1.dw",
+      "blob_sha": "5e6a977f8f6eb137469d6cc5e037cbfd34cf70f1",
+      "sha_verified": true,
+      "size_bytes": 557
+    },
+    {
+      "name": "schema.cedarschema",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-language/tests/passing/macros/corpus/mcagg_0299_sum_resolved_filter/schema.cedarschema",
+      "blob_sha": "13a67fa955c8fa3cea7c904ae6ee89e0af97ff6e",
+      "sha_verified": true,
+      "size_bytes": 2620
+    },
+    {
+      "name": "trace_1.log",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-language/tests/passing/macros/corpus/mcagg_0299_sum_resolved_filter/trace_1.log",
+      "blob_sha": "df14e1d5ac8780e6f4db46150257a94a4a17d907",
+      "sha_verified": true,
+      "size_bytes": 2557
+    },
+    {
+      "name": "trace_2.log",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-language/tests/passing/macros/corpus/mcagg_0299_sum_resolved_filter/trace_2.log",
+      "blob_sha": "593e2891c22bec96b38ea108123f58d4d659cdcd",
+      "sha_verified": true,
+      "size_bytes": 2003
+    },
+    {
+      "name": "trace_3.log",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-language/tests/passing/macros/corpus/mcagg_0299_sum_resolved_filter/trace_3.log",
+      "blob_sha": "da91a8f92342a813f9056b229dc83c54d17fe7d7",
+      "sha_verified": true,
+      "size_bytes": 2559
+    },
+    {
+      "name": "trace_4.log",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-language/tests/passing/macros/corpus/mcagg_0299_sum_resolved_filter/trace_4.log",
+      "blob_sha": "bf338d6f26d9acddf455656b4cd53c2ca1305e70",
+      "sha_verified": true,
+      "size_bytes": 2559
+    },
+    {
+      "name": "trace_5.log",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-language/tests/passing/macros/corpus/mcagg_0299_sum_resolved_filter/trace_5.log",
+      "blob_sha": "cfac503ea984f191727b8bff8e118b86f3560d26",
+      "sha_verified": true,
+      "size_bytes": 2007
+    },
+    {
+      "name": "trace_6.log",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-language/tests/passing/macros/corpus/mcagg_0299_sum_resolved_filter/trace_6.log",
+      "blob_sha": "dd09d2a70e10365ea6fb7ded2d0f4a508f52bb45",
+      "sha_verified": true,
+      "size_bytes": 2007
+    },
+    {
+      "name": "trace_7.log",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-language/tests/passing/macros/corpus/mcagg_0299_sum_resolved_filter/trace_7.log",
+      "blob_sha": "4f1f643b21cccf0a13a6ced5f73f177b69c0c407",
+      "sha_verified": true,
+      "size_bytes": 2003
+    }
+  ]
+}

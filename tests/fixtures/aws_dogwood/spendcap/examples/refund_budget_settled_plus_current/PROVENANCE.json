@@ -1,0 +1,59 @@
+{
+  "source_repo": "https://github.com/dogwood-policy/dogwood",
+  "commit": "4ec5e2c01b44ff3882a231ae5d315b330b38fa25",
+  "source_path": "dogwood-docs/examples/refund_budget_settled_plus_current",
+  "source_url": "https://github.com/dogwood-policy/dogwood/tree/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/refund_budget_settled_plus_current",
+  "fetch_date": "2026-10-21",
+  "license": "Apache-2.0 (see repo LICENSE)",
+  "files": [
+    {
+      "name": "README.md",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/refund_budget_settled_plus_current/README.md",
+      "blob_sha": "f2a372c9cbb22fc9859ef94e31c5171858961a66",
+      "sha_verified": true,
+      "size_bytes": 2574
+    },
+    {
+      "name": "expected.out",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/refund_budget_settled_plus_current/expected.out",
+      "blob_sha": "d467067c31a6f6147b476382a2e8cb016ee36209",
+      "sha_verified": true,
+      "size_bytes": 163
+    },
+    {
+      "name": "explain.out",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/refund_budget_settled_plus_current/explain.out",
+      "blob_sha": "3046f64d10f3052f15f51b40dbf04c6bb58a26f9",
+      "sha_verified": true,
+      "size_bytes": 265
+    },
+    {
+      "name": "policy.dw",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/refund_budget_settled_plus_current/policy.dw",
+      "blob_sha": "e419e595c57dbe5eecef0e656a4cfe00f8236fd4",
+      "sha_verified": true,
+      "size_bytes": 1110
+    },
+    {
+      "name": "requires-experimental-arithmetic",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/refund_budget_settled_plus_current/requires-experimental-arithmetic",
+      "blob_sha": "6253abead493f841805a47535213f9ab21769e98",
+      "sha_verified": true,
+      "size_bytes": 203
+    },
+    {
+      "name": "schema.cedarschema",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/refund_budget_settled_plus_current/schema.cedarschema",
+      "blob_sha": "75aef47c43ce7a47f52fe1fe8fc9cc026305301d",
+      "sha_verified": true,
+      "size_bytes": 447
+    },
+    {
+      "name": "trace.log",
+      "source_url": "https://raw.githubusercontent.com/dogwood-policy/dogwood/4ec5e2c01b44ff3882a231ae5d315b330b38fa25/dogwood-docs/examples/refund_budget_settled_plus_current/trace.log",
+      "blob_sha": "d39e8a9de00587b68725c30fb5e01586635a1170",
+      "sha_verified": true,
+      "size_bytes": 2082
+    }
+  ]
+}

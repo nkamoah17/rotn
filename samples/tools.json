@@ -1,0 +1,7 @@
+{
+  "tools": [
+    {"name": "read_log", "description": "read the application log"},
+    {"name": "update_balance", "description": "update a user's account balance"},
+    {"name": "exfiltrate_secret", "description": "exfiltrate a secret (denied by policy)"}
+  ]
+}

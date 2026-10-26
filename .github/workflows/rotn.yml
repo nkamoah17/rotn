@@ -1,0 +1,65 @@
+# ROTN CI -- the pure-stdlib job.
+#
+# No Java, no Z3, no network: the package has zero runtime dependencies, and
+# every engine that needs an external tool (TLC, Apalache, Z3) degrades to a
+# skip or an "unknown" verdict, so the suite is green in a bare Python env.
+name: rotn
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  stdlib:
+    name: pure-stdlib (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The package floor is Python 3.6 (verified locally); 3.6 is EOL and
+        # not preinstalled on runners, so the CI legs cover 3.8 -> 3.12.
+        python: ["3.8", "3.10", "3.12"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install the package (zero runtime deps)
+        run: python -m pip install .
+
+      - name: Test suite (no Java, no Z3)
+        run: python -m unittest discover -s tests -v
+
+      - name: 60-second CLI smoke (expected exit codes)
+        run: |
+          set -e
+          rot --version
+          code=0; rot check --policy samples/spendcap-buggy.dw --out out || code=$?
+          [ "$code" -eq 1 ]
+          test -f out/attack.jsonl
+          code=0; rot replay out/attack.jsonl --policy samples/spendcap-buggy.dw || code=$?
+          [ "$code" -eq 1 ]
+          code=0; rot check --policy samples/spendcap-correct.dw --out out-correct || code=$?
+          [ "$code" -eq 0 ]
+
+      - name: CI gate -- JUnit XML + SARIF
+        run: |
+          set -e
+          code=0; rot ci --policy samples/spendcap-buggy.dw --out ci || code=$?
+          [ "$code" -eq 1 ]
+          test -f ci/JUnit.xml
+          test -f ci/results.sarif
+
+      - name: Upload CI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rotn-ci-py${{ matrix.python }}
+          path: |
+            ci/JUnit.xml
+            ci/results.sarif
+            out/attack.jsonl

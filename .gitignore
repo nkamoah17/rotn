@@ -1,0 +1,99 @@
+# =====================================================================
+# ROTN — version-control ignore list
+# Keep:   source (rot/, tests/, twopc-java/src|tests|agent-*), docs,
+#         pipeline.py, run.ps1, README.md, todo.md, third_party/ (small
+#         vendored jars), examples/, META-INF/, technical report.
+# Ignore: large binaries, tooling, build/model-checker output, CPG/Joern
+#         scratch workspaces, probe/debug scratch, caches, OS/editor junk.
+# =====================================================================
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# --- Virtual environments ---
+.venv*/
+venv/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+
+# --- Large binaries / tooling (NOT source) ---
+_tools/
+*.zip
+*.class
+
+# --- Model-checker / build outputs ---
+out/
+out_tlc/
+_apalache-out/
+
+# --- Joern / CPG scratch workspaces ---
+_joern_test/
+workspace/
+*.cpg
+cpg.bin
+cpg.bin.tmp
+*.bin.zip
+
+# --- Probe / debug scratch ---
+_probe/
+
+# --- Java build outputs (keep src/tests/agent source + scripts) ---
+twopc-java/build/
+twopc-java/out/
+
+# --- Data / trace dumps ---
+*.jsonl
+*.verdict.json
+
+# --- Root temp test-output text files ---
+test_baseline.txt
+test_err.txt
+test_out.txt
+tests_out_mr.txt
+tmp1.txt
+tmp_err.txt
+
+# --- A4 publish cleanup: local scratch kept on disk, out of the repo ---
+/.z3probe/
+/tmp_probe_z3/
+/_baseline.txt
+/_cleanup.py
+/_diag*.py
+/_diag*.txt
+/_dv_out.txt
+/_e2e_check.py
+/_inspect_ir.py
+/_probe*.py
+/_probe*.txt
+/_rdm_slice.txt
+/_sd_src.txt
+/_check_buggy.log
+/_pip_install.log
+/_rot_exit.txt
+/_rot_out.log
+/_rot_run.ps1
+/check-asm.ps1
+/regen_check.py
+/err.txt
+/out.txt
+/test_run.txt
+/out_p7_check/
+/ROTN_Technical_Report.zh.bak.md
+/tmp_dogwood_*.py
+/tmp_dogwood_manifest.json
+/tmp_*.log
+/tests/_tmp_*.txt
+/twopc-java/debug/
+
+# --- CI output (JUnit / SARIF artifacts) ---
+/ci/

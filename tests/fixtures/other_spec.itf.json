@@ -1,0 +1,21 @@
+{
+  "#meta": {
+    "format": "ITF",
+    "format-description": "https://apalache-mc.org/docs/adr/015adr-trace.html",
+    "description": "Created by Apalache on Sun Oct 04 03:16:18 GMT 2026",
+    "varTypes": {
+      "phase": "Str"
+    }
+  },
+  "vars": [
+    "phase"
+  ],
+  "states": [
+    {
+      "#meta": {
+        "index": 0
+      },
+      "phase": "prepare"
+    }
+  ]
+}
