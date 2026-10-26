@@ -576,7 +576,8 @@ def _cmd_policy(args):
         ir = policy_fe.build_ir(policy_path, tools_path=tools_path,
                                 n_steps=n_steps, kind=args.kind,
                                 max_inflight=args.max_inflight,
-                                amount=args.amount, cap=args.cap)
+                                amount=args.amount, cap=args.cap,
+                                window=args.window)
     except policy_fe.PolicyFrontendError as exc:
         print("ERROR: %s" % exc, file=sys.stderr)
         return EXIT_ERROR
@@ -679,6 +680,10 @@ def _cmd_policy(args):
     }
     if ir.metadata.get("max_inflight") is not None:
         report["max_inflight"] = ir.metadata["max_inflight"]
+    if ir.metadata.get("window") is not None:
+        report["window"] = ir.metadata["window"]
+    if ir.metadata.get("dw_window") is not None:
+        report["dw_window"] = ir.metadata["dw_window"]
     if kind == "liveness":
         report["liveness_horizon"] = horizon
         report["note"] = note
@@ -708,6 +713,10 @@ def _cmd_policy(args):
         if ir.metadata.get("max_inflight") is not None:
             print("  max-inflt : %d (bounded concurrency pool K)"
                   % ir.metadata["max_inflight"])
+        if ir.metadata.get("window") is not None:
+            print("  window    : %d (bounded event count W; %s)"
+                  % (ir.metadata["window"],
+                     ir.metadata.get("dw_window") or "n/a"))
         print("  verdict   : %s" % status.upper())
         if note:
             print("  note      : %s" % note)
@@ -914,7 +923,8 @@ def _cmd_classify(args):
             ir = policy_fe.build_ir(policy_path, tools_path=args.tools,
                                     n_steps=n_steps, kind=args.kind,
                                     max_inflight=args.max_inflight,
-                                    amount=args.amount, cap=args.cap)
+                                    amount=args.amount, cap=args.cap,
+                                    window=args.window)
         except policy_fe.PolicyFrontendError as exc:
             entry["error"] = str(exc)
             results.append(entry)
@@ -950,6 +960,7 @@ def _cmd_classify(args):
         "max_inflight": (args.max_inflight
                          if args.max_inflight is not None
                          else None),
+        "window": (args.window if args.window is not None else None),
         "results": results,
         "summary": {"safe": n_safe, "unsafe": n_unsafe,
                     "unknown": n_unknown, "error": n_error},
@@ -1103,6 +1114,14 @@ def main(argv=None):
                              "-- K=1 masks the parallel-fire race, K>=3 "
                              "exposes the clean (completed=0, inflight=3) "
                              "witness [default: 4; .dw spend-cap policies "
+                             "only, ignored for Cedar / .json]")
+    parser.add_argument("--window", dest="window", type=int,
+                        default=None, metavar="W",
+                        help="bounded event count W for the spend-cap "
+                             "formerly-within window: the discretization of "
+                             "the policy's time window (e.g. '24h') into at "
+                             "most W tracked events; provenance recorded in "
+                             "the report [default: 4; .dw spend-cap policies "
                              "only, ignored for Cedar / .json]")
     parser.add_argument("--amount", dest="amount", type=int, default=None,
                         metavar="AMOUNT",
