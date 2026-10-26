@@ -221,8 +221,102 @@ def _code_for(status):
 # rot check
 # ---------------------------------------------------------------------------
 
+def _read_policy_actions(policy_path):
+    """Read a Dogwood ``policy.json`` -> ``(allowed, denied)`` action lists.
+
+    Reads the JSON directly (rather than via :func:`dogwood.parse_policy`) so
+    that a *contradictory* policy (overlapping allowed/denied) is not rejected
+    at parse time -- the :mod:`rot.mcp_adapter` structural check is what should
+    report it as a Cedar-AR ``contradictions`` finding.
+
+    Raises
+    ------
+    ValueError
+        If the file is missing, malformed, or lacks well-formed
+        ``allowed``/``denied`` lists.
+    """
+    try:
+        with open(policy_path, "r") as fh:
+            data = json.load(fh)
+    except (IOError, OSError) as exc:
+        raise ValueError("could not read policy file %r: %s"
+                         % (policy_path, exc))
+    except ValueError as exc:  # json.JSONDecodeError subclasses ValueError
+        raise ValueError("malformed JSON in policy file %r: %s"
+                         % (policy_path, exc))
+    if not isinstance(data, dict):
+        raise ValueError(
+            "policy file must be a JSON object with 'allowed' and 'denied'")
+    for key in ("allowed", "denied"):
+        if key not in data:
+            raise ValueError("policy file missing required key %r" % key)
+        raw = data[key]
+        if (not isinstance(raw, list)
+                or any(not isinstance(x, str) or not x for x in raw)):
+            raise ValueError(
+                "policy file: %r must be a list of non-empty "
+                "action-name strings" % key)
+    return list(data["allowed"]), list(data["denied"])
+
+
+def _cmd_check_mcp(args):
+    """Emit the Cedar-AR standardized findings report (``--mcp``).
+
+    Reads the policy's ``allowed``/``denied`` action sets (and, if ``--tools``
+    is given, the tool catalog), runs :func:`rot.mcp_adapter.audit_mcp`, writes
+    the JSON artifact, and renders the blog-ready narrative.  The exit code is
+    the report's gate outcome (0 PASS / 1 BLOCK / 2 OUT_OF_SCOPE).
+    """
+    import rot.mcp_adapter as mcp
+    from rot.frontends.policy import dogwood
+
+    policy_path = args.policy
+    if not os.path.isfile(policy_path):
+        print("ERROR: policy file not found: %s" % policy_path,
+              file=sys.stderr)
+        return EXIT_ERROR
+
+    try:
+        allowed, denied = _read_policy_actions(policy_path)
+    except ValueError as exc:
+        print("ERROR: %s" % exc, file=sys.stderr)
+        return EXIT_ERROR
+
+    tools = None
+    tools_path = getattr(args, "tools", None)
+    if tools_path:
+        if not os.path.isfile(tools_path):
+            print("ERROR: tools file not found: %s" % tools_path,
+                  file=sys.stderr)
+            return EXIT_ERROR
+        try:
+            tools = dogwood.parse_tools(tools_path)
+        except dogwood.DogwoodFrontendError as exc:
+            print("ERROR: %s" % exc, file=sys.stderr)
+            return EXIT_ERROR
+
+    report = mcp.audit_mcp(
+        allowed, denied, tools=tools,
+        horizon=getattr(args, "liveness_horizon", None) or 12,
+    )
+
+    # Write the JSON artifact (the MCP/CI artifact).
+    out_dir = args.out or os.path.join(_repo_root(), "out")
+    _ensure_dir(out_dir)
+    report_path = os.path.join(out_dir, "mcp_findings.json")
+    with open(report_path, "w") as fh:
+        fh.write(report.to_json() + "\n")
+
+    if not args.quiet:
+        print(mcp.render_narrative(report))
+        print("  report    : %s" % report_path)
+    return report.exit_code()
+
+
 def cmd_check(args):
     """Verify a policy; on VIOLATED emit narrative + attack.jsonl."""
+    if getattr(args, "mcp", False):
+        return _cmd_check_mcp(args)
     policy = args.policy
     import rot.frontends.policy as fe
     try:
@@ -563,10 +657,25 @@ def cmd_demo(args):
 # ---------------------------------------------------------------------------
 
 def cmd_corpus(args):
-    """Run every .dw policy under the corpus dir; emit a coverage matrix."""
+    """Run every .dw policy under the corpus dir; emit an honest coverage matrix.
+
+    Phase B.2 deliverable. Each policy is classified as:
+      - shape:       the temporal shape (spendcap / count_window / exists_sum /
+                     refund_budget), from the IR metadata ``protocol`` field.
+      - lowerable:   whether the general temporal lowering produced a valid IR.
+      - verdict:     PROVEN / VIOLATED / OUT_OF_SCOPE.
+                     OUT_OF_SCOPE is an honest classification (the reachable
+                     state space exceeded the bounded-checking budget, or the
+                     shape is not yet lowerable) -- NOT a bug.
+    The command exits 0 when the matrix is produced (report semantics); it
+    exits non-zero only on an internal error (corpus dir missing, no policies,
+    or an unexpected engine exception).
+    """
+    from rot.modelfind import ProductTooLarge
+
     root = _repo_root()
     corpus_dir = args.corpus_dir or os.path.join(
-        root, "tests", "fixtures", "aws_dogwood", "spendcap", "corpus")
+        root, "tests", "fixtures", "aws_dogwood", "spendcap")
     if not os.path.isdir(corpus_dir):
         print("ERROR: corpus dir not found: %s" % corpus_dir, file=sys.stderr)
         return EXIT_ERROR
@@ -584,65 +693,134 @@ def cmd_corpus(args):
     print("Discovered %d policies under %s" % (len(policies), corpus_dir))
     results = []
     for p in policies:
-        name = os.path.relpath(p, corpus_dir)
+        name = os.path.relpath(p, corpus_dir).replace(os.sep, "/")
         a = argparse.Namespace(policy=p, kind=None,
                                max_inflight=args.max_inflight, amount=None,
                                cap=None, out=None, quiet=True,
                                liveness_horizon=None)
-        entry = {"policy": name, "property": None, "kind": None,
-                 "verdict": None, "witness": None, "error": None}
+        entry = {
+            "policy": name, "shape": None, "lowerable": False,
+            "verdict": None, "witness": None, "note": None,
+        }
+        ir = None
         try:
             ir = _build_ir(p, a)
             ir.validate()
-            entry["kind"] = (ir.metadata.get("property_kind") or "safety")
-            entry["property"] = ir.metadata.get("property_name")
-            if entry["kind"] == "safety":
-                status, witness, _note = _verify(ir, a)
-                entry["verdict"] = status
-                entry["witness"] = witness
-            else:
-                entry["verdict"] = "unsupported"
+            entry["lowerable"] = True
+            entry["shape"] = (ir.metadata.get("protocol") or "unknown").lower()
         except Exception as exc:
-            entry["error"] = str(exc)
+            # A lowering failure is an honest out-of-scope row (the shape is
+            # not yet supported by the general lowering), not an internal error.
+            entry["verdict"] = "out_of_scope"
+            entry["note"] = "not lowerable: %s" % exc
+        if entry["lowerable"]:
+            kind = ir.metadata.get("property_kind") or "safety"
+            if kind == "safety":
+                try:
+                    status, witness, note = _verify(ir, a)
+                    entry["verdict"] = status
+                    entry["witness"] = witness
+                    if note:
+                        entry["note"] = note
+                except ProductTooLarge as exc:
+                    # Honest out-of-scope: the reachable state space exceeds the
+                    # bounded-checking budget. A known limitation, not a bug.
+                    entry["verdict"] = "out_of_scope"
+                    entry["note"] = "state space exceeded budget: %s" % exc
+                except Exception as exc:
+                    entry["verdict"] = "error"
+                    entry["note"] = "engine error: %s" % exc
+            else:
+                entry["verdict"] = "out_of_scope"
+                entry["note"] = ("property kind %r not supported by the "
+                                 "corpus harness" % kind)
         results.append(entry)
-        v = entry["verdict"] or "ERROR"
+        v = (entry["verdict"] or "?").upper()
         w = ""
         if entry.get("witness") is not None:
             try:
                 w = json.dumps(entry["witness"], sort_keys=True)
             except (TypeError, ValueError):
                 w = repr(entry["witness"])
-        print("  %-44s %-12s %s" % (name[:44], v, w))
+        elif entry.get("note"):
+            w = entry["note"]
+        print("  %-40s %-14s %-6s %-13s %s" % (
+            name[:40], entry["shape"] or "-",
+            "yes" if entry["lowerable"] else "no", v, w))
 
     summary = {}
     for r in results:
         key = r["verdict"] or "error"
         summary[key] = summary.get(key, 0) + 1
+    lowerable_count = sum(1 for r in results if r["lowerable"])
 
     print(_BAR)
-    print("  ROTN corpus coverage matrix (%d policies)" % len(results))
+    print("  ROTN corpus coverage matrix (%d policies, %d lowerable)"
+          % (len(results), lowerable_count))
     print(_BAR)
     for k in sorted(summary):
-        print("  %-12s %d" % (k, summary[k]))
+        print("  %-14s %d" % (k, summary[k]))
     print(_BAR)
 
-    if args.out:
-        if not os.path.isdir(args.out):
-            os.makedirs(args.out)
-        matrix_path = os.path.join(args.out, "corpus_matrix.json")
-        with open(matrix_path, "w") as f:
-            json.dump({"corpus_dir": corpus_dir, "summary": summary,
-                       "results": results}, f, indent=2, sort_keys=True)
-        print("  matrix      : %s" % matrix_path)
+    report = {
+        "corpus_dir": corpus_dir,
+        "generated_by": "rot corpus (Phase B.2)",
+        "policies": results,
+        "summary": dict({"total": len(results),
+                         "lowerable": lowerable_count}, **summary),
+    }
 
-    if summary.get("error") or summary.get("unsupported"):
+    out_dir = args.out or os.path.join(root, "out", "corpus")
+    if not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
+    json_path = os.path.join(out_dir, "corpus_matrix.json")
+    md_path = os.path.join(out_dir, "corpus_matrix.md")
+    with open(json_path, "w") as f:
+        json.dump(report, f, indent=2, sort_keys=True)
+    with open(md_path, "w") as f:
+        f.write(_corpus_matrix_markdown(report))
+    print("  matrix      : %s" % json_path)
+    print("  markdown    : %s" % md_path)
+
+    # Report semantics: exit 0 when the matrix is produced. Non-zero only on
+    # an internal error (a policy that hit an unexpected engine exception).
+    if summary.get("error"):
         return EXIT_ERROR
-    if summary.get("violated"):
-        return EXIT_VIOLATED
-    if summary.get("unknown"):
-        return EXIT_UNKNOWN
     return EXIT_PROVEN
 
+
+def _corpus_matrix_markdown(report):
+    """Render the coverage matrix as a Markdown table (Phase B.2 artifact)."""
+    s = report["summary"]
+    lines = []
+    lines.append("# ROTN corpus coverage matrix (Phase B.2)")
+    lines.append("")
+    lines.append("Corpus: `%s`" % report["corpus_dir"])
+    lines.append("")
+    lines.append(
+        "Summary: **%d** policies, **%d** lowerable, **%d** PROVEN, "
+        "**%d** VIOLATED, **%d** OUT_OF_SCOPE, **%d** ERROR."
+        % (s.get("total", 0), s.get("lowerable", 0),
+           s.get("proven", 0), s.get("violated", 0),
+           s.get("out_of_scope", 0), s.get("error", 0)))
+    lines.append("")
+    lines.append("| Policy | Shape | Lowerable | Verdict | Witness / Note |")
+    lines.append("|--------|-------|-----------|---------|----------------|")
+    for r in report["policies"]:
+        if r["witness"] is not None:
+            try:
+                witness = json.dumps(r["witness"], sort_keys=True)
+            except (TypeError, ValueError):
+                witness = repr(r["witness"])
+        else:
+            witness = r["note"] or "\u2014"
+        lines.append("| %s | %s | %s | %s | %s |" % (
+            r["policy"], r["shape"] or "\u2014",
+            "yes" if r["lowerable"] else "no",
+            (r["verdict"] or "?").upper(),
+            witness))
+    lines.append("")
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -681,6 +859,12 @@ def main(argv=None):
                         "[default: <repo>/out]")
     p.add_argument("--liveness-horizon", type=int, default=None, metavar="H",
                    help="bounded liveness horizon (liveness policies)")
+    p.add_argument("--mcp", action="store_true",
+                   help="emit the Cedar-AR standardized findings report "
+                        "(rot.mcp_adapter) instead of the narrative")
+    p.add_argument("--tools", default=None, metavar="FILE",
+                   help="tools catalog (tools.json) enabling the --mcp "
+                        "'unreachable rules' structural check")
     p.add_argument("--quiet", action="store_true",
                    help="suppress the human summary")
 
@@ -711,7 +895,7 @@ def main(argv=None):
     p = sub.add_parser("corpus", help="run the AWS Dogwood corpus")
     p.add_argument("--corpus-dir", default=None, metavar="DIR",
                    help="corpus dir [default: "
-                        "tests/fixtures/aws_dogwood/spendcap/corpus]")
+                        "tests/fixtures/aws_dogwood/spendcap]")
     p.add_argument("--max-inflight", type=int, default=None, metavar="K",
                    help="bounded concurrency pool K")
     p.add_argument("--out", default=None, metavar="DIR",

@@ -22,4 +22,5 @@ __all__ = [
     "cegar",
     "config",
     "cpg_reader",
+    "mcp_adapter",
 ]

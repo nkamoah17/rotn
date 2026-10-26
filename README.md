@@ -345,6 +345,41 @@ success): `bash scripts/run_agent_mode.sh`.
 
 ---
 
+## Novelty: temporal proof, not point-in-time checks
+
+The spend-cap result above exposes a class of bug that point-in-time
+authorization tooling cannot see. The framing is precise, not a claim about
+AWS's tooling: it is an **absence of a soundness-of-intent guarantee**.
+
+- **Cedar's Automated Reasoning** checks - the finding vocabulary AgentCore
+  applies to agent tool policies (contradictions, unreachable rules, Overly
+  Permissive / Overly Restrictive, Ineffective) - are *point-in-time* static
+  analyses over one request.
+- **Dogwood's** formal spec (guide §7) adds *operational* meta-properties:
+  fail-closed evaluation, lowering totality, validation soundness,
+  determinism of identity, statefulness confined to the temporal engine, and
+  acceptance-implies-monitorability. Clause 5 is the boundary: the policy
+  engine is invoked *per-request over an empty entity set* - an in-flight
+  request that has not settled is not in the monitor's world.
+- **ROTN** answers the question neither asks: *can this policy, under
+  concurrency, ever reach a state that violates it?* - by lowering the policy
+  into a bounded model and checking **all** reachable states, and by honestly
+  reporting `OUT_OF_SCOPE` when it cannot.
+
+| Dimension | **Cedar AR** (point-in-time checks) | **Dogwood** (operational guarantees) | **ROTN** (temporal proof) |
+|---|---|---|---|
+| Question answered | "Is this policy well-formed / effective?" | "Is this request admissible against the settled history?" | "Can this policy ever reach a violating state under concurrency?" |
+| Concurrency / in-flight | not modeled | not in the settled history (per-request engine) | first-class state; interleavings explored |
+| Parallel-fire budget bug | invisible | invisible (each request admissible in isolation) | **VIOLATED + witness** (`inflight = 3`), K >= 2 |
+| Honesty | reports findings | fail-closed | PROVEN / VIOLATED / **OUT_OF_SCOPE** - never silent |
+
+Full analysis (K-sweep, corpus coverage matrix, honest limits, and what ROTN
+does not claim): [`docs/novelty.md`](docs/novelty.md). The corpus coverage
+evaluation (per-policy verdicts, aggregate metrics, the honest 11-vs-59 note,
+and the gaps): [`docs/corpus-eval.md`](docs/corpus-eval.md).
+
+---
+
 ## Engines
 
 The invariant check is discharged by one of three **independent** engines, all
@@ -530,7 +565,8 @@ pipeline.py         # CLI orchestration + exit codes (+ --source / --cpg modes)
 run.ps1             # PowerShell wrapper (single / list / matrix)
 samples/            # Cedar / Dogwood policy + tools samples (Agent Mode)
 scripts/            # run_agent_mode.sh (CI matrix for Agent Mode)
-docs/               # agent-mode.md (Agent Mode reference)
+docs/               # agent-mode.md, phase3-eval.md (Step 3.7),
+                    # novelty.md (B.3), corpus-eval.md (B.2)
 tests/
   test_cegar.py             # CEGAR mapping + bounded refinement
   test_pipeline.py          # end-to-end (symbolic) + CLI exit codes
