@@ -37,20 +37,37 @@ setup(
     name="rotn",
     version=_read_version(),
     description=(
-        "ROTN -- temporal policy verification engine. "
-        "Three-engine cross-check (SMT/Z3 + TLC + policy-direct) with "
-        "deterministic counterexample generation."
+        "caravel/rot-verify -- verify an AI agent's tool policy (Dogwood or "
+        "an MCP manifest) with three independent engines + bounded CEGAR; "
+        "deterministic, hashed trace; SOC 2 / AIUC control mapping; zero "
+        "runtime deps."
     ),
     long_description=(
-        "ROTN verifies temporal safety policies (Dogwood, Cedar, .dw "
-        "spend-cap) against bounded state-space models using three "
-        "independent engines.  A VIOLATED verdict requires all three "
-        "engines to agree on the same counterexample state -- "
-        "soundness-first by construction.\n\n"
-        "Pure stdlib, zero external dependencies, Python 3.6+."
+        "<p align=\"center\">"
+        "<img src=\"assets/caravel_logo.jpeg\" alt=\"Caravel\" width=\"160\"/>"
+        "</p>\n\n"
+        "# ROTN — Regression-detection Oracle via Trace Non-emptiness\n\n"
+        "**CARAVEL** — *Agents are replacing the software that used to "
+        "enforce our rules. We make the rules explicit, prove agents can't "
+        "break them — even when compromised — and coach agents back in "
+        "bounds when they try.*\n\n"
+        "ROTN ingests an AI agent's tool policy (Dogwood *or* a standard "
+        "MCP manifest), verifies it with three independent engines and a "
+        "bounded CEGAR loop, maps findings to SOC 2 / AIUC controls, gates "
+        "depth by tier, and emits a deterministic, hashed trace that "
+        "replays as an interactive proof on GitHub Pages.\n\n"
+        "Pure stdlib, zero external dependencies, Python 3.6+.\n\n"
+        "Repository: [caravel/rot-verify]"
+        "(https://github.com/caravel/rot-verify)\n"
     ),
-    long_description_content_type="text/plain",
-    author="KAMANU",
+    long_description_content_type="text/markdown",
+    author="Caravel",
+    url="https://github.com/caravel/rot-verify",
+    project_urls={
+        "Repository": "https://github.com/caravel/rot-verify",
+        "Issues": "https://github.com/caravel/rot-verify/issues",
+        "Documentation": "https://caravel.github.io/rot-verify/",
+    },
     license="MIT",
     python_requires=">=3.6",
     packages=find_packages(exclude=[

@@ -28,6 +28,18 @@ deterministic, so the whole pipeline runs in a bare Python environment.
 
 ---
 
+## Hosted replay
+
+Every `rot check` run emits a **deterministic, hashed trace** (`trace.json`)
+that replays as an **interactive proof** on GitHub Pages — a verdict card,
+the counterexample graph (Cytoscape), the step-by-step attack timeline with
+narration, the Cedar-AR findings, and the SOC 2 / AIUC control mapping:
+
+> **<https://caravel.github.io/rot-verify/>**
+> *(to be deployed — the Ship plane; see `docs/architecture.md`)*
+
+---
+
 ## 60-second run
 
 Zero dependencies, no Java, no network. From a source checkout:
