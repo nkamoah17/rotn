@@ -1,4 +1,8 @@
-# ROTN — Regression-detection Oracle via Trace Non-emptiness
+<p align="center">
+  <img src="assets/caravel_logo.jpeg" alt="Caravel" width="160"/>
+</p>
+
+<h1 align="center">ROTN — Regression-detection Oracle via Trace Non-emptiness</h1>
 
 > **CARAVEL** — *Agents are replacing the software that used to enforce our rules. We make the rules explicit, prove agents can't break them — even when compromised — and coach agents back in bounds when they try.*
 
@@ -58,7 +62,11 @@ rot demo
 
 ---
 
-## Research pipeline (pipeline.py)
+## Deep dive
+
+<details>
+<summary><strong>Research pipeline (pipeline.py)</strong></summary>
+
 
 ```bash
 # List available targets and invariants
@@ -98,7 +106,11 @@ PowerShell wrapper (adds a matrix mode):
 
 ---
 
-## The targets
+</details>
+
+<details>
+<summary><strong>The targets</strong></summary>
+
 
 ROTN verifies four protocol families and the AWS Dogwood **spend-cap** policy
 target, each shipped as a *correct* variant (the invariant holds) and a
@@ -273,7 +285,11 @@ The `*-correct` targets prove the pinned invariant; the `*-buggy` target violate
 
 ---
 
-## Composition plane (Phase 2)
+</details>
+
+<details>
+<summary><strong>Composition plane (Phase 2)</strong></summary>
+
 
 `rot.composition` merges independently modelled service IRs into a single
 concurrent `ProtocolIR`, so **cross-service** invariants can be checked
@@ -287,7 +303,11 @@ A service IR may reference another service's variables (e.g. `client.ordered`);
 `validate` enforces that the *composed* IR is self-contained (every referenced
 variable is defined) and that each sync action names a defined variable.
 
-## Merge-request gate (Phase 3)
+</details>
+
+<details>
+<summary><strong>Merge-request gate (Phase 3)</strong></summary>
+
 
 `rot.mr_gate` maps invariant verdicts to a `PASS`/`BLOCK` merge decision, comparing a
 **candidate** change against a **baseline**:
@@ -303,7 +323,11 @@ with the `no_double_charge` witness.
 
 ---
 
-## Agent Mode (policy-driven verification)
+</details>
+
+<details>
+<summary><strong>Agent Mode (policy-driven verification)</strong></summary>
+
 
 ROTN can also verify the *action choice of an autonomous agent* against the
 **policy** it must obey. Instead of a protocol target, pass a policy file - a
@@ -345,7 +369,11 @@ success): `bash scripts/run_agent_mode.sh`.
 
 ---
 
-## Novelty: temporal proof, not point-in-time checks
+</details>
+
+<details>
+<summary><strong>Novelty: temporal proof, not point-in-time checks</strong></summary>
+
 
 The spend-cap result above exposes a class of bug that point-in-time
 authorization tooling cannot see. The framing is precise, not a claim about
@@ -380,7 +408,11 @@ and the gaps): [`docs/corpus-eval.md`](docs/corpus-eval.md).
 
 ---
 
-## Engines
+</details>
+
+<details>
+<summary><strong>Engines</strong></summary>
+
 
 The invariant check is discharged by one of three **independent** engines, all
 behind the same `EngineResult` interface (`rot.symbolic.EngineResult`):
@@ -444,7 +476,11 @@ $env:TLA2TOOLS_JAR = "C:\path\to\tla2tools.jar"
 
 ---
 
-## CEGAR (`rot/cegar.py`)
+</details>
+
+<details>
+<summary><strong>CEGAR (`rot/cegar.py`)</strong></summary>
+
 
 Counterexample-guided handling of the engine outcome. It maps an
 `EngineResult` to a `Verdict` and, when the result is **unknown**, makes a
@@ -467,7 +503,11 @@ loop **terminates** (`cegar_max_iter` is the hard cap).
 
 ---
 
-## Auditable report
+</details>
+
+<details>
+<summary><strong>Auditable report</strong></summary>
+
 
 `VerdictReport.write(out_dir, base_name)` writes two files per run:
 
@@ -483,7 +523,11 @@ the abstraction is *property-relevant* (no spurious behaviour introduced).
 
 ---
 
-## Environment fragments, refinement & LLM baseline
+</details>
+
+<details>
+<summary><strong>Environment fragments, refinement & LLM baseline</strong></summary>
+
 
 Three optional extensions of the same core, all wired into the CLI:
 
@@ -515,7 +559,11 @@ python pipeline.py correct --property agreement --engine symbolic \
 
 ---
 
-## Project layout
+</details>
+
+<details>
+<summary><strong>Project layout</strong></summary>
+
 
 ```
 rot/
@@ -595,7 +643,11 @@ tests/
 
 ---
 
-## Testing
+</details>
+
+<details>
+<summary><strong>Testing</strong></summary>
+
 
 ```bash
 # full suite (pure stdlib, Python 3.6)
@@ -630,4 +682,4 @@ The pinned invariant is the discriminator in each family; the auxiliary
 invariants (e.g. `validity`, `charge_requires_order`, `settle_requires_charge`) hold for
 both variants and exist to show the registry drives *different* property-directed
 abstractions (different free-variable closures).
-
+</details>
