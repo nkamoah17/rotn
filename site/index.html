@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ROTN Replay — caravel/rot-verify</title>
+<meta name="description" content="Replay deterministic, hashed policy-verification proofs (RTF v1) as interactive evidence: verdict, state-space graph, counterexample, findings, and controls.">
+<link rel="stylesheet" href="app/style.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="#/">
+      <img class="brand-logo" src="../assets/caravel_logo.jpeg" alt=""
+           onerror="this.style.display='none'">
+      <span class="brand-name">ROTN</span>
+      <span class="brand-sub">rot-verify · interactive proofs</span>
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="#/">Gallery</a>
+    </nav>
+  </div>
+</header>
+
+<main id="view" class="wrap" aria-live="polite"></main>
+
+<noscript>
+  <div class="wrap"><p class="muted">This site needs JavaScript to render the
+  gallery and replay pages (the trace data itself is plain JSON in
+  <code>data/</code>).</p></div>
+</noscript>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <span>caravel/rot-verify — deterministic, hashed, zero-dependency policy verification.</span>
+    <span>RTF v1 · <a href="#/">gallery</a></span>
+  </div>
+</footer>
+
+<!-- Vendored (offline) + app modules. No build step, no CDN. -->
+<script src="vendor/cytoscape.min.js"></script>
+<script src="data/traces.js"></script>
+<script src="app/graph.js"></script>
+<script src="app/timeline.js"></script>
+<script src="app/narration.js"></script>
+<script src="app/findings.js"></script>
+<script src="app/app.js"></script>
+</body>
+</html>

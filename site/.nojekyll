@@ -1,0 +1,3 @@
+# This file is required by GitHub Pages. Its presence disables Jekyll
+# processing so that the site's data files (data/*.trace.json) and hash
+# routes are served as-is, without 404s on refresh.

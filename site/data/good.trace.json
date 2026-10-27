@@ -1,0 +1,118 @@
+{
+  "budget": {
+    "limits": {
+      "max_horizon": 4,
+      "max_states": 1000,
+      "max_tenant_scopes": 1,
+      "max_tools": 5
+    },
+    "source": "free",
+    "tier": "free"
+  },
+  "counterexample": null,
+  "decision_tree": {
+    "checks": [
+      {
+        "check": "field_write_permission",
+        "findings": [],
+        "result": "pass"
+      },
+      {
+        "check": "tenant_read_isolation",
+        "findings": [],
+        "result": "pass"
+      }
+    ],
+    "root": "manifest_audit",
+    "verdict": "proven"
+  },
+  "engines": [
+    "structural"
+  ],
+  "findings": [],
+  "graph": {
+    "allowed_write_fields": [
+      "account.balance"
+    ],
+    "edges": [
+      {
+        "from": "get_balance",
+        "kind": "read",
+        "to": "tenant:acme.account.balance"
+      },
+      {
+        "from": "update_balance",
+        "kind": "read",
+        "to": "tenant:acme.account.balance"
+      },
+      {
+        "from": "update_balance",
+        "kind": "write",
+        "to": "account.balance"
+      }
+    ],
+    "kind": "manifest",
+    "nodes": [
+      {
+        "id": "get_balance",
+        "kind": "tool",
+        "read_fields": [
+          "tenant:acme.account.balance"
+        ],
+        "write_fields": []
+      },
+      {
+        "id": "update_balance",
+        "kind": "tool",
+        "read_fields": [
+          "tenant:acme.account.balance"
+        ],
+        "write_fields": [
+          "account.balance"
+        ]
+      }
+    ],
+    "tenant_scope": "tenant:acme"
+  },
+  "hash": "44e498ee5679bb5942304e4c9a3858ef4d792c708c77d78628134a00348520c9",
+  "horizon": 12,
+  "manifest_id": "mf-b3886e274afb2fe1",
+  "narration": "ROTN MCP findings  (Cedar-AR vocabulary, temporal proof)\n====================================================\nmanifest server=caravel-agent-tools  version=1.0.0\n         tenant_scope=tenant:acme  allowed_write_fields=['account.balance']\ntools    get_balance, update_balance\n\nRESULT: PASS -- field and tenant structural checks clean; no Cedar-AR findings\n\nCedar-AR findings: none",
+  "policy": {
+    "allowed_write_fields": [
+      "account.balance"
+    ],
+    "hash": "b3886e274afb2fe1e53b2e3006429583c23ff6444f0ddce3558dda0217737f0b",
+    "server": "caravel-agent-tools",
+    "tenant_scope": "tenant:acme",
+    "version": "1.0.0"
+  },
+  "rot_version": "0.1.0",
+  "schema": "caravel.rtf/v1",
+  "source": {
+    "hash": "b3886e274afb2fe1e53b2e3006429583c23ff6444f0ddce3558dda0217737f0b",
+    "path": "examples\\mcp-manifest-good.json",
+    "schema": "caravel.mcp-manifest/v1"
+  },
+  "timeline": [
+    {
+      "status": "ok",
+      "step": "parse_manifest"
+    },
+    {
+      "findings": 0,
+      "status": "pass",
+      "step": "field_write_permission"
+    },
+    {
+      "findings": 0,
+      "status": "pass",
+      "step": "tenant_read_isolation"
+    },
+    {
+      "status": "proven",
+      "step": "verdict"
+    }
+  ],
+  "verdict": "proven"
+}
