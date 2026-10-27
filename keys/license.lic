@@ -1,0 +1,14 @@
+{
+  "expiry": "2027-10-27",
+  "hmac": "hmac-sha256:dffbaec00e9d491581594fdf443886b39c37da30b6abf681b989990f6b78eebb",
+  "issued": "2026-10-27",
+  "limits": {
+    "max_horizon": 4,
+    "max_states": 1000,
+    "max_tenant_scopes": 1,
+    "max_tools": 5
+  },
+  "org": "KAMANU",
+  "schema": "caravel.license/v1",
+  "tier": "free"
+}

@@ -626,7 +626,8 @@ run.ps1             # PowerShell wrapper (single / list / matrix)
 samples/            # Cedar / Dogwood policy + tools samples (Agent Mode)
 scripts/            # run_agent_mode.sh (CI matrix for Agent Mode)
 docs/               # agent-mode.md, phase3-eval.md (Step 3.7),
-                    # novelty.md (B.3), corpus-eval.md (B.2)
+                    # novelty.md (B.3), corpus-eval.md (B.2),
+                    # compliance.md (Phase C, SOC 2 / AIUC control map)
 tests/
   test_cegar.py             # CEGAR mapping + bounded refinement
   test_pipeline.py          # end-to-end (symbolic) + CLI exit codes

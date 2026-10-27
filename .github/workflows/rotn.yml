@@ -3,12 +3,32 @@
 # No Java, no Z3, no network: the package has zero runtime dependencies, and
 # every engine that needs an external tool (TLC, Apalache, Z3) degrades to a
 # skip or an "unknown" verdict, so the suite is green in a bare Python env.
+#
+# Phase D (tier gating): the ``workflow_dispatch`` inputs let a maintainer
+# pin the audit tier + depth for a manual run.  The ``stdlib`` job always
+# demonstrates the tier gate with the ``policy-six.json`` / ``tools-six.json``
+# samples: the free tier (max_tools=5) is out of scope for a 6-tool catalog
+# (exit 2), while the paid tier (max_tools=100) proves it (exit 0).
 name: rotn
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: "Audit tier (free | paid)"
+        required: false
+        default: "free"
+        type: choice
+        options:
+          - free
+          - paid
+      depth:
+        description: "max_states override (capped to the tier max when tier=free)"
+        required: false
+        default: "1000"
 
 jobs:
   stdlib:
@@ -55,6 +75,42 @@ jobs:
           test -f ci/JUnit.xml
           test -f ci/results.sarif
 
+      - name: Tier-gating demo (Phase D)
+        # The 6-tool catalog exceeds the free tier cap (max_tools=5) ->
+        # OUT_OF_SCOPE (exit 2).  The paid tier (max_tools=100) proves it
+        # -> PASS (exit 0).  This is the D3 "Done when" #5 demonstration.
+        run: |
+          set -e
+          echo "=== free tier (expect OUT_OF_SCOPE, exit 2) ==="
+          code=0; rot check --mcp \
+            --policy samples/policy-six.json \
+            --tools samples/tools-six.json \
+            --tier free --out out-tier-free || code=$?
+          [ "$code" -eq 2 ]
+          test -f out-tier-free/mcp_findings.json
+
+          echo "=== paid tier (expect PASS, exit 0) ==="
+          code=0; rot check --mcp \
+            --policy samples/policy-six.json \
+            --tools samples/tools-six.json \
+            --tier paid --out out-tier-paid || code=$?
+          [ "$code" -eq 0 ]
+          test -f out-tier-paid/mcp_findings.json
+
+      - name: Tier-gating demo (workflow_dispatch inputs)
+        # When triggered manually, honour the chosen tier + depth.
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -e
+          echo "tier=${{ inputs.tier }} depth=${{ inputs.depth }}"
+          code=0; rot check --mcp \
+            --policy samples/policy-six.json \
+            --tools samples/tools-six.json \
+            --tier "${{ inputs.tier }}" \
+            --depth "${{ inputs.depth }}" \
+            --out out-tier-custom || code=$?
+          echo "custom exit code: $code"
+
       - name: Upload CI artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -63,3 +119,6 @@ jobs:
             ci/JUnit.xml
             ci/results.sarif
             out/attack.jsonl
+            out-tier-free/mcp_findings.json
+            out-tier-paid/mcp_findings.json
+          if-no-files-found: ignore

@@ -1,0 +1,4 @@
+{
+  "allowed": ["read_log", "update_balance", "send_email"],
+  "denied": ["exfiltrate_secret", "delete_account", "grant_admin"]
+}

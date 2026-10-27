@@ -260,6 +260,37 @@ def _read_policy_actions(policy_path):
     return list(data["allowed"]), list(data["denied"])
 
 
+def _fmt_date(value):
+    """Format a date (``datetime.date`` or ISO string) for display."""
+    if value is None:
+        return "n/a"
+    iso = getattr(value, "isoformat", None)
+    if callable(iso):
+        return iso()
+    return str(value)
+
+
+def _resolve_budget(args):
+    """Resolve the effective tier budget (Phase D) from CLI options.
+
+    Precedence: ``--license`` (verified, fail-closed) > ``--tier`` /
+    ``--depth`` (the action-input path) > free defaults. Returns a
+    :class:`rot.license.DepthBudget` (never ``None`` -- free is the floor).
+    """
+    import rot.license as lic
+
+    key = getattr(args, "key", None)
+    license_obj = None
+    license_path = getattr(args, "license", None)
+    if license_path:
+        # Fail-closed: a tampered / expired / malformed license is rejected.
+        license_obj = lic.load_license(license_path, key=key)
+
+    tier = getattr(args, "tier", None)
+    depth = getattr(args, "depth", None)
+    return lic.resolve_budget(license=license_obj, tier=tier, depth=depth)
+
+
 def _cmd_check_mcp(args):
     """Emit the Cedar-AR standardized findings report (``--mcp``).
 
@@ -269,6 +300,7 @@ def _cmd_check_mcp(args):
     the report's gate outcome (0 PASS / 1 BLOCK / 2 OUT_OF_SCOPE).
     """
     import rot.mcp_adapter as mcp
+    import rot.license as lic
     from rot.frontends.policy import dogwood
 
     policy_path = args.policy
@@ -296,14 +328,22 @@ def _cmd_check_mcp(args):
             print("ERROR: %s" % exc, file=sys.stderr)
             return EXIT_ERROR
 
+    try:
+        budget = _resolve_budget(args)
+    except lic.LicenseError as exc:
+        # Fail-closed: a tampered / expired / malformed license is rejected.
+        print("REJECTED: %s" % exc, file=sys.stderr)
+        return EXIT_VIOLATED
+
     report = mcp.audit_mcp(
         allowed, denied, tools=tools,
         horizon=getattr(args, "liveness_horizon", None) or 12,
+        budget=budget,
     )
 
     # Write the JSON artifact (the MCP/CI artifact).
     out_dir = args.out or os.path.join(_repo_root(), "out")
-    _ensure_dir(out_dir)
+    os.makedirs(out_dir, exist_ok=True)
     report_path = os.path.join(out_dir, "mcp_findings.json")
     with open(report_path, "w") as fh:
         fh.write(report.to_json() + "\n")
@@ -324,6 +364,7 @@ def _cmd_check_manifest(args):
     outcome (0 PASS / 1 BLOCK).
     """
     import rot.mcp_adapter as mcp
+    import rot.license as lic
     import rot.mcp_manifest as mm
 
     manifest_path = args.manifest
@@ -333,11 +374,18 @@ def _cmd_check_manifest(args):
         print("ERROR: %s" % exc, file=sys.stderr)
         return EXIT_ERROR
 
-    report = mcp.audit_manifest(manifest)
+    try:
+        budget = _resolve_budget(args)
+    except lic.LicenseError as exc:
+        # Fail-closed: a tampered / expired / malformed license is rejected.
+        print("REJECTED: %s" % exc, file=sys.stderr)
+        return EXIT_VIOLATED
+
+    report = mcp.audit_manifest(manifest, budget=budget)
 
     # Write the JSON artifact (the MCP/CI artifact).
     out_dir = args.out or os.path.join(_repo_root(), "out")
-    _ensure_dir(out_dir)
+    os.makedirs(out_dir, exist_ok=True)
     report_path = os.path.join(out_dir, "mcp_findings.json")
     with open(report_path, "w") as fh:
         fh.write(report.to_json() + "\n")
@@ -417,6 +465,75 @@ def cmd_check(args):
         _narrative(policy, target, prop, kind, status, witness, steps,
                    note, report_path, attack_path)
     return code
+
+
+# ---------------------------------------------------------------------------
+# rot license
+# ---------------------------------------------------------------------------
+
+def cmd_license(args):
+    """License management (Phase D): verify / make / show.
+
+    Exit codes: 0 = valid / issued, 1 = rejected (tampered / expired),
+    3 = usage / I/O error.
+    """
+    import rot.license as lic
+
+    key = getattr(args, "key", None)
+
+    # --verify: the fail-closed license check (D2 "Done when" #1 / #4).
+    if getattr(args, "verify", False):
+        path = getattr(args, "file", None)
+        if not path:
+            print("ERROR: --verify requires --file LICENSE", file=sys.stderr)
+            return EXIT_ERROR
+        try:
+            license_obj = lic.load_license(path, key=key)
+        except lic.LicenseError as exc:
+            print("REJECTED: %s" % exc, file=sys.stderr)
+            return EXIT_VIOLATED
+        print("VALID: license for %r (tier=%s, expires %s)"
+              % (license_obj.org, license_obj.tier,
+                 _fmt_date(license_obj.expiry)))
+        return EXIT_PROVEN
+
+    # --make: issue a signed license (for testing / the Caravel backend).
+    if getattr(args, "make", False):
+        org = getattr(args, "org", None) or "demo-org"
+        tier = getattr(args, "tier", None) or "free"
+        try:
+            license_dict = lic.make_license(org, tier, key=key)
+        except lic.LicenseError as exc:
+            print("ERROR: %s" % exc, file=sys.stderr)
+            return EXIT_ERROR
+        out = getattr(args, "out", None)
+        if out:
+            _ensure_dir(out)
+            with open(out, "w") as fh:
+                fh.write(json.dumps(license_dict, indent=2,
+                                   sort_keys=True) + "\n")
+            print("wrote %s" % out)
+        else:
+            print(json.dumps(license_dict, indent=2, sort_keys=True))
+        return EXIT_PROVEN
+
+    # --show (or default when only --file is given): show a license (validated).
+    if getattr(args, "show", False) or getattr(args, "file", None):
+        path = getattr(args, "file", None)
+        if not path:
+            print("ERROR: --show requires --file LICENSE", file=sys.stderr)
+            return EXIT_ERROR
+        try:
+            license_obj = lic.load_license(path, key=key)
+        except lic.LicenseError as exc:
+            print("ERROR: %s" % exc, file=sys.stderr)
+            return EXIT_ERROR
+        print(json.dumps(license_obj.to_dict(), indent=2, sort_keys=True))
+        return EXIT_PROVEN
+
+    print("ERROR: specify --verify, --make, or --show --file LICENSE",
+          file=sys.stderr)
+    return EXIT_ERROR
 
 
 # ---------------------------------------------------------------------------
@@ -920,6 +1037,20 @@ def main(argv=None):
     p.add_argument("--manifest", default=None, metavar="FILE",
                    help="MCP Manifest v1 JSON file (Phase B, B2): field and "
                         "tenant structural checks via rot.mcp_adapter")
+    # Tier gating (Phase D): license / tier / depth cap the bounded-search
+    # budget. A tampered or expired license is rejected (fail-closed).
+    p.add_argument("--license", default=None, metavar="FILE",
+                   help="Caravel license file (Phase D): verified, fail-closed; "
+                        "its limits cap the audit budget")
+    p.add_argument("--tier", default=None, choices=["free", "paid"],
+                   help="tier (Phase D): caps the audit budget when no "
+                        "--license is given")
+    p.add_argument("--depth", type=int, default=None, metavar="N",
+                   help="max_states override (Phase D); capped to the free "
+                        "maximum when tier is free")
+    p.add_argument("--key", default=None, metavar="KEY",
+                   help="Caravel key for license verification "
+                        "[default: $CARAVEL_LICENSE_KEY or the demo key]")
     p.add_argument("--quiet", action="store_true",
                    help="suppress the human summary")
 
@@ -956,12 +1087,33 @@ def main(argv=None):
     p.add_argument("--out", default=None, metavar="DIR",
                    help="output dir for corpus_matrix.json")
 
+    p = sub.add_parser("license",
+                       help="manage Caravel licenses (Phase D): "
+                            "verify / make / show")
+    p.add_argument("--file", default=None, metavar="LICENSE",
+                   help="license file to verify / show")
+    p.add_argument("--verify", action="store_true",
+                   help="verify the license (fail-closed; exit 1 if rejected)")
+    p.add_argument("--show", action="store_true",
+                   help="show the license (validated)")
+    p.add_argument("--make", action="store_true",
+                   help="issue a signed license for --org / --tier")
+    p.add_argument("--org", default=None, metavar="ORG",
+                   help="licensed organization (for --make)")
+    p.add_argument("--tier", default=None, choices=["free", "paid"],
+                   help="tier (for --make; default free)")
+    p.add_argument("--out", default=None, metavar="FILE",
+                   help="write the issued license here (for --make)")
+    p.add_argument("--key", default=None, metavar="KEY",
+                   help="Caravel key [default: $CARAVEL_LICENSE_KEY or demo]")
+
     args = parser.parse_args(argv)
     if args.command is None:
         parser.print_help()
         return EXIT_ERROR
     return {"check": cmd_check, "replay": cmd_replay, "ci": cmd_ci,
-            "demo": cmd_demo, "corpus": cmd_corpus}[args.command](args)
+            "demo": cmd_demo, "corpus": cmd_corpus,
+            "license": cmd_license}[args.command](args)
 
 
 if __name__ == "__main__":

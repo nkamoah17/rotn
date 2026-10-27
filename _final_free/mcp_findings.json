@@ -1,0 +1,94 @@
+{
+  "compliance": {
+    "controls": {},
+    "controls_touched": [],
+    "evidence": {
+      "by_control": {},
+      "findings_total": 0
+    },
+    "frameworks": [
+      "SOC2",
+      "AIUC"
+    ],
+    "profile": "caravel.compliance/v1",
+    "result": "proven"
+  },
+  "facets": {
+    "conformance": {
+      "evidence": {
+        "engine": "ModelFinder",
+        "method": "exists_reachable",
+        "n_states": 3,
+        "truncated": false
+      },
+      "facet": "conformance",
+      "n_states": 3,
+      "note": "a reachable state exists where an allowed action was taken",
+      "property_name": "allowed_action_reachable",
+      "status": "proven",
+      "witness": {
+        "decision": "read_log"
+      }
+    },
+    "liveness": {
+      "evidence": {
+        "budget_complete": true,
+        "depth": 1,
+        "engine": "SymbolicEngine.reach_within",
+        "horizon": 4,
+        "horizon_complete": true
+      },
+      "facet": "liveness",
+      "n_states": 2,
+      "note": "an allowed action is reachable within 4 step(s) (reached at depth 1)",
+      "property_name": "bounded_allowed_action",
+      "status": "proven",
+      "witness": [
+        {
+          "decision": "idle"
+        },
+        {
+          "decision": "read_log"
+        }
+      ]
+    },
+    "safety": {
+      "evidence": {
+        "engine": "ModelFinder",
+        "method": "forall_reachable",
+        "n_states": 3,
+        "truncated": false
+      },
+      "facet": "safety",
+      "n_states": 3,
+      "note": "policy conformance holds in every reachable state",
+      "property_name": "policy_conformance",
+      "status": "proven",
+      "witness": null
+    }
+  },
+  "findings": [],
+  "policy": {
+    "allowed": [
+      "read_log",
+      "update_balance"
+    ],
+    "denied": [
+      "exfiltrate_secret"
+    ],
+    "hash": "5de70fac907a6e8edbcebb9d84f146fb10103c4c3dbe275e8015a8e510013bcd"
+  },
+  "schema": "rotn.mcp-findings/v1",
+  "summary": {
+    "any_unknown": false,
+    "by_finding": {},
+    "note": "",
+    "result": "proven",
+    "total_findings": 0
+  },
+  "tools": [
+    "exfiltrate_secret",
+    "read_log",
+    "update_balance"
+  ]
+}

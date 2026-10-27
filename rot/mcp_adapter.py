@@ -36,12 +36,20 @@ model needed), so the report covers the full Cedar-AR vocabulary:
     allowed ∩ denied != ∅                    contradictions          error
     action/tool not referenced by the other  unreachable rules       warning
 
+Every finding is also mapped to the controls it touches -- **SOC 2** (AICPA
+TSC, CC6 = Logical & Physical Access) and **AIUC** (Caravel AI Usage Control,
+*autonomy*) -- via :mod:`rot.compliance`. The mapping is attached to each
+finding (``controls``) and summarised in the report (``compliance``), so the
+``--json`` artifact is directly consumable by a SOC 2 / AIUC audit. The AIUC
+control set is Caravel-defined and **swappable** (see ``docs/compliance.md``).
+
 Pure stdlib, Python 3.6 compatible.
 """
 
 import hashlib
 import json
 
+import rot.compliance as compliance
 import rot.ir as ir
 from rot.trifecta import audit, PROVEN, VIOLATED, UNKNOWN
 
@@ -221,6 +229,8 @@ class Finding(object):
             "facet": self.facet,
             "severity": self.severity,
             "property": self.property_name,
+            "controls": compliance.controls_for(self.finding,
+                                                self.property_name),
             "message": self.message,
             "witness": self.witness,
             "evidence": self.evidence,
@@ -250,12 +260,14 @@ class McpFindingsReport(object):
         True if any facet was ``UNKNOWN`` (bounded search did not complete).
     """
 
-    def __init__(self, policy, tools, facets, findings, any_unknown=False):
+    def __init__(self, policy, tools, facets, findings, any_unknown=False,
+                 note=""):
         self.policy = policy
         self.tools = list(tools or [])
         self.facets = facets
         self.findings = list(findings)
         self.any_unknown = bool(any_unknown)
+        self.note = note
 
     # -- queries -----------------------------------------------------------
     def has_findings(self):
@@ -300,11 +312,14 @@ class McpFindingsReport(object):
             "tools": self.tools,
             "facets": self.facets,
             "findings": [f.to_dict() for f in self.findings],
+            "compliance": compliance.compliance_section(self.findings,
+                                                        self.result()),
             "summary": {
                 "total_findings": len(self.findings),
                 "by_finding": by_finding,
                 "any_unknown": self.any_unknown,
                 "result": self.result(),
+                "note": self.note,
             },
         }
 
@@ -431,7 +446,8 @@ def _skipped_facets(reason):
     }
 
 
-def audit_mcp(allowed, denied, tools=None, horizon=12, max_states=200000):
+def audit_mcp(allowed, denied, tools=None, horizon=12, max_states=200000,
+              budget=None):
     """Run the Trifecta audit and map it to the Cedar-AR findings vocabulary.
 
     This is the single entry point for the ``rot check --mcp`` adoption
@@ -462,6 +478,22 @@ def audit_mcp(allowed, denied, tools=None, horizon=12, max_states=200000):
     allowed = list(allowed)
     denied = list(denied)
     tool_names = _tool_names(tools)
+
+    # Tier gating (Phase D): a license budget may cap the bounded-search depth
+    # (``max_states`` / ``horizon``) and the tool-catalog scope (``max_tools``).
+    # An out-of-scope catalog is reported as UNKNOWN (exit 2), never silent.
+    note = ""
+    if budget is not None:
+        # The budget is a *cap*: it can only lower the search depth, never raise
+        # it. An explicit --liveness-horizon / --depth can only go lower.
+        max_states = min(max_states, budget.max_states)
+        horizon = min(horizon, budget.max_horizon)
+        if (budget.max_tools is not None
+                and len(tool_names) > budget.max_tools):
+            note = ("tool catalog has %d tools, exceeding the tier cap of %d; "
+                    "audit is out of scope"
+                    % (len(tool_names), budget.max_tools))
+
     policy_info = {
         "allowed": sorted(set(allowed)),
         "denied": sorted(set(denied)),
@@ -480,6 +512,7 @@ def audit_mcp(allowed, denied, tools=None, horizon=12, max_states=200000):
             facets=_skipped_facets("the policy is contradictory"),
             findings=findings,
             any_unknown=False,
+            note=note,
         )
 
     # 3. Build the policy and run the three-facet (temporal) audit.
@@ -497,6 +530,8 @@ def audit_mcp(allowed, denied, tools=None, horizon=12, max_states=200000):
     any_unknown = (result.safety.is_unknown()
                    or result.liveness.is_unknown()
                    or result.conformance.is_unknown())
+    if note:
+        any_unknown = True
 
     return McpFindingsReport(
         policy=policy_info,
@@ -504,6 +539,7 @@ def audit_mcp(allowed, denied, tools=None, horizon=12, max_states=200000):
         facets=facets,
         findings=findings,
         any_unknown=any_unknown,
+        note=note,
     )
 
 # ---------------------------------------------------------------------------
@@ -621,7 +657,7 @@ def manifest_findings(manifest):
     return findings
 
 
-def audit_manifest(manifest):
+def audit_manifest(manifest, budget=None):
     """Run the MCP Manifest v1 structural audit (Phase B, B2).
 
     This is the single entry point for the ``rot check --manifest`` adoption
@@ -634,6 +670,10 @@ def audit_manifest(manifest):
     ----------
     manifest : rot.mcp_manifest.McpManifest
         A validated manifest (see :mod:`rot.mcp_manifest`).
+    budget : rot.license.DepthBudget, optional
+        A tier budget (Phase D). When present, ``max_tenant_scopes`` caps the
+        number of distinct tenant scopes the audit may reason about; exceeding
+        it marks the audit out of scope (UNKNOWN / exit 2).
 
     Returns
     -------
@@ -642,6 +682,23 @@ def audit_manifest(manifest):
         audit is structural, not temporal).
     """
     findings = manifest_findings(manifest)
+
+    # Tier gating (Phase D): cap the number of distinct tenant scopes.
+    note = ""
+    if budget is not None and budget.max_tenant_scopes is not None:
+        tenants = set()
+        if manifest.tenant_scope:
+            tenants.add(manifest.tenant_scope)
+        for tool in manifest.tools:
+            for field in list(tool.read_fields) + list(tool.write_fields):
+                t = _field_tenant(field)
+                if t:
+                    tenants.add(t)
+        if len(tenants) > budget.max_tenant_scopes:
+            note = ("manifest references %d tenant scopes, exceeding the tier "
+                    "cap of %d; audit is out of scope"
+                    % (len(tenants), budget.max_tenant_scopes))
+
     policy_info = {
         "server": manifest.server,
         "version": manifest.version,
@@ -655,7 +712,8 @@ def audit_manifest(manifest):
         facets=_skipped_facets(
             "manifest audit is structural (no temporal model)"),
         findings=findings,
-        any_unknown=False,
+        any_unknown=bool(note),
+        note=note,
     )
 
 
@@ -713,6 +771,9 @@ def render_narrative(report):
         lines.append("[%s] %s" % (f.severity.upper(), f.finding))
         lines.append("    facet: %s   property: %s"
                      % (f.facet, f.property_name))
+        lines.append("    controls: %s"
+                     % ", ".join(compliance.controls_for(
+                         f.finding, f.property_name)))
         lines.append("    %s" % f.message)
         if f.witness is not None:
             witness_json = json.dumps(f.witness, sort_keys=True,

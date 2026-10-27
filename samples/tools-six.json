@@ -1,0 +1,10 @@
+{
+  "tools": [
+    {"name": "read_log", "description": "read the application log"},
+    {"name": "update_balance", "description": "update a user's account balance"},
+    {"name": "send_email", "description": "send an email to a recipient"},
+    {"name": "exfiltrate_secret", "description": "exfiltrate a secret (denied by policy)"},
+    {"name": "delete_account", "description": "delete a user account (denied by policy)"},
+    {"name": "grant_admin", "description": "grant admin privileges (denied by policy)"}
+  ]
+}
