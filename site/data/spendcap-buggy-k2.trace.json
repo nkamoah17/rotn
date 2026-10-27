@@ -1,0 +1,407 @@
+{
+  "budget": {
+    "limits": {
+      "max_horizon": 4,
+      "max_states": 1000,
+      "max_tenant_scopes": 1,
+      "max_tools": 5
+    },
+    "source": "free",
+    "tier": "free"
+  },
+  "compliance": {
+    "controls": {
+      "AIUC-1": "Caravel AIUC-1 -- Autonomy (agent must not act beyond policy)",
+      "CC6.1": "SOC 2 CC6.1 -- Logical access security"
+    },
+    "controls_touched": [
+      "AIUC-1",
+      "CC6.1"
+    ],
+    "evidence": {
+      "by_control": {
+        "AIUC-1": 1,
+        "CC6.1": 1
+      },
+      "findings_total": 1
+    },
+    "frameworks": [
+      "SOC2",
+      "AIUC"
+    ],
+    "profile": "caravel.compliance/v1",
+    "result": "violated"
+  },
+  "counterexample": {
+    "completed": 100,
+    "inflight": 2,
+    "steps": [
+      {
+        "action": "spend_ok",
+        "state": {
+          "completed": 0,
+          "inflight": 1
+        },
+        "step": 0
+      },
+      {
+        "action": "spend_ok",
+        "state": {
+          "completed": 0,
+          "inflight": 2
+        },
+        "step": 1
+      },
+      {
+        "action": "respond",
+        "state": {
+          "completed": 100,
+          "inflight": 1
+        },
+        "step": 2
+      },
+      {
+        "action": "spend_ok",
+        "state": {
+          "completed": 100,
+          "inflight": 2
+        },
+        "step": 3
+      }
+    ]
+  },
+  "decision_tree": {
+    "checks": [
+      {
+        "action": "spend_ok",
+        "guard": "completed + AMOUNT <= CAP",
+        "result": "admit",
+        "state": {
+          "completed": 0,
+          "inflight": 1
+        },
+        "step": 0
+      },
+      {
+        "action": "spend_ok",
+        "guard": "completed + AMOUNT <= CAP",
+        "result": "admit",
+        "state": {
+          "completed": 0,
+          "inflight": 2
+        },
+        "step": 1
+      },
+      {
+        "action": "respond",
+        "guard": "completed + AMOUNT <= CAP",
+        "result": "deny",
+        "state": {
+          "completed": 100,
+          "inflight": 1
+        },
+        "step": 2
+      },
+      {
+        "action": "spend_ok",
+        "guard": "completed + AMOUNT <= CAP",
+        "result": "admit",
+        "state": {
+          "completed": 100,
+          "inflight": 2
+        },
+        "step": 3
+      }
+    ],
+    "guard": "completed + AMOUNT <= CAP",
+    "root": "spendcap_within_cap",
+    "verdict": "violated"
+  },
+  "engines": [
+    "symbolic"
+  ],
+  "findings": [
+    {
+      "controls": [
+        "AIUC-1",
+        "CC6.1"
+      ],
+      "finding": "Overly Permissive",
+      "message": "the spend_ok guard admits 2 in-flight requests (cumulative 200), exceeding the cap of 200",
+      "property_name": "spendcap_within_cap",
+      "remediation": "charge in-flight requests against the cap: guard on completed + inflight * AMOUNT + AMOUNT <= CAP",
+      "severity": "error",
+      "witness": {
+        "completed": 100,
+        "inflight": 2
+      }
+    }
+  ],
+  "graph": {
+    "edges": [
+      {
+        "action": "spend_ok",
+        "from": "s0_1",
+        "to": "s0_2",
+        "witness": true
+      },
+      {
+        "action": "respond",
+        "from": "s0_2",
+        "to": "s100_1",
+        "witness": true
+      },
+      {
+        "action": "spend_ok",
+        "from": "s100_1",
+        "to": "s100_2",
+        "witness": true
+      }
+    ],
+    "kind": "state",
+    "nodes": [
+      {
+        "completed": 0,
+        "cumulative": 100,
+        "id": "s0_1",
+        "inflight": 1,
+        "kind": "state",
+        "witness": true
+      },
+      {
+        "completed": 0,
+        "cumulative": 200,
+        "id": "s0_2",
+        "inflight": 2,
+        "kind": "state",
+        "witness": true
+      },
+      {
+        "completed": 100,
+        "cumulative": 200,
+        "id": "s100_1",
+        "inflight": 1,
+        "kind": "state",
+        "witness": true
+      },
+      {
+        "completed": 100,
+        "cumulative": 300,
+        "id": "s100_2",
+        "inflight": 2,
+        "kind": "state",
+        "witness": true
+      }
+    ],
+    "witness_path": [
+      "s0_1",
+      "s0_2",
+      "s100_1",
+      "s100_2"
+    ]
+  },
+  "hash": "c50a773d0ab70e063ac6a11b091e12618bc470659a21f94a159de93164307871",
+  "horizon": 12,
+  "manifest_id": "mf-1030049f3b5c2797",
+  "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 2 * 100 = 200 -- past the cap of 200. The counterexample is {'completed': 100, 'inflight': 2}. (9 reachable states explored.)",
+  "policy": {
+    "amount": 100,
+    "buggy": true,
+    "cap": 200,
+    "kind": "safety",
+    "max_inflight": 2,
+    "property": "spendcap_within_cap"
+  },
+  "provenance": {
+    "budget": {
+      "limits": {
+        "max_horizon": 4,
+        "max_states": 1000,
+        "max_tenant_scopes": 1,
+        "max_tools": 5
+      },
+      "source": "free",
+      "tier": "free"
+    },
+    "engines": [
+      "symbolic"
+    ],
+    "horizon": 12,
+    "horizon_complete": true,
+    "n_states": 9,
+    "policy_hash": "1030049f3b5c27972c9d19acd3289c4d11fb9d1fe41c59253e4ab09e3faab404",
+    "policy_source": "samples/spendcap-buggy.dw"
+  },
+  "rot_version": "0.1.0",
+  "schema": "caravel.rtf/v1",
+  "source": {
+    "hash": "1030049f3b5c27972c9d19acd3289c4d11fb9d1fe41c59253e4ab09e3faab404",
+    "path": "samples/spendcap-buggy.dw",
+    "schema": "caravel.dogwood/v1"
+  },
+  "spend": {
+    "amount": 100,
+    "cap": 200,
+    "crossing_step": 3,
+    "max_inflight": 2,
+    "reachable_states": [
+      {
+        "completed": 0,
+        "cumulative": 0,
+        "inflight": 0,
+        "within_cap": true
+      },
+      {
+        "completed": 0,
+        "cumulative": 100,
+        "inflight": 1,
+        "within_cap": true
+      },
+      {
+        "completed": 0,
+        "cumulative": 200,
+        "inflight": 2,
+        "within_cap": true
+      },
+      {
+        "completed": 100,
+        "cumulative": 100,
+        "inflight": 0,
+        "within_cap": true
+      },
+      {
+        "completed": 100,
+        "cumulative": 200,
+        "inflight": 1,
+        "within_cap": true
+      },
+      {
+        "completed": 100,
+        "cumulative": 300,
+        "inflight": 2,
+        "within_cap": false
+      },
+      {
+        "completed": 200,
+        "cumulative": 200,
+        "inflight": 0,
+        "within_cap": true
+      },
+      {
+        "completed": 200,
+        "cumulative": 300,
+        "inflight": 1,
+        "within_cap": false
+      },
+      {
+        "completed": 300,
+        "cumulative": 300,
+        "inflight": 0,
+        "within_cap": false
+      }
+    ],
+    "steps": [
+      {
+        "action": "spend_ok",
+        "crosses": false,
+        "cumulative": 100,
+        "inflight": 1,
+        "settled": 0,
+        "state": {
+          "completed": 0,
+          "inflight": 1
+        },
+        "step": 0
+      },
+      {
+        "action": "spend_ok",
+        "crosses": false,
+        "cumulative": 200,
+        "inflight": 2,
+        "settled": 0,
+        "state": {
+          "completed": 0,
+          "inflight": 2
+        },
+        "step": 1
+      },
+      {
+        "action": "respond",
+        "crosses": false,
+        "cumulative": 200,
+        "inflight": 1,
+        "settled": 100,
+        "state": {
+          "completed": 100,
+          "inflight": 1
+        },
+        "step": 2
+      },
+      {
+        "action": "spend_ok",
+        "crosses": true,
+        "cumulative": 300,
+        "inflight": 2,
+        "settled": 100,
+        "state": {
+          "completed": 100,
+          "inflight": 2
+        },
+        "step": 3
+      }
+    ]
+  },
+  "timeline": [
+    {
+      "narration": "Parsed the spend-cap policy: AMOUNT=100, CAP=200, property spendcap_within_cap (safety).",
+      "status": "ok",
+      "step": "parse_policy"
+    },
+    {
+      "action": "spend_ok",
+      "narration": "Step 0: spend_ok -> completed=0, inflight=1 (cumulative 100 within the cap of 200).",
+      "state": {
+        "completed": 0,
+        "inflight": 1
+      },
+      "status": "ok",
+      "step": "step_0"
+    },
+    {
+      "action": "spend_ok",
+      "narration": "Step 1: spend_ok -> completed=0, inflight=2 (cumulative 200 within the cap of 200).",
+      "state": {
+        "completed": 0,
+        "inflight": 2
+      },
+      "status": "ok",
+      "step": "step_1"
+    },
+    {
+      "action": "respond",
+      "narration": "Step 2: respond -> completed=100, inflight=1 (cumulative 200 within the cap of 200).",
+      "state": {
+        "completed": 100,
+        "inflight": 1
+      },
+      "status": "ok",
+      "step": "step_2"
+    },
+    {
+      "action": "spend_ok",
+      "narration": "Step 3: spend_ok -> completed=100, inflight=2 (cumulative 300 EXCEEDS the cap of 200) -- the cap is crossed here.",
+      "state": {
+        "completed": 100,
+        "inflight": 2
+      },
+      "status": "fail",
+      "step": "step_3"
+    },
+    {
+      "narration": "Verdict: VIOLATED -- a burst of parallel fires grows the in-flight amount past the cap; the crossing moment is highlighted.",
+      "status": "violated",
+      "step": "verdict"
+    }
+  ],
+  "verdict": "violated"
+}

@@ -81,8 +81,15 @@
   ROT.reverifyCommand = function (id, t) {
     var src = (t && t.source && t.source.path)
       ? String(t.source.path).replace(/\\/g, "/")
-      : "<manifest.json>";
-    return "rot trace --manifest " + src + " --out site/data/" + id + ".trace.json";
+      : null;
+    var schema = (t && t.source && t.source.schema) || "";
+    var isPolicy = /dogwood/i.test(schema);
+    var flag = isPolicy ? "--policy" : "--manifest";
+    var def = isPolicy ? "<policy.dw>" : "<manifest.json>";
+    var k = (t && t.policy && t.policy.max_inflight != null)
+      ? " --max-inflight " + t.policy.max_inflight
+      : "";
+    return "rot trace " + flag + " " + (src || def) + k + " --out site/data/" + id + ".trace.json";
   };
 
   /* ---------------- views ---------------- */
@@ -148,6 +155,31 @@
       });
       html.push("</section>");
     }
+
+    /* Compare affordance: the spend-cap buggy vs correct pair (if present). */
+    var reg = registry();
+    var pairs = [];
+    if (reg["spendcap-buggy"] && reg["spendcap-correct"]) {
+      pairs.push(["spendcap-buggy", "spendcap-correct"]);
+    }
+    if (pairs.length) {
+      html.push(
+        '<section class="compare-cta" aria-label="Compare">',
+        "  <h2>Compare</h2>",
+        '  <p class="lede">Put the buggy and correct spend-cap policy side by side, ' +
+        "and watch the K-sweep expose the concurrency bound the verdict depends on " +
+        "(at K=1 the bug is masked).</p>",
+        "  <div class=\"compare-cta-btns\">"
+      );
+      pairs.forEach(function (pair) {
+        html.push(
+          '<a class="btn" href="#/compare/' + pair[0] + "/" + pair[1] + '">' +
+          esc(pair[0]) + " vs " + esc(pair[1]) + " \u2192</a>"
+        );
+      });
+      html.push("  </div></section>");
+    }
+
     view.innerHTML = html.join("\n");
   }
   /* ---------------- verdict hero (F2) ---------------- */
@@ -176,6 +208,10 @@
       '<span class="chip chip-tier" title="budget tier">tier: ' + esc(budget.tier || "?") + "</span>",
       '<span class="chip" title="bounded search horizon">horizon: ' +
         esc(t.horizon != null ? t.horizon : "?") + "</span>",
+      (t.policy && t.policy.max_inflight != null)
+        ? '<span class="chip chip-tier" title="concurrency pool K (max in-flight requests)">K: ' +
+          esc(t.policy.max_inflight) + "</span>"
+        : "",
       "</div>",
       "  </div>",
       "  <div class=\"vh-side\">",
@@ -183,8 +219,12 @@
       "      <dt>server</dt><dd>" + esc(server) + (version ? " v" + esc(version) : "") + "</dd>",
       '      <dt>tenant scope</dt><dd class="mono">' + esc(scope || "\u2014") + "</dd>",
       '      <dt>manifest hash</dt><dd class="hash-wrap">' +
-        esc((t.source && t.source.hash) || (t.policy && t.policy.hash) || "\u2014") + "</dd>",
-      '      <dt>trace hash</dt><dd class="hash-wrap">' + esc(t.hash || "\u2014") + "</dd>",
+        esc((t.source && t.source.hash) || (t.policy && t.policy.hash) || "\u2014") +
+        ' <button type="button" class="btn copy-btn hash-copy" data-copy-text="' +
+        esc((t.source && t.source.hash) || (t.policy && t.policy.hash) || "") + '">copy</button></dd>',
+      '      <dt>trace hash</dt><dd class="hash-wrap">' + esc(t.hash || "\u2014") +
+        ' <button type="button" class="btn copy-btn hash-copy" data-copy-text="' +
+        esc(t.hash || "") + '">copy</button></dd>',
       "      <dt>budget</dt><dd>" + esc(limitsText || "\u2014") +
         (budget.source ? " \u00b7 source: " + esc(budget.source) : "") + "</dd>",
       "    </dl>",
@@ -193,21 +233,60 @@
       '      <code class="rv-cmd mono" id="rv-cmd">' + esc(ROT.reverifyCommand(id, t)) + "</code>",
       '      <button type="button" class="btn copy-btn" data-copy="#rv-cmd">Copy</button>',
       "    </div>",
+      (function () {
+        var pair = comparePairFor(id);
+        if (!pair) { return ""; }
+        return (
+          '<div class="hero-compare">' +
+          '<span class="rv-label">Compare</span>' +
+          '<a class="btn" href="#/compare/' + pair[0] + "/" + pair[1] + '">' +
+          "buggy vs correct + K-sweep \u2192</a>" +
+          "</div>"
+        );
+      })(),
       "  </div>",
       "</section>"
     ].join("\n");
   }
 
+  function isSpendcap(t) {
+    return !!(t && t.spend && t.spend.steps && t.spend.steps.length);
+  }
+
+  /* The buggy-vs-correct compare pair for a spend-cap base trace (or null). */
+  function comparePairFor(id) {
+    if (id === "spendcap-buggy" || id === "spendcap-correct") {
+      return ["spendcap-buggy", "spendcap-correct"];
+    }
+    return null;
+  }
+
   function replayHTML(id, t, v) {
-    return [
+    var spendcap = isSpendcap(t);
+    var graphSub = spendcap
+      ? "nodes = states (in-flight / settled) \u00b7 edges = the counterexample step path \u00b7 " +
+        '<span class="hl-note">red = counterexample \u00b7 orange = replay step</span>'
+      : "nodes = states (tools, fields) \u00b7 edges = actions (reads, writes) \u00b7 " +
+        '<span class="hl-note">red = counterexample</span>';
+    var parts = [
       '<nav class="crumbs" aria-label="Breadcrumb"><a href="#/">gallery</a> / <span>' + esc(id) + "</span></nav>",
       heroHTML(id, t, v),
       '<section class="panel" aria-label="State-space graph">',
       "  <div class=\"panel-head\"><h2>State-space graph</h2>" +
-        '<p class="panel-sub">nodes = states (tools, fields) \u00b7 edges = actions (reads, writes) \u00b7 ' +
-        '<span class="hl-note">red = counterexample</span></p></div>',
+        '<p class="panel-sub">' + graphSub + "</p></div>",
       '  <div id="rot-graph" class="graph-box"></div>',
-      "</section>",
+      "</section>"
+    ];
+    if (spendcap) {
+      parts.push(
+        '<section class="panel" aria-label="Spend-cap timeline">',
+        "  <div class=\"panel-head\"><h2>Spend-cap</h2>" +
+          '<p class="panel-sub">G2 \u00b7 cumulative spend vs the cap, with the crossing moment highlighted</p></div>',
+        '  <div id="rot-spendcap"></div>',
+        "</section>"
+      );
+    }
+    parts.push(
       '<section class="panels-2" aria-label="Timeline and narration">',
       '  <div class="panel">',
       "    <div class=\"panel-head\"><h2>Audit timeline</h2></div>",
@@ -222,8 +301,14 @@
       "  <div class=\"panel-head\"><h2>Findings &amp; controls</h2>" +
         '<p class="panel-sub">Cedar-AR findings mapped to SOC 2 / AIUC controls</p></div>',
       '  <div id="rot-findings"></div>',
+      "</section>",
+      '<section class="panel" aria-label="Compliance">',
+      "  <div class=\"panel-head\"><h2>Compliance</h2>" +
+        '<p class="panel-sub">SOC 2 / AIUC controls touched by this audit, with the evidence that links each to its findings</p></div>',
+      '  <div id="rot-compliance"></div>',
       "</section>"
-    ].join("\n");
+    );
+    return parts.join("\n");
   }
 
   function renderReplay(id) {
@@ -237,14 +322,47 @@
       var v = ROT.verdictInfo(t.verdict);
       view.innerHTML = replayHTML(id, t, v);
       if (ROT.ROTGraph) { ROT.ROTGraph.mount(document.getElementById("rot-graph"), t); }
+      if (ROT.ROTSpendcap) { ROT.ROTSpendcap.mount(document.getElementById("rot-spendcap"), t); }
       if (ROT.ROTTimeline) { ROT.ROTTimeline.mount(document.getElementById("rot-timeline"), t); }
       if (ROT.ROTNarration) { ROT.ROTNarration.mount(document.getElementById("rot-narration"), t); }
       if (ROT.ROTFindings) { ROT.ROTFindings.mount(document.getElementById("rot-findings"), t); }
+      if (ROT.ROTCompliance) { ROT.ROTCompliance.mount(document.getElementById("rot-compliance"), t); }
       bindCopyButtons(view);
     }).catch(function () {
       var view = document.getElementById("view");
       if (view) { view.innerHTML = notFoundHTML(id); }
     });
+  }
+
+  /* ---------------- compare view (Phase H) ---------------- */
+
+  function renderCompare(leftId, rightId) {
+    var view = document.getElementById("view");
+    if (!view) { return; }
+    function fail() {
+      view.innerHTML = notFoundHTML(leftId + " / " + rightId);
+    }
+    ROT.loadTrace(leftId).then(function (left) {
+      if (!left) { fail(); return null; }
+      return ROT.loadTrace(rightId).then(function (right) {
+        if (!right) { fail(); return; }
+        view.innerHTML =
+          '<nav class="crumbs" aria-label="Breadcrumb"><a href="#/">gallery</a> / ' +
+          '<a href="#/compare/' + esc(leftId) + '/' + esc(rightId) + '">compare</a> / ' +
+          "<span>" + esc(leftId) + " vs " + esc(rightId) + "</span></nav>" +
+          '<section class="panel" aria-label="Compare">' +
+          '  <div class="panel-head"><h2>Compare — ' + esc(leftId) + " vs " + esc(rightId) + "</h2>" +
+          '  <p class="panel-sub">Side-by-side verdicts, hashes, and the controls each trace touched, ' +
+          "plus the K-sweep that exposes the concurrency-bound the verdict depends on.</p></div>" +
+          '  <div id="rot-compare"></div>' +
+          "</section>";
+        if (ROT.ROTCompare) {
+          ROT.ROTCompare.mount(document.getElementById("rot-compare"), {
+            leftId: leftId, rightId: rightId, left: left, right: right
+          });
+        }
+      });
+    }).catch(function () { fail(); });
   }
   /* ---------------- copy-to-clipboard (works over file://) ---------------- */
 
@@ -300,6 +418,12 @@
     var h = (location.hash || "").replace(/^#\/?/, "");
     var m = h.match(/^replay\/([^/]+)\/?$/);
     if (m) { return { view: "replay", id: decodeURIComponent(m[1]) }; }
+    var c = h.match(/^compare\/([^/]+)\/([^/]+)\/?$/);
+    if (c) {
+      return { view: "compare",
+               left: decodeURIComponent(c[1]),
+               right: decodeURIComponent(c[2]) };
+    }
     if (!h) { return { view: "gallery" }; }
     return { view: "notfound", raw: h };
   }
@@ -308,6 +432,8 @@
     var r = parseHash();
     if (r.view === "replay") {
       renderReplay(r.id);
+    } else if (r.view === "compare") {
+      renderCompare(r.left, r.right);
     } else if (r.view === "gallery") {
       renderGallery();
     } else {

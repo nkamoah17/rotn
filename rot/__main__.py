@@ -398,36 +398,99 @@ def _cmd_check_manifest(args):
     return report.exit_code()
 
 
-def cmd_trace(args):
-    """Emit the RTF v1 deterministic, hashable reasoning trace (--manifest).
+def _trace_manifest(manifest_path, budget, horizon, tier):
+    """Build the RTF v1 trace for an MCP Manifest v1 audit.
 
-    Parses and validates the manifest (:mod:`rot.mcp_manifest`), runs the two
-    structural checks (field permission + tenant isolation) via
-    :func:`rot.mcp_adapter.audit_manifest`, then re-assembles the findings --
-    plus the manifest's structural graph, decision tree, and timeline -- into
-    a deterministic, hashable RTF v1 trace (:mod:`rot.trace`). Writes the JSON
-    artifact to ``--out`` (a file) or stdout. The exit code is the report's
-    gate outcome (0 PASS / 1 BLOCK / 2 OUT_OF_SCOPE).
+    Returns ``(result, exit_code)``; ``result`` is ``None`` on error.
     """
     import rot.mcp_adapter as mcp
-    import rot.license as lic
     import rot.mcp_manifest as mm
     import rot.trace as trace
 
-    manifest_path = getattr(args, "manifest", None)
-    if not manifest_path:
-        print("ERROR: --manifest FILE is required for 'rot trace'",
-              file=sys.stderr)
-        return EXIT_ERROR
     if not os.path.isfile(manifest_path):
         print("ERROR: manifest file not found: %s" % manifest_path,
               file=sys.stderr)
-        return EXIT_ERROR
-
+        return None, EXIT_ERROR
     try:
         manifest = mm.parse_manifest_file(manifest_path)
     except (mm.McpManifestError, OSError) as exc:
         print("ERROR: %s" % exc, file=sys.stderr)
+        return None, EXIT_ERROR
+
+    report = mcp.audit_manifest(manifest, budget=budget)
+    result = trace.build_trace(
+        manifest, report,
+        budget=budget,
+        horizon=horizon,
+        tier=tier,
+        source_path=manifest_path,
+    )
+    return result, report.exit_code()
+
+
+def _trace_policy(policy_path, args, budget, horizon, tier):
+    """Build the RTF v1 trace for a spend-cap policy audit (AWS Dogwood).
+
+    Verifies the pinned ``spendcap_within_cap`` safety property with the
+    concrete-state engine, recovers the counterexample step path (the attack
+    path), and assembles the full architecture-contract trace. Returns
+    ``(result, exit_code)``; ``result`` is ``None`` on error.
+    """
+    import rot.frontends.policy as fe
+    import rot.trace as trace
+    from rot.modelfind import ModelFinder
+
+    if not os.path.isfile(policy_path):
+        print("ERROR: policy file not found: %s" % policy_path,
+              file=sys.stderr)
+        return None, EXIT_ERROR
+    try:
+        ir = _build_ir(policy_path, args)
+    except fe.PolicyFrontendError as exc:
+        print("ERROR: %s" % exc, file=sys.stderr)
+        return None, EXIT_ERROR
+    ir.validate()
+
+    mf = ModelFinder.from_ir(ir)
+    pred = lambda s: ir.pinned_property.eval(s)
+    ok, witness = mf.forall_reachable(pred)
+    status = "proven" if ok else "violated"
+    steps = _witness_steps(ir, witness) if (not ok) else []
+    result = trace.build_spendcap_trace(
+        ir, status, witness, steps,
+        budget=budget,
+        horizon=horizon,
+        tier=tier,
+        source_path=policy_path,
+    )
+    exit_code = {"proven": EXIT_PROVEN,
+                 "violated": EXIT_VIOLATED,
+                 "unknown": EXIT_UNKNOWN}[status]
+    return result, exit_code
+
+
+def cmd_trace(args):
+    """Emit the RTF v1 deterministic, hashable reasoning trace.
+
+    Two audit kinds are supported (exactly one required):
+      * ``--manifest FILE`` -- an MCP Manifest v1 audit (structural checks:
+        field permission + tenant isolation);
+      * ``--policy FILE``   -- a spend-cap policy audit (the AWS Dogwood
+        vertical slice; the ``spendcap_within_cap`` safety property).
+
+    Both produce the same RTF v1 trace shape -- per-step narration, the
+    counterexample step path, the decision tree, provenance with ``n_states``,
+    and the SOC 2 / AIUC compliance block -- and write the JSON artifact to
+    ``--out`` (a file) or stdout. The exit code is the gate outcome
+    (0 PROVEN / 1 VIOLATED / 2 UNKNOWN / 3 ERROR).
+    """
+    import rot.license as lic
+
+    policy_path = getattr(args, "policy", None)
+    manifest_path = getattr(args, "manifest", None)
+    if bool(policy_path) == bool(manifest_path):
+        print("ERROR: specify exactly one of --manifest FILE or --policy FILE",
+              file=sys.stderr)
         return EXIT_ERROR
 
     try:
@@ -437,17 +500,17 @@ def cmd_trace(args):
         print("REJECTED: %s" % exc, file=sys.stderr)
         return EXIT_VIOLATED
 
-    report = mcp.audit_manifest(manifest, budget=budget)
     tier = getattr(args, "tier", None)
     horizon = getattr(args, "liveness_horizon", None) or 12
 
-    result = trace.build_trace(
-        manifest, report,
-        budget=budget,
-        horizon=horizon,
-        tier=tier,
-        source_path=manifest_path,
-    )
+    if policy_path:
+        result, exit_code = _trace_policy(policy_path, args, budget, horizon,
+                                          tier)
+    else:
+        result, exit_code = _trace_manifest(manifest_path, budget, horizon,
+                                            tier)
+    if result is None:
+        return exit_code
 
     out = getattr(args, "out", None)
     if out:
@@ -464,7 +527,7 @@ def cmd_trace(args):
     else:
         # Stdout: emit only the JSON artifact (pipe-friendly).
         sys.stdout.write(result.to_json() + "\n")
-    return report.exit_code()
+    return exit_code
 
 
 def cmd_check(args):
@@ -1182,7 +1245,10 @@ def main(argv=None):
         "trace",
         help="emit the RTF v1 deterministic, hashable reasoning trace")
     p.add_argument("--manifest", default=None, metavar="FILE",
-                   help="MCP Manifest v1 JSON file (required for 'rot trace')")
+                   help="MCP Manifest v1 JSON file (for a manifest audit)")
+    p.add_argument("--policy", default=None, metavar="FILE",
+                   help="spend-cap policy file (.dw) -- the AWS Dogwood "
+                        "vertical slice (for a spend-cap audit)")
     p.add_argument("--out", default=None, metavar="FILE",
                    help="write the trace JSON here [default: stdout]")
     p.add_argument("--license", default=None, metavar="FILE",
@@ -1195,6 +1261,17 @@ def main(argv=None):
                    help="Caravel key for license verification")
     p.add_argument("--liveness-horizon", type=int, default=None, metavar="H",
                    help="bounded liveness horizon (recorded for provenance)")
+    p.add_argument("--max-inflight", type=int, default=None, metavar="K",
+                   help="bounded concurrency pool K (spend-cap .dw policies)")
+    p.add_argument("--amount", type=int, default=None, metavar="N",
+                   help="per-request amount override (spend-cap .dw policies)")
+    p.add_argument("--cap", type=int, default=None, metavar="N",
+                   help="spend cap override (spend-cap .dw policies)")
+    p.add_argument("--window", type=int, default=None, metavar="W",
+                   help="temporal window W (spend-cap .dw policies)")
+    p.add_argument("--kind", default=None,
+                   choices=["safety", "realizability", "liveness"],
+                   help="property kind [default: auto-route by extension]")
     p.add_argument("--quiet", action="store_true",
                    help="suppress the human summary")
 

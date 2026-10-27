@@ -69,9 +69,12 @@ class ScaffoldTests(unittest.TestCase):
             os.path.join("vendor", "cytoscape.min.js"),
             os.path.join("app", "app.js"),
             os.path.join("app", "graph.js"),
+            os.path.join("app", "spendcap.js"),
             os.path.join("app", "timeline.js"),
             os.path.join("app", "narration.js"),
             os.path.join("app", "findings.js"),
+            os.path.join("app", "compliance.js"),
+            os.path.join("app", "compare.js"),
             os.path.join("app", "style.css"),
         ):
             path = os.path.join(SITE, rel)
@@ -92,9 +95,12 @@ class ScaffoldTests(unittest.TestCase):
             "data/traces.js",
             "app/app.js",
             "app/graph.js",
+            "app/spendcap.js",
             "app/timeline.js",
             "app/narration.js",
             "app/findings.js",
+            "app/compliance.js",
+            "app/compare.js",
             "app/style.css",
         ):
             self.assertIn(ref, html)
@@ -161,6 +167,42 @@ class DataTests(unittest.TestCase):
                 self.assertEqual(first, fh.read())
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+class KsweepDataTests(unittest.TestCase):
+    """Phase H: the K-sweep traces drive the compare-mode animated slider.
+
+    K (``--max-inflight``) is structural, shared by both variants. The sweep
+    must expose the masking: at K=1 the buggy policy proves clean (a false
+    negative); at K>=2 it is violated while the correct policy stays proven.
+    """
+
+    def test_ksweep_traces_present(self):
+        for K in (1, 2, 3):
+            for variant in ("buggy", "correct"):
+                tid = "spendcap-%s-k%d" % (variant, K)
+                self.assertTrue(
+                    tid in _trace_ids(), "missing K-sweep trace: %s" % tid)
+
+    def test_ksweep_verdicts(self):
+        # K=1: the bug is masked (buggy proves clean).
+        self.assertEqual(_read_trace("spendcap-buggy-k1.trace.json")["verdict"],
+                         "proven")
+        self.assertEqual(_read_trace("spendcap-correct-k1.trace.json")["verdict"],
+                         "proven")
+        # K=2 and K=3: the bug is visible (buggy violated, correct proven).
+        for K in (2, 3):
+            self.assertEqual(
+                _read_trace("spendcap-buggy-k%d.trace.json" % K)["verdict"],
+                "violated")
+            self.assertEqual(
+                _read_trace("spendcap-correct-k%d.trace.json" % K)["verdict"],
+                "proven")
+        # Each K-sweep trace records the K it was audited under.
+        for K in (1, 2, 3):
+            for variant in ("buggy", "correct"):
+                t = _read_trace("spendcap-%s-k%d.trace.json" % (variant, K))
+                self.assertEqual(t["policy"]["max_inflight"], K)
 
 
 if __name__ == "__main__":

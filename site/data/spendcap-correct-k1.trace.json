@@ -1,0 +1,175 @@
+{
+  "budget": {
+    "limits": {
+      "max_horizon": 4,
+      "max_states": 1000,
+      "max_tenant_scopes": 1,
+      "max_tools": 5
+    },
+    "source": "free",
+    "tier": "free"
+  },
+  "compliance": {
+    "controls": {},
+    "controls_touched": [],
+    "evidence": {
+      "by_control": {},
+      "findings_total": 0
+    },
+    "frameworks": [
+      "SOC2",
+      "AIUC"
+    ],
+    "profile": "caravel.compliance/v1",
+    "result": "proven"
+  },
+  "counterexample": null,
+  "decision_tree": {
+    "checks": [],
+    "guard": "completed + inflight * AMOUNT + AMOUNT <= CAP",
+    "root": "spendcap_within_cap",
+    "verdict": "proven"
+  },
+  "engines": [
+    "symbolic"
+  ],
+  "findings": [],
+  "graph": {
+    "edges": [],
+    "kind": "state",
+    "nodes": [
+      {
+        "completed": 0,
+        "cumulative": 0,
+        "id": "s0_0",
+        "inflight": 0,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 0,
+        "cumulative": 100,
+        "id": "s0_1",
+        "inflight": 1,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 100,
+        "cumulative": 100,
+        "id": "s100_0",
+        "inflight": 0,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 100,
+        "cumulative": 200,
+        "id": "s100_1",
+        "inflight": 1,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 200,
+        "cumulative": 200,
+        "id": "s200_0",
+        "inflight": 0,
+        "kind": "state",
+        "witness": false
+      }
+    ],
+    "witness_path": []
+  },
+  "hash": "a372c55484abc817957aef687b6c8d1bffe89e416b345e39606984528a4fb5ab",
+  "horizon": 12,
+  "manifest_id": "mf-97c802024552fe2f",
+  "narration": "The spend-cap policy is PROVEN. The ``spend_ok`` guard charges in-flight requests against the cap, so the settled + in-flight amount never exceeds 200 in any of the 5 reachable states.",
+  "policy": {
+    "amount": 100,
+    "buggy": false,
+    "cap": 200,
+    "kind": "safety",
+    "max_inflight": 1,
+    "property": "spendcap_within_cap"
+  },
+  "provenance": {
+    "budget": {
+      "limits": {
+        "max_horizon": 4,
+        "max_states": 1000,
+        "max_tenant_scopes": 1,
+        "max_tools": 5
+      },
+      "source": "free",
+      "tier": "free"
+    },
+    "engines": [
+      "symbolic"
+    ],
+    "horizon": 12,
+    "horizon_complete": true,
+    "n_states": 5,
+    "policy_hash": "97c802024552fe2fcf7fbf2e04f2a2e083d93acb40331b68c160401400630352",
+    "policy_source": "samples/spendcap-correct.dw"
+  },
+  "rot_version": "0.1.0",
+  "schema": "caravel.rtf/v1",
+  "source": {
+    "hash": "97c802024552fe2fcf7fbf2e04f2a2e083d93acb40331b68c160401400630352",
+    "path": "samples/spendcap-correct.dw",
+    "schema": "caravel.dogwood/v1"
+  },
+  "spend": {
+    "amount": 100,
+    "cap": 200,
+    "crossing_step": null,
+    "max_inflight": 1,
+    "reachable_states": [
+      {
+        "completed": 0,
+        "cumulative": 0,
+        "inflight": 0,
+        "within_cap": true
+      },
+      {
+        "completed": 0,
+        "cumulative": 100,
+        "inflight": 1,
+        "within_cap": true
+      },
+      {
+        "completed": 100,
+        "cumulative": 100,
+        "inflight": 0,
+        "within_cap": true
+      },
+      {
+        "completed": 100,
+        "cumulative": 200,
+        "inflight": 1,
+        "within_cap": true
+      },
+      {
+        "completed": 200,
+        "cumulative": 200,
+        "inflight": 0,
+        "within_cap": true
+      }
+    ],
+    "steps": []
+  },
+  "timeline": [
+    {
+      "narration": "Parsed the spend-cap policy: AMOUNT=100, CAP=200, property spendcap_within_cap (safety).",
+      "status": "ok",
+      "step": "parse_policy"
+    },
+    {
+      "narration": "Verdict: PROVEN -- the settled + in-flight amount never exceeds the cap in any reachable state.",
+      "status": "proven",
+      "step": "verdict"
+    }
+  ],
+  "verdict": "proven"
+}
