@@ -11,6 +11,8 @@ Subcommands
   rot demo      The 5-phase spend-cap demo (PROVEN / VIOLATED / K-sweep /
                 replay), exit-code aware like demo.sh.
   rot corpus    Run the AWS Dogwood spend-cap corpus; emit a coverage matrix.
+  rot trace     Emit the RTF v1 deterministic, hashable reasoning trace
+                (a superset of the MCP findings report; --manifest).
 
 Exit codes
 ----------
@@ -393,6 +395,75 @@ def _cmd_check_manifest(args):
     if not getattr(args, "quiet", False):
         print(mcp.render_narrative(report))
         print("  report    : %s" % report_path)
+    return report.exit_code()
+
+
+def cmd_trace(args):
+    """Emit the RTF v1 deterministic, hashable reasoning trace (--manifest).
+
+    Parses and validates the manifest (:mod:`rot.mcp_manifest`), runs the two
+    structural checks (field permission + tenant isolation) via
+    :func:`rot.mcp_adapter.audit_manifest`, then re-assembles the findings --
+    plus the manifest's structural graph, decision tree, and timeline -- into
+    a deterministic, hashable RTF v1 trace (:mod:`rot.trace`). Writes the JSON
+    artifact to ``--out`` (a file) or stdout. The exit code is the report's
+    gate outcome (0 PASS / 1 BLOCK / 2 OUT_OF_SCOPE).
+    """
+    import rot.mcp_adapter as mcp
+    import rot.license as lic
+    import rot.mcp_manifest as mm
+    import rot.trace as trace
+
+    manifest_path = getattr(args, "manifest", None)
+    if not manifest_path:
+        print("ERROR: --manifest FILE is required for 'rot trace'",
+              file=sys.stderr)
+        return EXIT_ERROR
+    if not os.path.isfile(manifest_path):
+        print("ERROR: manifest file not found: %s" % manifest_path,
+              file=sys.stderr)
+        return EXIT_ERROR
+
+    try:
+        manifest = mm.parse_manifest_file(manifest_path)
+    except (mm.McpManifestError, OSError) as exc:
+        print("ERROR: %s" % exc, file=sys.stderr)
+        return EXIT_ERROR
+
+    try:
+        budget = _resolve_budget(args)
+    except lic.LicenseError as exc:
+        # Fail-closed: a tampered / expired / malformed license is rejected.
+        print("REJECTED: %s" % exc, file=sys.stderr)
+        return EXIT_VIOLATED
+
+    report = mcp.audit_manifest(manifest, budget=budget)
+    tier = getattr(args, "tier", None)
+    horizon = getattr(args, "liveness_horizon", None) or 12
+
+    result = trace.build_trace(
+        manifest, report,
+        budget=budget,
+        horizon=horizon,
+        tier=tier,
+        source_path=manifest_path,
+    )
+
+    out = getattr(args, "out", None)
+    if out:
+        out_dir = os.path.dirname(os.path.abspath(out))
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
+        with open(out, "w") as fh:
+            fh.write(result.to_json() + "\n")
+        if not getattr(args, "quiet", False):
+            print("  trace     : %s" % out)
+            print("  manifest  : %s" % result.manifest_id())
+            print("  verdict   : %s" % result.verdict())
+            print("  hash      : %s" % result.hash)
+    else:
+        # Stdout: emit only the JSON artifact (pipe-friendly).
+        sys.stdout.write(result.to_json() + "\n")
     return report.exit_code()
 
 
@@ -1107,13 +1178,33 @@ def main(argv=None):
     p.add_argument("--key", default=None, metavar="KEY",
                    help="Caravel key [default: $CARAVEL_LICENSE_KEY or demo]")
 
+    p = sub.add_parser(
+        "trace",
+        help="emit the RTF v1 deterministic, hashable reasoning trace")
+    p.add_argument("--manifest", default=None, metavar="FILE",
+                   help="MCP Manifest v1 JSON file (required for 'rot trace')")
+    p.add_argument("--out", default=None, metavar="FILE",
+                   help="write the trace JSON here [default: stdout]")
+    p.add_argument("--license", default=None, metavar="FILE",
+                   help="Caravel license file (Phase D): verified, fail-closed")
+    p.add_argument("--tier", default=None, choices=["free", "paid"],
+                   help="tier (Phase D): caps the audit budget")
+    p.add_argument("--depth", type=int, default=None, metavar="N",
+                   help="max_states override (Phase D)")
+    p.add_argument("--key", default=None, metavar="KEY",
+                   help="Caravel key for license verification")
+    p.add_argument("--liveness-horizon", type=int, default=None, metavar="H",
+                   help="bounded liveness horizon (recorded for provenance)")
+    p.add_argument("--quiet", action="store_true",
+                   help="suppress the human summary")
+
     args = parser.parse_args(argv)
     if args.command is None:
         parser.print_help()
         return EXIT_ERROR
     return {"check": cmd_check, "replay": cmd_replay, "ci": cmd_ci,
             "demo": cmd_demo, "corpus": cmd_corpus,
-            "license": cmd_license}[args.command](args)
+            "license": cmd_license, "trace": cmd_trace}[args.command](args)
 
 
 if __name__ == "__main__":
