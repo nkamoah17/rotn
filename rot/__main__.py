@@ -697,7 +697,7 @@ def cmd_site(args):
     canonical audit cases (the spend-cap K-sweep + the MCP manifest pair) into
     ``--out`` (a ``data/`` directory, default ``site/data``), then mirrors
     them into the deterministic ``traces.js`` registry
-    (``scripts/gen_site_data.generate_data``) so the gallery works over both
+    (``rot.sitegen.generate_data``) so the gallery works over both
     ``file://`` (registry fallback) and HTTP (fetch).
 
     The result is a byte-stable, hashable site bundle whose verdicts are the
@@ -734,12 +734,11 @@ def cmd_site(args):
         return EXIT_ERROR
 
     # Mirror the trace JSON files into the deterministic JS registry (which
-    # lives in the same data/ dir).  Reuse the tested generator.
-    scripts = os.path.join(root, "scripts")
-    if scripts not in sys.path:
-        sys.path.insert(0, scripts)
-    import gen_site_data
-    out_registry, ids = gen_site_data.generate_data(out_dir)
+    # lives in the same data/ dir).  The generator lives in the installed
+    # package (rot.sitegen) so this works from a `pip install .` environment
+    # where scripts/ is not on the import path.
+    from rot import sitegen
+    out_registry, ids = sitegen.generate_data(out_dir)
 
     if not getattr(args, "quiet", False):
         print(_BAR)
