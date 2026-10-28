@@ -11,8 +11,11 @@
 # repo-agnostic: it deploys whatever ``site/`` bundle is in the checked-out
 # repo, and GitHub sets the live URL (exposed as the job's ``page_url``).
 #
-# No Java, no Z3, no network: the package has zero runtime dependencies, so the
-# bundle builds in a bare Python env (same guarantee as the ``rotn.yml`` CI).
+# No Java, no Z3, no network, and no package install: the engine is pure
+# stdlib (zero runtime dependencies), so we run the site generator straight
+# from the checked-out source tree (``python -m rot site``).  This sidesteps
+# PEP 517 build isolation (which would otherwise have to fetch setuptools in
+# an isolated env) and keeps the build dependency-free.
 name: pages
 
 on:
@@ -41,24 +44,23 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Configure Pages (OIDC context for the deploy)
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
-      - name: Install the package (zero runtime deps)
-        run: python -m pip install .
-
       - name: Regenerate the replay site data (RTF traces + registry)
-        # A pure function of the committed sample policies + the current engine:
-        # re-derives the 10 canonical traces (spend-cap K-sweep + MCP pair) into
-        # site/data and mirrors them into the deterministic traces.js registry.
-        run: rot site --out site/data
+        # A pure function of the committed sample policies + the current
+        # engine: re-derives the 10 canonical traces (spend-cap K-sweep + MCP
+        # pair) into site/data and mirrors them into the deterministic
+        # traces.js registry.  Runs from the source tree (no install needed --
+        # the package is pure stdlib), so there is nothing to fetch.
+        run: python -m rot site --out site/data
 
       - name: Sanity-check the bundle (10 traces + registry present)
         run: |
@@ -70,10 +72,10 @@ jobs:
           test "$count" -eq 10
 
       - name: Upload GitHub Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: "site"
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

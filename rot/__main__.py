@@ -13,6 +13,8 @@ Subcommands
   rot corpus    Run the AWS Dogwood spend-cap corpus; emit a coverage matrix.
   rot trace     Emit the RTF v1 deterministic, hashable reasoning trace
                 (a superset of the MCP findings report; --manifest).
+  rot doctor    Diagnose the installation (Python, package, engines;
+                --deep runs a real end-to-end self-test).
 
 Exit codes
 ----------
@@ -751,6 +753,96 @@ def cmd_site(args):
         print("  registry: %s" % out_registry)
         print(_BAR)
     return EXIT_PROVEN
+
+
+def cmd_doctor(args):
+    """Diagnose the ROTN installation and environment.
+
+    Runs a series of read-only checks and reports PASS/FAIL for each:
+      * the Python interpreter is new enough (>= 3.6);
+      * the ``rot`` package is importable (and reports its version);
+      * the core modules import cleanly (trace, sitegen, IR, the three
+        engines, and the CEGAR loop);
+      * with ``--deep``: a real end-to-end verification of the committed
+        spend-cap sample (build IR -> verify -> expect PROVEN).
+
+    This is the fastest way to confirm a ``pip install .`` (or a source
+    checkout) is healthy before relying on ``rot check`` / ``rot site``.
+
+    Exit codes: ``0`` all checks passed, ``3`` one or more checks failed.
+    """
+    import platform
+
+    results = []  # list of (name, ok, detail)
+
+    def record(name, ok, detail=""):
+        results.append((name, bool(ok), detail))
+
+    # 1) Python interpreter.
+    vi = sys.version_info
+    record(
+        "python >= 3.6",
+        vi >= (3, 6),
+        "%d.%d.%d (%s)" % (vi[0], vi[1], vi[2], platform.python_implementation()),
+    )
+
+    # 2) The rot package.
+    try:
+        import rot as _rot
+        record("rot package", True,
+               "version %s" % getattr(_rot, "__version__", "?"))
+    except Exception as exc:  # noqa: BLE001 -- report, don't crash
+        record("rot package", False, "import failed: %s" % exc)
+
+    # 3) Core modules import cleanly.
+    for mod in ("rot.trace", "rot.sitegen", "rot.ir", "rot.tlc",
+                "rot.smtz3", "rot.policy_smt", "rot.cegar"):
+        try:
+            __import__(mod)
+            record("import %s" % mod, True, "ok")
+        except Exception as exc:  # noqa: BLE001
+            record("import %s" % mod, False,
+                   "%s: %s" % (type(exc).__name__, exc))
+
+    # 4) Optional deep self-test: a real end-to-end verification.
+    if getattr(args, "deep", False):
+        sample = os.path.join(_repo_root(), "samples", "spendcap-correct.dw")
+        if not os.path.isfile(sample):
+            record("engine self-test", False,
+                   "sample not found: %s" % sample)
+        else:
+            try:
+                a = argparse.Namespace(
+                    kind=None, max_inflight=4, amount=None, cap=None,
+                    window=None)
+                ir = _build_ir(sample, a)
+                status, _witness, note = _verify(ir, a)
+                record("engine self-test (spendcap-correct)",
+                       status == "proven",
+                       "verdict=%s%s" % (status,
+                                        (" (%s)" % note) if note else ""))
+            except Exception as exc:  # noqa: BLE001
+                record("engine self-test", False,
+                       "%s: %s" % (type(exc).__name__, exc))
+
+    # Report.
+    if not getattr(args, "quiet", False):
+        print(_BAR)
+        print("  ROTN doctor -- %d check(s)" % len(results))
+        print(_BAR)
+        for name, ok, detail in results:
+            line = "  [%s] %-34s" % ("PASS" if ok else "FAIL", name)
+            if detail:
+                line += "  --  %s" % detail
+            print(line)
+        print(_BAR)
+
+    all_ok = all(ok for _name, ok, _detail in results)
+    if all_ok:
+        return EXIT_PROVEN
+    if not getattr(args, "quiet", False):
+        print("  Some checks FAILED -- see above.", file=sys.stderr)
+    return EXIT_ERROR
 
 
 def cmd_check(args):
@@ -1528,6 +1620,16 @@ def main(argv=None):
     p.add_argument("--quiet", action="store_true",
                    help="suppress the human summary")
 
+    p = sub.add_parser(
+        "doctor",
+        help="diagnose the ROTN installation (Python, package, engines; "
+             "--deep runs a real self-test)")
+    p.add_argument("--deep", action="store_true",
+                   help="also run a real end-to-end verification self-test "
+                        "(slower)")
+    p.add_argument("--quiet", action="store_true",
+                   help="suppress the human summary")
+
     args = parser.parse_args(argv)
     if args.command is None:
         parser.print_help()
@@ -1535,7 +1637,8 @@ def main(argv=None):
     return {"check": cmd_check, "replay": cmd_replay, "ci": cmd_ci,
             "demo": cmd_demo, "corpus": cmd_corpus,
             "license": cmd_license, "trace": cmd_trace,
-            "coach": cmd_coach, "site": cmd_site}[args.command](args)
+            "coach": cmd_coach, "site": cmd_site,
+            "doctor": cmd_doctor}[args.command](args)
 
 
 if __name__ == "__main__":

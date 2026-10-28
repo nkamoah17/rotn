@@ -16,6 +16,11 @@
 
   var ROT = (window.ROT = window.ROT || {});
 
+  // True once the user has navigated (hashchange). Focus management is
+  // skipped on the very first render so we don't steal focus from the URL
+  // bar on initial page load.
+  var navigated = false;
+
   /* ---------------- small helpers ---------------- */
 
   function esc(s) {
@@ -93,6 +98,29 @@
   };
 
   /* ---------------- views ---------------- */
+
+  function showLoading(view, label) {
+    if (!view) { return; }
+    view.setAttribute("aria-busy", "true");
+    view.innerHTML =
+      '<div class="loading" role="status">' +
+      '<div class="spinner" aria-hidden="true"></div>' +
+      '<span>' + esc(label || "Loading\u2026") + "</span></div>";
+  }
+
+  function focusMain() {
+    // Move focus to the new page's first heading (or the view itself) so
+    // keyboard and screen-reader users land at the top of the new content
+    // (WCAG 2.4.3 Focus Order). Skipped on the initial render.
+    if (!navigated) { return; }
+    var view = document.getElementById("view");
+    if (!view) { return; }
+    view.removeAttribute("aria-busy");
+    var h = view.querySelector("h1, h2");
+    var target = h || view;
+    if (target.getAttribute("tabindex") == null) { target.setAttribute("tabindex", "-1"); }
+    if (target.focus) { target.focus({ preventScroll: true }); }
+  }
 
   function notFoundHTML(id) {
     return [
@@ -321,11 +349,13 @@
   }
 
   function renderReplay(id) {
+    var view = document.getElementById("view");
+    if (!view) { return; }
+    showLoading(view, "Loading " + id + "\u2026");
     ROT.loadTrace(id).then(function (t) {
-      var view = document.getElementById("view");
-      if (!view) { return; }
       if (!t) {
         view.innerHTML = notFoundHTML(id);
+        focusMain();
         return;
       }
       var v = ROT.verdictInfo(t.verdict);
@@ -338,9 +368,10 @@
       if (ROT.ROTFindings) { ROT.ROTFindings.mount(document.getElementById("rot-findings"), t); }
       if (ROT.ROTCompliance) { ROT.ROTCompliance.mount(document.getElementById("rot-compliance"), t); }
       bindCopyButtons(view);
+      focusMain();
     }).catch(function () {
-      var view = document.getElementById("view");
-      if (view) { view.innerHTML = notFoundHTML(id); }
+      view.innerHTML = notFoundHTML(id);
+      focusMain();
     });
   }
 
@@ -349,8 +380,10 @@
   function renderCompare(leftId, rightId) {
     var view = document.getElementById("view");
     if (!view) { return; }
+    showLoading(view, "Loading " + leftId + " vs " + rightId + "\u2026");
     function fail() {
       view.innerHTML = notFoundHTML(leftId + " / " + rightId);
+      focusMain();
     }
     ROT.loadTrace(leftId).then(function (left) {
       if (!left) { fail(); return null; }
@@ -371,6 +404,7 @@
             leftId: leftId, rightId: rightId, left: left, right: right
           });
         }
+        focusMain();
       });
     }).catch(function () { fail(); });
   }
@@ -441,20 +475,33 @@
   function route() {
     var r = parseHash();
     if (r.view === "replay") {
-      renderReplay(r.id);
+      renderReplay(r.id);            // manages focus on completion
     } else if (r.view === "compare") {
-      renderCompare(r.left, r.right);
+      renderCompare(r.left, r.right); // manages focus on completion
     } else if (r.view === "gallery") {
       renderGallery();
+      focusMain();
     } else {
       var view = document.getElementById("view");
-      if (view) { view.innerHTML = notFoundHTML(r.raw); }
+      if (view) { view.innerHTML = notFoundHTML(r.raw); focusMain(); }
     }
     if (window.scrollTo) { window.scrollTo(0, 0); }
   }
   ROT.route = route;
 
-  window.addEventListener("hashchange", route);
+  /* Skip-to-content: focus the main region without triggering hash routing. */
+  function wireSkipLink() {
+    var skip = document.querySelector("[data-skip]");
+    if (!skip) { return; }
+    skip.addEventListener("click", function (e) {
+      e.preventDefault();
+      var view = document.getElementById("view");
+      if (view && view.focus) { view.focus(); }
+    });
+  }
+  wireSkipLink();
+
+  window.addEventListener("hashchange", function () { navigated = true; route(); });
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", route);
   } else {

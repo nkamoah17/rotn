@@ -508,3 +508,56 @@ main.wrap { flex: 1; padding-top: 28px; padding-bottom: 48px; }
   .vh-verdict { font-size: 34px; }
   .hero h1 { font-size: 27px; }
 }
+
+/* ---------------- accessibility (Phase J) ---------------- */
+
+/* Visible focus indicator for keyboard users -- never strip the outline. */
+a:focus, button:focus, [tabindex]:focus {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Skip-to-content link: visually hidden until focused. */
+.skip-link {
+  position: absolute; left: -9999px; top: 0;
+  background: var(--accent); color: #fff; padding: 10px 16px;
+  border-radius: 0 0 8px 0; font-weight: 600; text-decoration: none; z-index: 100;
+}
+.skip-link:focus { left: 0; }
+
+/* Loading state (shown while a trace is fetched over HTTP). */
+.loading {
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  padding: 60px 20px; color: var(--muted);
+}
+.spinner {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 3px solid var(--line); border-top-color: var(--accent);
+  animation: rot-spin 0.7s linear infinite;
+}
+@keyframes rot-spin { to { transform: rotate(360deg); } }
+
+/* Respect users who prefer less motion. */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .spinner { animation: none; }
+}
+
+/* High-contrast verdicts for users who request more contrast. */
+@media (prefers-contrast: more) {
+  :root {
+    --proven: #0a5c25;
+    --violated: #a50d16;
+    --unknown: #6b4400;
+    --ink: #000000;
+    --muted: #24292f;
+    --line: #57606a;
+  }
+  .b-proven, .b-violated, .b-unknown { border: 1px solid currentColor; }
+}
+
