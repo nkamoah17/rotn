@@ -14,10 +14,11 @@ It is organised in verification planes over one sound core:
 2. **Composition plane (Phase 2).** Independently modelled services are merged into one concurrent IR and checked against *cross-service* invariants.
 3. **Merge-request gate.** Invariant verdicts map to `PASS`/`BLOCK` through an *assurance ladder* (label × rung × pinning).
 4. **Agent Mode (policy plane).** The autonomous agent's `AgentStep` model is checked against a **Cedar** (`.cedar`) or **Dogwood** (`.json`) policy: `policy_conformance` (safety), `policy_permits_request` (non-vacuity), `bounded_eventually` (bounded liveness within horizon B).
+5. **Two audit planes (different depth guarantees).** **Plane A** — structural/temporal (MCP manifest / Cedar / Dogwood `.json`) — is the Trifecta audit mapped to **SOC 2 CC6** + **AIUC-1** (autonomy). **Plane B** — deep temporal/concurrency (Dogwood `.dw` spend-cap) — is the cross-check proof (SMT/Z3 + TLC + policy-direct) that prevents spend-cap bypass, and carries the **CoachingArtifact** (Rule + Proof + **Coach**) that discharges **AIUC-1**. See `docs/architecture.md` §1A.
 
 ```
  CPG/IR  ->  property-directed abstraction  ->  linearization
-        ->  ENGINE  (TLC  |  symbolic-SAT  |  Apalache-ITF)
+        ->  ENGINE  (symbolic-bounded-exhaustive  |  SMT-Z3  |  policy-direct  |  TLC  |  Apalache)
         ->  bounded CEGAR (recheck on unknown)
         ->  Verdict  ->  auditable report (JSON + Markdown)
 ```
@@ -56,6 +57,10 @@ rot replay out/attack.jsonl --policy samples/spendcap-buggy.dw
 
 # 3) The corrected policy -> PROVEN (exit 0)
 rot check --policy samples/spendcap-correct.dw --out out
+
+# 4) Coach the buggy policy back in bounds, *with a proof* (exit 0 = closed)
+rot coach --policy samples/spendcap-buggy.dw --out out
+#    -> out/coaching.json: the deterministic CoachingArtifact (Rule + Proof + Coach)
 ```
 
 Exit codes: `0` PROVEN · `1` VIOLATED · `2` UNKNOWN · `3` ERROR.
@@ -677,7 +682,7 @@ the Apalache ITF engine (concrete-trace refutation, never `proven`), the
 LLM baseline (audit artifact only — never affects the verdict), the impact /
 spec-diff / trace-check / model-finding / ZK-bug / false-block extensions, the
 SAFE/UNSAFE spend-cap classifier (`tests/test_classify.py`), and the CLI
-exit-code contract. **748 tests** currently pass. The TLC and
+exit-code contract. **947 tests** currently pass. The TLC and
 Apalache engines are exercised by the CLI / `run.ps1` matrix when the
 respective tooling is available.
 

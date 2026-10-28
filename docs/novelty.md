@@ -143,6 +143,67 @@ that can produce a **concrete counterexample** (a witness interleaving) and
 the only one that can report **"I cannot decide"** instead of silently
 passing.
 
+## 5A. The SOTA: coaching without a guarantee — and what ROTN adds
+
+The most direct prior work on *agent self-correction* is the **verbal**
+coaching literature:
+
+- **Reflexion** (Shinn et al., arXiv:2303.11366) — an agent stores *verbal*
+  feedback from its failed attempts in an episodic memory and conditions its
+  next attempt on it. The "correction" is a *critique the model may or may not
+  act on*; there is no guarantee the next attempt is better, let alone *safe*.
+- **Self-Refine** (Madaan et al., arXiv:2303.17651) — the model iteratively
+  refines its own output using its own feedback. Again the loop is *verbal*:
+  each pass is a self-critique, and termination is by heuristic (the model
+  decides it is "done"), not by a proof.
+
+Both are state-of-the-art for *improving* an agent's behaviour, and both are
+honest about what they are: **optimisation heuristics, not guarantees.** The
+correction is a *suggestion*; whether it holds is left to the model's
+judgment. That is a real gap for the safety-critical setting: a coach that
+cannot *prove* the correction is safe is a coach that can be wrong and never
+know.
+
+Dogwood is different in kind — it is a **runtime monitor / interpreter**, not a
+verifier. Its README and formal spec describe a *decision function* (a request
+against the settled trace) with six *operational* meta-properties (fail-closed
+evaluation, total lowering, sound validation, deterministic identity,
+confined statefulness, monitorability). None of them is a *soundness-of-intent*
+guarantee, and none *coaches*: Dogwood denies the request; it does not explain
+why, correct the policy, or prove the correction safe.
+
+**ROTN's contribution is the combination: coach *and* proof.** When a policy is
+violated, ROTN does not merely report it (Cedar/Dogwood) nor merely nudge an
+LLM to retry (Reflexion/Self-Refine). It (1) *explains* the violation with a
+concrete witness, (2) *corrects* the policy by a faithful AST rewrite, and
+(3) **re-proves** the correction with the same bounded-exhaustive engine — and
+only then does it *close* the coaching. The `CoachingArtifact` is `closed`
+**iff** the corrected policy is `proven` within the recorded bound; if the
+correction does not re-prove, the artifact is `open` (fail-closed). That
+"coach + proof" loop is the third leg of the triad — **Rule + Proof + Coach** —
+and it is the thing no prior system couples: the self-correction is *discharged
+by a proof*, not left to the model's judgment.
+
+| | **Reflexion / Self-Refine** | **Dogwood** | **ROTN** |
+|---|---|---|---|
+| **Feedback** | verbal critique (LLM) | deny/allow decision | concrete witness (IR-feasible) |
+| **Correction** | re-prompt / self-refine | none (monitor only) | faithful AST rewrite |
+| **Guarantee** | *none* (heuristic) | *none* (operational only) | **proof** (re-check, bound-relative) |
+| **Fail-closed** | n/a | yes (deny on error) | yes (`open` iff not re-proven) |
+
+**The obvious objection — "why not just run TLC on the whole Dogwood
+policy?"** deserves a direct answer. Arbitrary policy text has no
+*model-checking semantics*: Cedar and Dogwood ship a *runtime interpreter*
+(a decision function over the settled history), not a formal semantics to
+lower against, so there is no general "lower the whole `.dw` to a transition
+system" step to hand to a model checker. ROTN therefore lowers the
+**highest-risk, highest-frequency class** of temporal policy — spend/rate
+caps over a bounded event set — into a bounded transition system and proves
+it, and that **lowering is the extension point** for more policy classes.
+That is an honest, product-sensible scope: it is built to grow one class at
+a time, each with its own soundness argument, rather than pretending to be
+a general Cedar/Dogwood model checker (see §8).
+
 ## 6. How ROTN relates to the §7 meta-properties
 
 ROTN is **not** a replacement for the Dogwood monitor. It is a different
@@ -262,4 +323,7 @@ deterministically.
 far?"; ROTN answers "can this policy, under concurrency, ever reach a state
 that violates it?" — by lowering the policy into a bounded model and
 checking *all* reachable states, and by honestly reporting `OUT_OF_SCOPE`
-when it cannot.**
+when it cannot — and when it *does* find a violating state, it coaches the
+agent back in bounds *with a proof* that the corrected behaviour is safe: the
+layer between "the policy says" and "the agent does" that neither the policy
+engine nor the agent-coaching SOTA provides.**

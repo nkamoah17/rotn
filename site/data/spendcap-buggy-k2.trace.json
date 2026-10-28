@@ -9,6 +9,64 @@
     "source": "free",
     "tier": "free"
   },
+  "coaching": {
+    "close": {
+      "discharge": "the corrected policy is proven safe within the bound (K=2, W=4): the coaching is discharged",
+      "status": "closed"
+    },
+    "correct": {
+      "buggy_guard": "completed + 100 <= 200 and inflight < 2",
+      "delta": "response -> request (charge in-flight against the cap)",
+      "event_kind": "request",
+      "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 2",
+      "policy": {
+        "action": "Transfer",
+        "buggy": false,
+        "cap": 200,
+        "event_kind": "request",
+        "policy_id": "spendcap_buggy",
+        "window": "24h"
+      }
+    },
+    "detect": {
+      "engine": "symbolic",
+      "n_states": 9,
+      "status": "violated",
+      "witness": {
+        "completed": 100,
+        "inflight": 2
+      }
+    },
+    "explain": {
+      "cap": 200,
+      "exposure": 300,
+      "rationale": "The policy sums over 'response' events, so it charges only settled requests. In the witness (completed=100, inflight=2) the 2 in-flight requests are invisible to the decision: each of the 2 parallel fires sees completed=0 and is admitted, pushing total exposure to 300 -- past the cap of 200.",
+      "root_cause": "the spend_ok guard sums over 'response' events only; in-flight (issued, unsettled) requests are not charged against the cap",
+      "witness": {
+        "completed": 100,
+        "inflight": 2
+      }
+    },
+    "hash": "525ad5c723798e98383264e421f47fded3a19ec6e99773b51f209e9dd8fc2101",
+    "policy": {
+      "action": "Transfer",
+      "amount": 100,
+      "cap": 200,
+      "event_kind": "response",
+      "max_inflight": 2,
+      "policy_id": "spendcap_buggy",
+      "window": 4
+    },
+    "recheck": {
+      "engine": "symbolic",
+      "n_states": 6,
+      "status": "proven",
+      "witness": null
+    },
+    "rot_version": "0.1.0",
+    "schema": "caravel.coach/v1",
+    "status": "closed"
+  },
   "compliance": {
     "controls": {
       "AIUC-1": "Caravel AIUC-1 -- Autonomy (agent must not act beyond policy)",
@@ -200,9 +258,9 @@
       "s100_2"
     ]
   },
-  "hash": "c50a773d0ab70e063ac6a11b091e12618bc470659a21f94a159de93164307871",
+  "hash": "b93e179166db4906680188e7138166fce1edc0d1e96a89b3480695e713a33b83",
   "horizon": 12,
-  "manifest_id": "mf-1030049f3b5c2797",
+  "manifest_id": "mf-09637d84dfcc8a5f",
   "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 2 * 100 = 200 -- past the cap of 200. The counterexample is {'completed': 100, 'inflight': 2}. (9 reachable states explored.)",
   "policy": {
     "amount": 100,
@@ -229,13 +287,13 @@
     "horizon": 12,
     "horizon_complete": true,
     "n_states": 9,
-    "policy_hash": "1030049f3b5c27972c9d19acd3289c4d11fb9d1fe41c59253e4ab09e3faab404",
+    "policy_hash": "09637d84dfcc8a5fa83185d96822ba02512042a242b0ccf396e9df41fb04b3c0",
     "policy_source": "samples/spendcap-buggy.dw"
   },
   "rot_version": "0.1.0",
   "schema": "caravel.rtf/v1",
   "source": {
-    "hash": "1030049f3b5c27972c9d19acd3289c4d11fb9d1fe41c59253e4ab09e3faab404",
+    "hash": "09637d84dfcc8a5fa83185d96822ba02512042a242b0ccf396e9df41fb04b3c0",
     "path": "samples/spendcap-buggy.dw",
     "schema": "caravel.dogwood/v1"
   },

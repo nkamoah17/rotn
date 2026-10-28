@@ -286,6 +286,15 @@
         "</section>"
       );
     }
+    if (t.coaching && t.coaching.schema) {
+      parts.push(
+        '<section class="panel" aria-label="Coaching">',
+        "  <div class=\"panel-head\"><h2>Coaching</h2>" +
+          '<p class="panel-sub">the third leg of the triad \u00b7 the agent is coached back in bounds, *with a proof* (detect \u2192 explain \u2192 correct \u2192 re-check \u2192 close)</p></div>',
+        '  <div id="rot-coach"></div>',
+        "</section>"
+      );
+    }
     parts.push(
       '<section class="panels-2" aria-label="Timeline and narration">',
       '  <div class="panel">',
@@ -323,6 +332,7 @@
       view.innerHTML = replayHTML(id, t, v);
       if (ROT.ROTGraph) { ROT.ROTGraph.mount(document.getElementById("rot-graph"), t); }
       if (ROT.ROTSpendcap) { ROT.ROTSpendcap.mount(document.getElementById("rot-spendcap"), t); }
+      if (ROT.ROTCoach) { ROT.ROTCoach.mount(document.getElementById("rot-coach"), t); }
       if (ROT.ROTTimeline) { ROT.ROTTimeline.mount(document.getElementById("rot-timeline"), t); }
       if (ROT.ROTNarration) { ROT.ROTNarration.mount(document.getElementById("rot-narration"), t); }
       if (ROT.ROTFindings) { ROT.ROTFindings.mount(document.getElementById("rot-findings"), t); }

@@ -776,7 +776,7 @@ def _spend_section(steps, amount, cap, max_inflight, reachable_states):
 
 def build_spendcap_trace(ir, status, witness=None, steps=None,
                          n_states=None, budget=None, horizon=12, tier=None,
-                         source_path=None):
+                         source_path=None, coaching=None):
     """Build an RTF v1 reasoning trace for a spend-cap policy audit.
 
     This is the entry point for the ``rot trace --policy`` command (the
@@ -807,6 +807,13 @@ def build_spendcap_trace(ir, status, witness=None, steps=None,
         The budget tier (``"free"`` / ``"paid"``); inferred when omitted.
     source_path : str, optional
         The policy file path (recorded for provenance).
+    coaching : dict, optional
+        The full :class:`rot.coach.CoachingArtifact` (``artifact.to_dict()``)
+        for a violated spend-cap policy -- the corrected policy + the
+        plain-English rationale + the re-verification proof + its SHA-256 hash.
+        When present, the RTF trace bundle is self-contained: **Rule + Proof +
+        Coach**. ``None`` for a proven policy or a non-coachable audit (the
+        trace then carries ``coaching: null``).
 
     Returns
     -------
@@ -862,6 +869,7 @@ def build_spendcap_trace(ir, status, witness=None, steps=None,
         ),
         "spend": _spend_section(steps, amount, cap, max_inflight,
                                 reachable_states),
+        "coaching": coaching,
     }
     return TraceResult(body)
 

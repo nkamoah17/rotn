@@ -34,12 +34,14 @@ The whole system is built on four invariants that never change:
 
 ```
 ┌─ Ingest ─────────────┐   ┌─ Verify ────────────┐   ┌─ Evidence ─────────────┐   ┌─ Ship ──────────────┐
-│ policy.json (Dogwood)│   │ symbolic (BDD)      │   │ RTF trace.json         │   │ static site (Cytoscape)│
-│ MCP manifest  (NEW)  │──▶│ SMT (DPLL+CDCL)     │──▶│ (deterministic, hashed)│──▶│ GitHub Pages (deploy-pages)│
-│ tools.json           │   │ policy-direct       │   │ verdict+graph+CE+      │   │ verdict card, replay,    │
-└──────────────────────┘   │ + bounded CEGAR     │   │ timeline+narration+    │   │ findings+compliance      │
-                           │  DepthBudget (tier) │   │ findings+compliance    │   └─────────────────────────┘
-                           └─────────────────────┘   └─────────────────────────┘
+│ policy.json (Dogwood)│   │ symbolic (bounded-  │   │ RTF trace.json         │   │ static site (Cytoscape)│
+│ MCP manifest  (NEW)  │──▶│ exhaustive BFS)     │──▶│ (deterministic, hashed)│──▶│ GitHub Pages (deploy-pages)│
+│ tools.json           │   │ SMT (Z3 + ref)      │   │ verdict+graph+CE+      │   │ verdict card, replay,    │
+└──────────────────────┘   │ policy-direct       │   │ timeline+narration+    │   │ findings+compliance      │
+                           │ + bounded CEGAR     │   │ findings+compliance+   │   └─────────────────────────┘
+                           │  DepthBudget (tier) │   │ coaching (Rule+Proof+  │
+                           └─────────────────────┘   │ Coach)                 │
+                                                      └─────────────────────────┘
 ```
 
 The planes are strictly ordered and communicate **only** through stable,
@@ -159,6 +161,38 @@ Cytoscape, plays back the step-by-step attack timeline with narration, and lists
 the Cedar-AR findings + SOC 2 / AIUC control mapping. Because it only reads the
 trace, the same `trace.json` replays identically anywhere — locally, in CI, or
 on GitHub Pages.
+
+---
+
+## 1A. The two audit planes (different depth guarantees)
+
+The pipeline above is one *mechanism*; the product has **two audit planes** —
+two modalities with *different depth guarantees* that answer different
+questions. Both reuse the same narrow waist (`rot.ir`) and the same
+deterministic, hashed RTF trace, but they are not the same depth of claim.
+
+| | **Plane A — structural / temporal (MCP)** | **Plane B — deep temporal / concurrency (Dogwood)** |
+|---|---|---|
+| **Question** | Does the agent conform to policy? (no denied action, tenant isolation, no contradictions) | Can the agent *bypass the cap* under concurrent, in-flight activity? |
+| **Input** | MCP manifest / Cedar `.cedar` / Dogwood `policy.json` | Dogwood `.dw` spend-cap source (the temporal extension) |
+| **Engine** | Trifecta (safety + liveness + conformance) over the bounded model | Cross-check: **SMT/Z3 + TLC + policy-direct** (zero shared code) + bounded-exhaustive |
+| **Depth guarantee** | Bounded: holds within the declared horizon / state budget; `UNKNOWN` is never read as `PROVEN` | Bounded-exhaustive over the *concurrent* state space (the K-sweep); the three engines must *agree* and find the *same* witness |
+| **Maps to** | SOC 2 **CC6** (CC6.1 / CC6.3 / CC6.6) + **AIUC-1** (autonomy) | Spend-cap bypass prevention; the **CoachingArtifact** (Rule + Proof + **Coach**) discharges **AIUC-1** |
+| **Evidence** | RTF trace (verdict + graph + counterexample + findings + compliance) | RTF trace **plus** the CoachingArtifact: the corrected policy + the re-proof that the correction is safe |
+
+The distinction is the point. **Plane A** is a *structural* audit: it checks
+that the policy is well-formed and the agent conforms, within a bound. **Plane
+B** is a *deep temporal/concurrency* proof: it shows the policy is (or is not)
+safe under parallel, in-flight activity — the regime where a naive settled-only
+guard silently lets a burst overshoot the cap. Plane B is where the
+**CoachingArtifact** lives: when the policy is violated, ROTN does not just
+report it — it coaches the agent back in bounds and *proves* the correction
+safe (the third leg of the triad, Rule + Proof + Coach).
+
+Both planes are **fail-closed** and **bounded**: a `PROVEN` is always
+bound-relative, and an `UNKNOWN` (budget-truncated or a tool absent) is never
+read as safe. The difference is *what* is bounded — the structural horizon in
+Plane A, the concurrent state space in Plane B.
 
 ---
 

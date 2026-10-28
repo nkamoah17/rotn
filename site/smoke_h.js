@@ -27,6 +27,7 @@ function load(rel) {
 load(path.join("data", "traces.js"));
 load("app/compliance.js");
 load("app/compare.js");
+load("app/coach.js");
 
 const ROT = global.window.ROT;
 const reg = global.window.ROT_TRACES;
@@ -134,6 +135,31 @@ check("compare mount: K=1..4 columns",
 check("compare mount: play button", cmpHTML.indexOf("ksweep-play") >= 0);
 check("compare mount: slider", cmpHTML.indexOf('type="range"') >= 0);
 check("compare mount: manifest hash shown", cmpHTML.indexOf("manifest hash") >= 0);
+
+// ---- coaching panel (the third leg of the triad) ----
+const coachContainer = { innerHTML: "" };
+ROT.ROTCoach.mount(coachContainer, reg["spendcap-buggy"]);
+const coachHTML = coachContainer.innerHTML;
+check("coach (buggy): renders the panel", coachHTML.indexOf("coach-table") >= 0);
+check("coach (buggy): CLOSED badge (discharged by proof)",
+  coachHTML.indexOf("coach-badge-closed") >= 0);
+check("coach (buggy): 5-step loop present",
+  ["Detect", "Explain", "Correct", "Re-check", "Close"].every(
+    function (s) { return coachHTML.indexOf(s) >= 0; }));
+check("coach (buggy): rationale derived from the witness",
+  coachHTML.indexOf("coach-rationale") >= 0);
+check("coach (buggy): corrected policy (request-sum) shown",
+  coachHTML.indexOf("request") >= 0 && coachHTML.indexOf("coach-guard") >= 0);
+check("coach (buggy): re-check proven", coachHTML.indexOf("proven") >= 0);
+check("coach (buggy): SHA-256 hash shown", coachHTML.indexOf("SHA-256") >= 0);
+
+// Proven / non-coachable traces must NOT render the panel.
+const coachClean = { innerHTML: "" };
+ROT.ROTCoach.mount(coachClean, reg["spendcap-correct"]);
+check("coach (correct): stays empty", coachClean.innerHTML === "");
+const coachMasked = { innerHTML: "" };
+ROT.ROTCoach.mount(coachMasked, reg["spendcap-buggy-k1"]);
+check("coach (buggy K=1, masked): stays empty", coachMasked.innerHTML === "");
 
 console.log("");
 console.log(failures === 0 ? "ALL SMOKE CHECKS PASSED" : failures + " CHECK(S) FAILED");

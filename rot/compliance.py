@@ -60,6 +60,8 @@ __all__ = [
     "controls_for",
     "controls_touched",
     "compliance_section",
+    "COACHING_CONTROL",
+    "coaching_compliance",
 ]
 
 #: The compliance profile schema tag (bump on breaking changes to the mapping).
@@ -247,5 +249,79 @@ def compliance_section(findings, result):
         "evidence": {
             "findings_total": len(findings),
             "by_control": dict(sorted(by_control.items())),
+        },
+    }
+
+
+#: The control the :class:`~rot.coach.CoachingArtifact` discharges. The
+#: coaching is the *evidence* for AIUC-1 (autonomy): it shows that when the
+#: agent acts beyond its policy (the violation), ROTN coaches it back in
+#: bounds AND proves the correction safe (the re-proof).
+COACHING_CONTROL = AIUC_1
+
+
+def coaching_compliance(coaching):
+    """Map a CoachingArtifact to the AIUC-1 control (the "coach + proof").
+
+    The :class:`~rot.coach.CoachingArtifact` (``caravel.coach/v1``) is the
+    strongest evidence for **AIUC-1** (autonomy -- "the agent must not act
+    beyond its policy"): it records that the out-of-bounds act was *detected*
+    (the witness), *explained* (the rationale), *corrected* (the corrected
+    policy), and -- the point -- **re-proven safe** (the re-check). A
+    ``closed`` coaching (correction re-proven) discharges the concern; an
+    ``open`` coaching (correction did not re-prove) is fail-closed evidence
+    that the concern was *detected* but NOT discharged.
+
+    This is a leaf-module function: it takes the artifact's plain dict
+    (``CoachingArtifact.to_dict()``) and imports nothing from
+    :mod:`rot.coach`, so the compliance profile stays dependency-free.
+
+    Parameters
+    ----------
+    coaching : dict, optional
+        The CoachingArtifact body (``caravel.coach/v1``). ``None`` yields
+        ``None`` (nothing to map).
+
+    Returns
+    -------
+    dict or None
+        A deterministic, JSON-serialisable compliance section mapping the
+        coaching to AIUC-1, or ``None`` when ``coaching`` is ``None``::
+
+            {
+              "profile": "caravel.compliance/v1",
+              "frameworks": ["SOC2", "AIUC"],
+              "result": "proven",
+              "controls_touched": ["AIUC-1"],
+              "controls": {"AIUC-1": "Caravel AIUC-1 -- Autonomy (...)"},
+              "evidence": {
+                "coaching": {"schema": ..., "status": "closed",
+                              "recheck": "proven", "hash": ...},
+                "discharge": "the corrected policy is proven safe ..."
+              }
+            }
+    """
+    if not coaching:
+        return None
+    status = coaching.get("status")
+    recheck = (coaching.get("recheck") or {}).get("status")
+    closed = (status == "closed")
+    # A closed coaching (correction re-proven) is the autonomy *guarantee*;
+    # an open one is fail-closed (the concern is surfaced, not discharged).
+    result = "proven" if closed else "violated"
+    return {
+        "profile": COMPLIANCE_PROFILE,
+        "frameworks": list(FRAMEWORKS),
+        "result": result,
+        "controls_touched": [COACHING_CONTROL],
+        "controls": {COACHING_CONTROL: CONTROL_LABELS[COACHING_CONTROL]},
+        "evidence": {
+            "coaching": {
+                "schema": coaching.get("schema"),
+                "status": status,
+                "recheck": recheck,
+                "hash": coaching.get("hash"),
+            },
+            "discharge": (coaching.get("close") or {}).get("discharge"),
         },
     }

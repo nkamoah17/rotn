@@ -442,6 +442,62 @@ main.wrap { flex: 1; padding-top: 28px; padding-bottom: 48px; }
 }
 .hash-copy:hover { background: #e2e8f0; color: var(--ink); }
 
+/* ---------------- Coaching panel (the third leg of the triad) ---------------- */
+
+.coach-h { margin: 18px 0 4px; font-size: 14px; color: var(--ink); }
+.coach-sub { margin: 0 0 12px; font-size: 12.5px; color: var(--muted); }
+.coach-sub code { font-family: var(--mono); font-size: 12px; background: #f6f8fa; padding: 1px 5px; border-radius: 4px; }
+
+/* status badge (closed = discharged by proof / open = fail-closed) */
+.coach-status { margin: 0 0 14px; }
+.coach-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 700; letter-spacing: 0.4px;
+  padding: 8px 14px; border-radius: 999px; border: 1px solid;
+}
+.coach-badge-icon {
+  width: 20px; height: 20px; border-radius: 50%; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 12px; font-weight: 800;
+}
+.coach-badge-closed { background: var(--proven-bg); color: var(--proven); border-color: #a7dfc0; }
+.coach-badge-closed .coach-badge-icon { background: var(--proven); }
+.coach-badge-open { background: var(--unknown-bg); color: var(--unknown); border-color: #f0d68a; }
+.coach-badge-open .coach-badge-icon { background: var(--unknown); }
+
+/* the 5-step loop table */
+.coach-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.coach-table th {
+  text-align: left; font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--muted); padding: 6px 10px; border-bottom: 2px solid var(--line);
+}
+.coach-table td { padding: 10px; border-bottom: 1px solid #eef1f5; vertical-align: top; }
+.coach-table tr:last-child td { border-bottom: none; }
+.coach-step-n { font-family: var(--mono); font-weight: 700; color: var(--muted); width: 28px; }
+.coach-step-label { font-weight: 700; color: var(--ink); white-space: nowrap; width: 96px; }
+.coach-step-body { color: var(--ink); }
+.coach-step-body p { margin: 0 0 4px; }
+.coach-step-body p:last-child { margin-bottom: 0; }
+.coach-mut { color: var(--muted); font-size: 12px; }
+.coach-guard code { font-family: var(--mono); font-size: 12px; background: #f6f8fa; padding: 1px 5px; border-radius: 4px; }
+.coach-rationale { font-size: 13px; line-height: 1.5; }
+.coach-delta { font-weight: 600; }
+
+/* verdict chips */
+.coach-verdict {
+  display: inline-block; font-family: var(--mono); font-size: 12px; font-weight: 700;
+  padding: 1px 8px; border-radius: 6px; border: 1px solid;
+}
+.coach-verdict-good { background: var(--proven-bg); color: var(--proven); border-color: #a7dfc0; }
+.coach-verdict-bad { background: var(--violated-bg); color: var(--violated); border-color: #f3b4b0; }
+.coach-witness { color: var(--muted); font-size: 12px; }
+.coach-witness code { font-family: var(--mono); font-size: 11.5px; background: #f6f8fa; padding: 1px 5px; border-radius: 4px; }
+
+/* the discharge line */
+.coach-discharge { font-size: 13px; font-weight: 600; }
+.coach-closed { color: var(--proven); }
+.coach-open { color: var(--unknown); }
+
 /* ---------------- responsive ---------------- */
 
 @media (max-width: 820px) {

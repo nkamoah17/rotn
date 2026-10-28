@@ -157,6 +157,53 @@ class ComplianceSectionTests(unittest.TestCase):
         self.assertEqual(a, b)
 
 
+class CoachingComplianceTests(unittest.TestCase):
+    """The CoachingArtifact -> AIUC-1 mapping (the "coach + proof")."""
+
+    def _coaching(self, status, recheck):
+        return {
+            "schema": "caravel.coach/v1",
+            "status": status,
+            "recheck": {"status": recheck},
+            "close": {"status": status, "discharge": "the discharge line"},
+            "hash": "ab" * 32,
+        }
+
+    def test_closed_coaching_discharges_aiuc1(self):
+        section = compliance.coaching_compliance(
+            self._coaching("closed", "proven"))
+        self.assertEqual(section["profile"], compliance.COMPLIANCE_PROFILE)
+        self.assertEqual(section["frameworks"], ["SOC2", "AIUC"])
+        self.assertEqual(section["result"], "proven")
+        self.assertEqual(section["controls_touched"], ["AIUC-1"])
+        self.assertIn("AIUC-1", section["controls"])
+        self.assertEqual(section["evidence"]["coaching"]["status"], "closed")
+        self.assertEqual(section["evidence"]["coaching"]["recheck"], "proven")
+        self.assertEqual(section["evidence"]["coaching"]["hash"], "ab" * 32)
+        self.assertEqual(section["evidence"]["discharge"], "the discharge line")
+
+    def test_open_coaching_is_fail_closed(self):
+        # A correction that did not re-prove is surfaced, not discharged.
+        section = compliance.coaching_compliance(
+            self._coaching("open", "violated"))
+        self.assertEqual(section["result"], "violated")
+        self.assertEqual(section["controls_touched"], ["AIUC-1"])
+        self.assertEqual(section["evidence"]["coaching"]["status"], "open")
+
+    def test_none_yields_none(self):
+        self.assertIsNone(compliance.coaching_compliance(None))
+
+    def test_coaching_control_is_aiuc1(self):
+        self.assertEqual(compliance.COACHING_CONTROL, "AIUC-1")
+
+    def test_json_deterministic(self):
+        a = json.dumps(compliance.coaching_compliance(
+            self._coaching("closed", "proven")), sort_keys=True)
+        b = json.dumps(compliance.coaching_compliance(
+            self._coaching("closed", "proven")), sort_keys=True)
+        self.assertEqual(a, b)
+
+
 class McpReportComplianceTests(unittest.TestCase):
     """The ``--mcp`` report carries per-finding controls + a compliance section."""
 

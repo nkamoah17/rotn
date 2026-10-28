@@ -351,6 +351,64 @@ window.ROT_TRACES = {
       "source": "free",
       "tier": "free"
     },
+    "coaching": {
+      "close": {
+        "discharge": "the corrected policy is proven safe within the bound (K=4, W=4): the coaching is discharged",
+        "status": "closed"
+      },
+      "correct": {
+        "buggy_guard": "completed + 100 <= 200 and inflight < 4",
+        "delta": "response -> request (charge in-flight against the cap)",
+        "event_kind": "request",
+        "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 4",
+        "policy": {
+          "action": "Transfer",
+          "buggy": false,
+          "cap": 200,
+          "event_kind": "request",
+          "policy_id": "spendcap_buggy",
+          "window": "24h"
+        }
+      },
+      "detect": {
+        "engine": "symbolic",
+        "n_states": 20,
+        "status": "violated",
+        "witness": {
+          "completed": 0,
+          "inflight": 3
+        }
+      },
+      "explain": {
+        "cap": 200,
+        "exposure": 300,
+        "rationale": "The policy sums over 'response' events, so it charges only settled requests. In the witness (completed=0, inflight=3) the 3 in-flight requests are invisible to the decision: each of the 3 parallel fires sees completed=0 and is admitted, pushing total exposure to 300 -- past the cap of 200.",
+        "root_cause": "the spend_ok guard sums over 'response' events only; in-flight (issued, unsettled) requests are not charged against the cap",
+        "witness": {
+          "completed": 0,
+          "inflight": 3
+        }
+      },
+      "hash": "29661bc5d10a563eea18f76c1d6d47dcbc88b9d7f88b2b60b1d3c950dad7cc02",
+      "policy": {
+        "action": "Transfer",
+        "amount": 100,
+        "cap": 200,
+        "event_kind": "response",
+        "max_inflight": 4,
+        "policy_id": "spendcap_buggy",
+        "window": 4
+      },
+      "recheck": {
+        "engine": "symbolic",
+        "n_states": 6,
+        "status": "proven",
+        "witness": null
+      },
+      "rot_version": "0.1.0",
+      "schema": "caravel.coach/v1",
+      "status": "closed"
+    },
     "compliance": {
       "controls": {
         "AIUC-1": "Caravel AIUC-1 -- Autonomy (agent must not act beyond policy)",
@@ -509,9 +567,9 @@ window.ROT_TRACES = {
         "s0_3"
       ]
     },
-    "hash": "3bf377f9e82424970a60b92ed482e3622595fcc4f4df6aee8ea1e6eb544ea803",
+    "hash": "daf19e83cb37d9ecf8109265166165545ffcc46a4846c871dbea2521fec66dfa",
     "horizon": 12,
-    "manifest_id": "mf-62b1e195bfaf9c31",
+    "manifest_id": "mf-20d3d055f2baa10e",
     "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 3 * 100 = 300 -- past the cap of 200. The counterexample is {'completed': 0, 'inflight': 3}. (20 reachable states explored.)",
     "policy": {
       "amount": 100,
@@ -538,14 +596,14 @@ window.ROT_TRACES = {
       "horizon": 12,
       "horizon_complete": true,
       "n_states": 20,
-      "policy_hash": "62b1e195bfaf9c313209fc27b7b6fa724694802e4347bef7605dd7ae180deebb",
-      "policy_source": "samples\\spendcap-buggy.dw"
+      "policy_hash": "20d3d055f2baa10e408697023c07e6e208d09c968935b5600e5f0f4b770c58f9",
+      "policy_source": "samples/spendcap-buggy.dw"
     },
     "rot_version": "0.1.0",
     "schema": "caravel.rtf/v1",
     "source": {
-      "hash": "62b1e195bfaf9c313209fc27b7b6fa724694802e4347bef7605dd7ae180deebb",
-      "path": "samples\\spendcap-buggy.dw",
+      "hash": "20d3d055f2baa10e408697023c07e6e208d09c968935b5600e5f0f4b770c58f9",
+      "path": "samples/spendcap-buggy.dw",
       "schema": "caravel.dogwood/v1"
     },
     "spend": {
@@ -769,6 +827,7 @@ window.ROT_TRACES = {
       "source": "free",
       "tier": "free"
     },
+    "coaching": null,
     "compliance": {
       "controls": {},
       "controls_touched": [],
@@ -841,9 +900,9 @@ window.ROT_TRACES = {
       ],
       "witness_path": []
     },
-    "hash": "0fc65825fac65d33c7b3c58e8005adc9a0d0f34540a734b837548758a2419c90",
+    "hash": "f4b8936744236331412dc86e08c9ea8020f0bee5e07f78e4495403b0d4a17e34",
     "horizon": 12,
-    "manifest_id": "mf-5834b20b0999946d",
+    "manifest_id": "mf-d63943f4106df183",
     "narration": "The spend-cap policy is PROVEN. The ``spend_ok`` guard charges in-flight requests against the cap, so the settled + in-flight amount never exceeds 200 in any of the 5 reachable states.",
     "policy": {
       "amount": 100,
@@ -870,13 +929,13 @@ window.ROT_TRACES = {
       "horizon": 12,
       "horizon_complete": true,
       "n_states": 5,
-      "policy_hash": "5834b20b0999946dd43eeca87eb10f6b2b2f57e057e691b3f003e501e63aab31",
+      "policy_hash": "d63943f4106df183d7a98ec1713bc7afb6019ca406d165cc87ef66a43949a617",
       "policy_source": "samples/spendcap-buggy.dw"
     },
     "rot_version": "0.1.0",
     "schema": "caravel.rtf/v1",
     "source": {
-      "hash": "5834b20b0999946dd43eeca87eb10f6b2b2f57e057e691b3f003e501e63aab31",
+      "hash": "d63943f4106df183d7a98ec1713bc7afb6019ca406d165cc87ef66a43949a617",
       "path": "samples/spendcap-buggy.dw",
       "schema": "caravel.dogwood/v1"
     },
@@ -943,6 +1002,64 @@ window.ROT_TRACES = {
       },
       "source": "free",
       "tier": "free"
+    },
+    "coaching": {
+      "close": {
+        "discharge": "the corrected policy is proven safe within the bound (K=2, W=4): the coaching is discharged",
+        "status": "closed"
+      },
+      "correct": {
+        "buggy_guard": "completed + 100 <= 200 and inflight < 2",
+        "delta": "response -> request (charge in-flight against the cap)",
+        "event_kind": "request",
+        "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 2",
+        "policy": {
+          "action": "Transfer",
+          "buggy": false,
+          "cap": 200,
+          "event_kind": "request",
+          "policy_id": "spendcap_buggy",
+          "window": "24h"
+        }
+      },
+      "detect": {
+        "engine": "symbolic",
+        "n_states": 9,
+        "status": "violated",
+        "witness": {
+          "completed": 100,
+          "inflight": 2
+        }
+      },
+      "explain": {
+        "cap": 200,
+        "exposure": 300,
+        "rationale": "The policy sums over 'response' events, so it charges only settled requests. In the witness (completed=100, inflight=2) the 2 in-flight requests are invisible to the decision: each of the 2 parallel fires sees completed=0 and is admitted, pushing total exposure to 300 -- past the cap of 200.",
+        "root_cause": "the spend_ok guard sums over 'response' events only; in-flight (issued, unsettled) requests are not charged against the cap",
+        "witness": {
+          "completed": 100,
+          "inflight": 2
+        }
+      },
+      "hash": "525ad5c723798e98383264e421f47fded3a19ec6e99773b51f209e9dd8fc2101",
+      "policy": {
+        "action": "Transfer",
+        "amount": 100,
+        "cap": 200,
+        "event_kind": "response",
+        "max_inflight": 2,
+        "policy_id": "spendcap_buggy",
+        "window": 4
+      },
+      "recheck": {
+        "engine": "symbolic",
+        "n_states": 6,
+        "status": "proven",
+        "witness": null
+      },
+      "rot_version": "0.1.0",
+      "schema": "caravel.coach/v1",
+      "status": "closed"
     },
     "compliance": {
       "controls": {
@@ -1135,9 +1252,9 @@ window.ROT_TRACES = {
         "s100_2"
       ]
     },
-    "hash": "c50a773d0ab70e063ac6a11b091e12618bc470659a21f94a159de93164307871",
+    "hash": "b93e179166db4906680188e7138166fce1edc0d1e96a89b3480695e713a33b83",
     "horizon": 12,
-    "manifest_id": "mf-1030049f3b5c2797",
+    "manifest_id": "mf-09637d84dfcc8a5f",
     "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 2 * 100 = 200 -- past the cap of 200. The counterexample is {'completed': 100, 'inflight': 2}. (9 reachable states explored.)",
     "policy": {
       "amount": 100,
@@ -1164,13 +1281,13 @@ window.ROT_TRACES = {
       "horizon": 12,
       "horizon_complete": true,
       "n_states": 9,
-      "policy_hash": "1030049f3b5c27972c9d19acd3289c4d11fb9d1fe41c59253e4ab09e3faab404",
+      "policy_hash": "09637d84dfcc8a5fa83185d96822ba02512042a242b0ccf396e9df41fb04b3c0",
       "policy_source": "samples/spendcap-buggy.dw"
     },
     "rot_version": "0.1.0",
     "schema": "caravel.rtf/v1",
     "source": {
-      "hash": "1030049f3b5c27972c9d19acd3289c4d11fb9d1fe41c59253e4ab09e3faab404",
+      "hash": "09637d84dfcc8a5fa83185d96822ba02512042a242b0ccf396e9df41fb04b3c0",
       "path": "samples/spendcap-buggy.dw",
       "schema": "caravel.dogwood/v1"
     },
@@ -1351,6 +1468,64 @@ window.ROT_TRACES = {
       "source": "free",
       "tier": "free"
     },
+    "coaching": {
+      "close": {
+        "discharge": "the corrected policy is proven safe within the bound (K=3, W=4): the coaching is discharged",
+        "status": "closed"
+      },
+      "correct": {
+        "buggy_guard": "completed + 100 <= 200 and inflight < 3",
+        "delta": "response -> request (charge in-flight against the cap)",
+        "event_kind": "request",
+        "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 3",
+        "policy": {
+          "action": "Transfer",
+          "buggy": false,
+          "cap": 200,
+          "event_kind": "request",
+          "policy_id": "spendcap_buggy",
+          "window": "24h"
+        }
+      },
+      "detect": {
+        "engine": "symbolic",
+        "n_states": 14,
+        "status": "violated",
+        "witness": {
+          "completed": 0,
+          "inflight": 3
+        }
+      },
+      "explain": {
+        "cap": 200,
+        "exposure": 300,
+        "rationale": "The policy sums over 'response' events, so it charges only settled requests. In the witness (completed=0, inflight=3) the 3 in-flight requests are invisible to the decision: each of the 3 parallel fires sees completed=0 and is admitted, pushing total exposure to 300 -- past the cap of 200.",
+        "root_cause": "the spend_ok guard sums over 'response' events only; in-flight (issued, unsettled) requests are not charged against the cap",
+        "witness": {
+          "completed": 0,
+          "inflight": 3
+        }
+      },
+      "hash": "d19933b9ccbbabf7dca334e51cabb6e1a0040334e0eab17f1396dc2b57821951",
+      "policy": {
+        "action": "Transfer",
+        "amount": 100,
+        "cap": 200,
+        "event_kind": "response",
+        "max_inflight": 3,
+        "policy_id": "spendcap_buggy",
+        "window": 4
+      },
+      "recheck": {
+        "engine": "symbolic",
+        "n_states": 6,
+        "status": "proven",
+        "witness": null
+      },
+      "rot_version": "0.1.0",
+      "schema": "caravel.coach/v1",
+      "status": "closed"
+    },
     "compliance": {
       "controls": {
         "AIUC-1": "Caravel AIUC-1 -- Autonomy (agent must not act beyond policy)",
@@ -1509,9 +1684,9 @@ window.ROT_TRACES = {
         "s0_3"
       ]
     },
-    "hash": "ac8311806f0204393c465f3c9fb13ea1c6735d88c3865f230ccf6678894ac247",
+    "hash": "9e6585787ae37b4475e8f31cafad639bfa67c4c21876a6b884de5aaae2cf90be",
     "horizon": 12,
-    "manifest_id": "mf-ba311c76ea6f5884",
+    "manifest_id": "mf-fbce44c22b97ba49",
     "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 3 * 100 = 300 -- past the cap of 200. The counterexample is {'completed': 0, 'inflight': 3}. (14 reachable states explored.)",
     "policy": {
       "amount": 100,
@@ -1538,13 +1713,13 @@ window.ROT_TRACES = {
       "horizon": 12,
       "horizon_complete": true,
       "n_states": 14,
-      "policy_hash": "ba311c76ea6f5884ccf4526f6e611793db5de132e657807b92344a9b8893c3e7",
+      "policy_hash": "fbce44c22b97ba492f4dfbe9305afeed8d3db19cf5a8296e63bc490755a84933",
       "policy_source": "samples/spendcap-buggy.dw"
     },
     "rot_version": "0.1.0",
     "schema": "caravel.rtf/v1",
     "source": {
-      "hash": "ba311c76ea6f5884ccf4526f6e611793db5de132e657807b92344a9b8893c3e7",
+      "hash": "fbce44c22b97ba492f4dfbe9305afeed8d3db19cf5a8296e63bc490755a84933",
       "path": "samples/spendcap-buggy.dw",
       "schema": "caravel.dogwood/v1"
     },
@@ -1733,6 +1908,7 @@ window.ROT_TRACES = {
       "source": "free",
       "tier": "free"
     },
+    "coaching": null,
     "compliance": {
       "controls": {},
       "controls_touched": [],
@@ -1813,9 +1989,9 @@ window.ROT_TRACES = {
       ],
       "witness_path": []
     },
-    "hash": "7730b53708703419ced1dd8a309eab5113b03fa1d63663ec74b272601df4809c",
+    "hash": "bb6803cec3fb079067b96cbe7ed60d216b476db3b13aa57984cf80b71ed2e9b9",
     "horizon": 12,
-    "manifest_id": "mf-6fe1b5999e41ed8b",
+    "manifest_id": "mf-08cc3e32c8756099",
     "narration": "The spend-cap policy is PROVEN. The ``spend_ok`` guard charges in-flight requests against the cap, so the settled + in-flight amount never exceeds 200 in any of the 6 reachable states.",
     "policy": {
       "amount": 100,
@@ -1842,14 +2018,14 @@ window.ROT_TRACES = {
       "horizon": 12,
       "horizon_complete": true,
       "n_states": 6,
-      "policy_hash": "6fe1b5999e41ed8b2c90d185969acc8ea0b801c56bdacf7439cff24bc1ddeb3a",
-      "policy_source": "samples\\spendcap-correct.dw"
+      "policy_hash": "08cc3e32c875609927aa3ff52d98a3a356c2b28391dccc57e9fd0b34bae95cef",
+      "policy_source": "samples/spendcap-correct.dw"
     },
     "rot_version": "0.1.0",
     "schema": "caravel.rtf/v1",
     "source": {
-      "hash": "6fe1b5999e41ed8b2c90d185969acc8ea0b801c56bdacf7439cff24bc1ddeb3a",
-      "path": "samples\\spendcap-correct.dw",
+      "hash": "08cc3e32c875609927aa3ff52d98a3a356c2b28391dccc57e9fd0b34bae95cef",
+      "path": "samples/spendcap-correct.dw",
       "schema": "caravel.dogwood/v1"
     },
     "spend": {
@@ -1922,6 +2098,7 @@ window.ROT_TRACES = {
       "source": "free",
       "tier": "free"
     },
+    "coaching": null,
     "compliance": {
       "controls": {},
       "controls_touched": [],
@@ -1994,9 +2171,9 @@ window.ROT_TRACES = {
       ],
       "witness_path": []
     },
-    "hash": "a372c55484abc817957aef687b6c8d1bffe89e416b345e39606984528a4fb5ab",
+    "hash": "2b7dcf86b65fa01237ce32a566a068d74fff6d67a108409688b98893164ccfe5",
     "horizon": 12,
-    "manifest_id": "mf-97c802024552fe2f",
+    "manifest_id": "mf-d4afedbf694a46b8",
     "narration": "The spend-cap policy is PROVEN. The ``spend_ok`` guard charges in-flight requests against the cap, so the settled + in-flight amount never exceeds 200 in any of the 5 reachable states.",
     "policy": {
       "amount": 100,
@@ -2023,13 +2200,13 @@ window.ROT_TRACES = {
       "horizon": 12,
       "horizon_complete": true,
       "n_states": 5,
-      "policy_hash": "97c802024552fe2fcf7fbf2e04f2a2e083d93acb40331b68c160401400630352",
+      "policy_hash": "d4afedbf694a46b81a9d7136d3f52860f55fb79f3645d2a7a0ea4030f72fe735",
       "policy_source": "samples/spendcap-correct.dw"
     },
     "rot_version": "0.1.0",
     "schema": "caravel.rtf/v1",
     "source": {
-      "hash": "97c802024552fe2fcf7fbf2e04f2a2e083d93acb40331b68c160401400630352",
+      "hash": "d4afedbf694a46b81a9d7136d3f52860f55fb79f3645d2a7a0ea4030f72fe735",
       "path": "samples/spendcap-correct.dw",
       "schema": "caravel.dogwood/v1"
     },
@@ -2097,6 +2274,7 @@ window.ROT_TRACES = {
       "source": "free",
       "tier": "free"
     },
+    "coaching": null,
     "compliance": {
       "controls": {},
       "controls_touched": [],
@@ -2177,9 +2355,9 @@ window.ROT_TRACES = {
       ],
       "witness_path": []
     },
-    "hash": "8ee8acbcb5bc7a01fb2a52bcf64b164b1420193865e70c9e92ede3b4606b787e",
+    "hash": "fbe4ca563e0cb7178d149f63e400d40f152216d93f61fdb264ca924bf0e01dd5",
     "horizon": 12,
-    "manifest_id": "mf-b863363abfa870cd",
+    "manifest_id": "mf-1ca8a558adf31a2b",
     "narration": "The spend-cap policy is PROVEN. The ``spend_ok`` guard charges in-flight requests against the cap, so the settled + in-flight amount never exceeds 200 in any of the 6 reachable states.",
     "policy": {
       "amount": 100,
@@ -2206,13 +2384,13 @@ window.ROT_TRACES = {
       "horizon": 12,
       "horizon_complete": true,
       "n_states": 6,
-      "policy_hash": "b863363abfa870cd3f788c4287e346e2c2cb098c53675c73939391e50cf7bddd",
+      "policy_hash": "1ca8a558adf31a2ba5d6bbeaf3090957ddb2e482d1585b6bf358171ab038a84c",
       "policy_source": "samples/spendcap-correct.dw"
     },
     "rot_version": "0.1.0",
     "schema": "caravel.rtf/v1",
     "source": {
-      "hash": "b863363abfa870cd3f788c4287e346e2c2cb098c53675c73939391e50cf7bddd",
+      "hash": "1ca8a558adf31a2ba5d6bbeaf3090957ddb2e482d1585b6bf358171ab038a84c",
       "path": "samples/spendcap-correct.dw",
       "schema": "caravel.dogwood/v1"
     },
@@ -2286,6 +2464,7 @@ window.ROT_TRACES = {
       "source": "free",
       "tier": "free"
     },
+    "coaching": null,
     "compliance": {
       "controls": {},
       "controls_touched": [],
@@ -2366,9 +2545,9 @@ window.ROT_TRACES = {
       ],
       "witness_path": []
     },
-    "hash": "260ba5637e5e62944a7cc3c01ec38a7920b3d9a822794b029af31300fbaa9a40",
+    "hash": "89d6992d028bbc76fcae19239fc3bb7b571ac204ed2c451b136a64e249dfd211",
     "horizon": 12,
-    "manifest_id": "mf-ced79ff21583e50d",
+    "manifest_id": "mf-f8d130a1e128d030",
     "narration": "The spend-cap policy is PROVEN. The ``spend_ok`` guard charges in-flight requests against the cap, so the settled + in-flight amount never exceeds 200 in any of the 6 reachable states.",
     "policy": {
       "amount": 100,
@@ -2395,13 +2574,13 @@ window.ROT_TRACES = {
       "horizon": 12,
       "horizon_complete": true,
       "n_states": 6,
-      "policy_hash": "ced79ff21583e50d94956420f5de8f20ef806eaa11c61c436bdaabc22217e4c5",
+      "policy_hash": "f8d130a1e128d030fc0fd73ae64a7e00428f63de23f5e9ef4715aaa20770faf8",
       "policy_source": "samples/spendcap-correct.dw"
     },
     "rot_version": "0.1.0",
     "schema": "caravel.rtf/v1",
     "source": {
-      "hash": "ced79ff21583e50d94956420f5de8f20ef806eaa11c61c436bdaabc22217e4c5",
+      "hash": "f8d130a1e128d030fc0fd73ae64a7e00428f63de23f5e9ef4715aaa20770faf8",
       "path": "samples/spendcap-correct.dw",
       "schema": "caravel.dogwood/v1"
     },

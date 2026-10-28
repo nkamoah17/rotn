@@ -428,6 +428,45 @@ def _trace_manifest(manifest_path, budget, horizon, tier):
     return result, report.exit_code()
 
 
+def _coach_artifact(policy_path, max_inflight=None, amount=None, cap=None,
+                    window=None):
+    """Compute the full CoachingArtifact for a buggy spend-cap policy.
+
+    The third leg of the triad (Rule -> Proof -> **Coach**): for a violated
+    spend-cap policy, run the 5-step coaching loop and return the *full*
+    artifact (``artifact.to_dict()`` -- the corrected policy + the plain-English
+    rationale + the re-verification proof + its SHA-256 hash) so the RTF trace
+    bundle is self-contained: **Rule + Proof + Coach**. A reader can re-verify
+    the coaching byte-for-byte from the trace alone, and the site renders it as
+    the third panel.
+
+    Returns ``None`` when the policy is not coachable (not a spend-cap policy)
+    or the coaching fails -- the trace then carries ``coaching: null``.
+    """
+    import rot.coach as coachmod
+    import rot.dw as dw
+
+    try:
+        policy = dw.parse_file(policy_path)
+    except (dw.DwParseError, IOError, OSError):
+        return None
+    if not hasattr(policy, "to_ir"):
+        return None
+
+    try:
+        artifact = coachmod.coach(
+            policy,
+            max_inflight=max_inflight,
+            amount=amount,
+            cap=cap,
+            window=window,
+        )
+    except (ValueError, dw.DwParseError):
+        return None
+
+    return artifact.to_dict()
+
+
 def _trace_policy(policy_path, args, budget, horizon, tier):
     """Build the RTF v1 trace for a spend-cap policy audit (AWS Dogwood).
 
@@ -456,12 +495,28 @@ def _trace_policy(policy_path, args, budget, horizon, tier):
     ok, witness = mf.forall_reachable(pred)
     status = "proven" if ok else "violated"
     steps = _witness_steps(ir, witness) if (not ok) else []
+
+    # Third leg of the triad: for a buggy (violated) spend-cap policy, embed
+    # the full CoachingArtifact (the corrected policy + rationale + re-proof).
+    # The RTF trace bundle is self-contained: Rule + Proof + Coach.
+    coaching = None
+    if status == "violated":
+        md = (ir.metadata or {})
+        coaching = _coach_artifact(
+            policy_path,
+            max_inflight=md.get("max_inflight"),
+            amount=md.get("amount"),
+            cap=md.get("cap"),
+            window=md.get("window"),
+        )
+
     result = trace.build_spendcap_trace(
         ir, status, witness, steps,
         budget=budget,
         horizon=horizon,
         tier=tier,
         source_path=policy_path,
+        coaching=coaching,
     )
     exit_code = {"proven": EXIT_PROVEN,
                  "violated": EXIT_VIOLATED,
@@ -528,6 +583,84 @@ def cmd_trace(args):
         # Stdout: emit only the JSON artifact (pipe-friendly).
         sys.stdout.write(result.to_json() + "\n")
     return exit_code
+
+
+# ---------------------------------------------------------------------------
+# rot coach
+# ---------------------------------------------------------------------------
+
+def cmd_coach(args):
+    """Coach the agent back in bounds, *with a proof* (the CoachingArtifact).
+
+    Runs the 5-step coaching loop (Detect -> Explain -> Correct -> Re-check ->
+    Close) on a buggy spend-cap policy and emits the deterministic, hashable
+    :class:`rot.coach.CoachingArtifact` (the corrected policy + the
+    plain-English rationale + the re-verification proof).
+
+    Exit codes: ``0`` closed (the corrected policy re-proved), ``1`` open
+    (the correction did not re-prove -- fail-closed), ``3`` error.
+    """
+    import rot.coach as coachmod
+    import rot.dw as dw
+
+    policy_path = getattr(args, "policy", None)
+    if not policy_path:
+        print("ERROR: specify --policy FILE (a spend-cap .dw policy)",
+              file=sys.stderr)
+        return EXIT_ERROR
+
+    try:
+        policy = dw.parse_file(policy_path)
+    except (dw.DwParseError, IOError, OSError) as exc:
+        print("ERROR: %s" % exc, file=sys.stderr)
+        return EXIT_ERROR
+    if not hasattr(policy, "to_ir"):
+        print("ERROR: %s is not a spend-cap policy (no to_ir)" % policy_path,
+              file=sys.stderr)
+        return EXIT_ERROR
+
+    try:
+        artifact = coachmod.coach(
+            policy,
+            max_inflight=getattr(args, "max_inflight", None),
+            amount=getattr(args, "amount", None),
+            cap=getattr(args, "cap", None),
+            window=getattr(args, "window", None),
+        )
+    except (ValueError, dw.DwParseError) as exc:
+        print("ERROR: %s" % exc, file=sys.stderr)
+        return EXIT_ERROR
+
+    out = getattr(args, "out", None)
+    if out:
+        out_dir = os.path.dirname(os.path.abspath(out))
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
+        with open(out, "w") as fh:
+            fh.write(artifact.to_json() + "\n")
+        if not getattr(args, "quiet", False):
+            print("  artifact  : %s" % out)
+            print("  status    : %s" % artifact.status())
+            print("  hash      : %s" % artifact.hash)
+    else:
+        sys.stdout.write(artifact.to_json() + "\n")
+
+    if not getattr(args, "quiet", False):
+        print(_BAR)
+        print("  COACHING: %s" % artifact.status().upper())
+        print("  policy    : %s" % policy_path)
+        print("  detect    : %s %s" % (artifact.body["detect"]["status"],
+                                      json.dumps(artifact.body["detect"]["witness"],
+                                                 sort_keys=True)))
+        print("  explain   : %s" % artifact.body["explain"]["rationale"])
+        print("  correct   : %s" % artifact.body["correct"]["delta"])
+        print("  recheck   : %s" % artifact.body["recheck"]["status"])
+        print("  hash      : %s" % artifact.hash)
+        print(_BAR)
+
+    if artifact.status() == coachmod.CLOSED:
+        return EXIT_PROVEN
+    return EXIT_VIOLATED
 
 
 def cmd_check(args):
@@ -1275,13 +1408,34 @@ def main(argv=None):
     p.add_argument("--quiet", action="store_true",
                    help="suppress the human summary")
 
+    p = sub.add_parser(
+        "coach",
+        help="coach the agent back in bounds, *with a proof* "
+             "(the CoachingArtifact: corrected policy + rationale + re-proof)")
+    p.add_argument("--policy", default=None, metavar="FILE",
+                   help="spend-cap policy file (.dw) to coach "
+                        "(the AWS Dogwood vertical slice)")
+    p.add_argument("--out", default=None, metavar="FILE",
+                   help="write the coaching artifact JSON here [default: stdout]")
+    p.add_argument("--max-inflight", type=int, default=None, metavar="K",
+                   help="bounded concurrency pool K (spend-cap .dw policies)")
+    p.add_argument("--amount", type=int, default=None, metavar="N",
+                   help="per-request amount override (spend-cap .dw policies)")
+    p.add_argument("--cap", type=int, default=None, metavar="N",
+                   help="spend cap override (spend-cap .dw policies)")
+    p.add_argument("--window", type=int, default=None, metavar="W",
+                   help="temporal window W (spend-cap .dw policies)")
+    p.add_argument("--quiet", action="store_true",
+                   help="suppress the human summary")
+
     args = parser.parse_args(argv)
     if args.command is None:
         parser.print_help()
         return EXIT_ERROR
     return {"check": cmd_check, "replay": cmd_replay, "ci": cmd_ci,
             "demo": cmd_demo, "corpus": cmd_corpus,
-            "license": cmd_license, "trace": cmd_trace}[args.command](args)
+            "license": cmd_license, "trace": cmd_trace,
+            "coach": cmd_coach}[args.command](args)
 
 
 if __name__ == "__main__":
