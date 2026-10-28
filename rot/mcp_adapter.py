@@ -357,16 +357,22 @@ class McpFindingsReport(object):
         The Cedar-AR findings (structural + facet-derived), in a stable order.
     any_unknown : bool
         True if any facet was ``UNKNOWN`` (bounded search did not complete).
+    behavioral : BehavioralVerdict or None
+        The *behavioral* (temporal) audit of the manifest's safety property over
+        the adversarial agent's tool-call sequences (Phase B, B2.5 -- G8): the
+        hard guarantees proven / the attack path witnessed / the lethal-trifecta
+        risk flagged.  ``None`` when the behavioral audit was not run.
     """
 
     def __init__(self, policy, tools, facets, findings, any_unknown=False,
-                 note=""):
+                 note="", behavioral=None):
         self.policy = policy
         self.tools = list(tools or [])
         self.facets = facets
         self.findings = list(findings)
         self.any_unknown = bool(any_unknown)
         self.note = note
+        self.behavioral = behavioral
 
     # -- queries -----------------------------------------------------------
     def has_findings(self):
@@ -380,10 +386,19 @@ class McpFindingsReport(object):
         return [f for f in self.findings if f.severity == severity]
 
     def result(self):
-        """``"proven"`` / ``"violated"`` / ``"unknown"`` (the gate outcome)."""
+        """``"proven"`` / ``"violated"`` / ``"unknown"`` (the gate outcome).
+
+        The gate is the structural findings (the hard guarantees) *or* the
+        behavioral verdict (a safety net: a behavioral violation is a block even
+        if the structural check missed it; a behavioral ``unknown`` is
+        OUT_OF_SCOPE).
+        """
         if self.has_findings():
             return "violated"
-        if self.any_unknown:
+        b = self.behavioral
+        if b is not None and b.is_violated():
+            return "violated"
+        if self.any_unknown or (b is not None and b.is_unknown()):
             return "unknown"
         return "proven"
 
@@ -396,7 +411,10 @@ class McpFindingsReport(object):
         """
         if self.has_findings():
             return 1
-        if self.any_unknown:
+        b = self.behavioral
+        if b is not None and b.is_violated():
+            return 1
+        if self.any_unknown or (b is not None and b.is_unknown()):
             return 2
         return 0
 
@@ -405,11 +423,15 @@ class McpFindingsReport(object):
         by_finding = {}
         for f in self.findings:
             by_finding[f.finding] = by_finding.get(f.finding, 0) + 1
+        behavioral = None
+        if self.behavioral is not None:
+            behavioral = self.behavioral.to_dict()
         return {
             "schema": REPORT_SCHEMA,
             "policy": self.policy,
             "tools": self.tools,
             "facets": self.facets,
+            "behavioral": behavioral,
             "findings": [f.to_dict() for f in self.findings],
             "compliance": compliance.compliance_section(self.findings,
                                                         self.result()),
@@ -756,14 +778,19 @@ def manifest_findings(manifest):
     return findings
 
 
-def audit_manifest(manifest, budget=None):
-    """Run the MCP Manifest v1 structural audit (Phase B, B2).
+def audit_manifest(manifest, budget=None, max_states=200000,
+                   run_behavioral=True):
+    """Run the MCP Manifest v1 audit (Phase B, B2 + B2.5).
 
-    This is the single entry point for the ``rot check --manifest`` adoption
-    surface. It performs the two pure structural checks (field permission and
-    tenant isolation) over the manifest's tool catalog and maps them to the
-    Cedar-AR ``Overly Permissive`` finding. It does not run the temporal
-    (three-facet) audit -- that is the ``--mcp`` (allowed/denied) surface.
+    The **structural** checks (field permission + tenant isolation) are the
+    per-tool declaration checks (B2). The **behavioral** audit (B2.5, closes
+    gap G8) is a model-check of the manifest's safety property over the
+    *adversarial agent's tool-call sequences* -- the same "fully compromised
+    model, only the harness can stop it" stance as the spend-cap engine --
+    producing a witness (the attack path), the explored state space, and the
+    lethal-trifecta risk flag.  The behavioral verdict is attached to the report
+    and factored into the gate (a behavioral violation blocks; a behavioral
+    ``unknown`` is OUT_OF_SCOPE).
 
     Parameters
     ----------
@@ -773,12 +800,17 @@ def audit_manifest(manifest, budget=None):
         A tier budget (Phase D). When present, ``max_tenant_scopes`` caps the
         number of distinct tenant scopes the audit may reason about; exceeding
         it marks the audit out of scope (UNKNOWN / exit 2).
+    max_states : int, optional
+        The state budget for the behavioral model-check (fail-closed floor; a
+        truncated search is an honest ``unknown``).
+    run_behavioral : bool, optional
+        Run the behavioral (temporal) audit (default True). Set False to run the
+        structural checks only.
 
     Returns
     -------
     McpFindingsReport
-        The findings report (``facets`` are ``skipped`` stubs -- the manifest
-        audit is structural, not temporal).
+        The findings report, with the behavioral verdict attached.
     """
     findings = manifest_findings(manifest)
 
@@ -798,6 +830,15 @@ def audit_manifest(manifest, budget=None):
                     "cap of %d; audit is out of scope"
                     % (len(tenants), budget.max_tenant_scopes))
 
+    # The behavioral (temporal) audit -- the G8 fix.  Lazy import: mcp_behavioral
+    # imports the field helpers from this module, so a module-level import would
+    # be a cycle.
+    behavioral = None
+    if run_behavioral and not note:
+        import rot.mcp_behavioral as mcp_behavioral
+        behavioral = mcp_behavioral.behavioral_audit(manifest,
+                                                     max_states=max_states)
+
     policy_info = {
         "server": manifest.server,
         "version": manifest.version,
@@ -809,10 +850,13 @@ def audit_manifest(manifest, budget=None):
         policy=policy_info,
         tools=manifest.tool_names(),
         facets=_skipped_facets(
-            "manifest audit is structural (no temporal model)"),
+            "manifest audit: structural findings + behavioral model"
+            if behavioral is not None
+            else "manifest audit is structural (behavioral audit skipped)"),
         findings=findings,
         any_unknown=bool(note),
         note=note,
+        behavioral=behavioral,
     )
 
 
@@ -820,9 +864,48 @@ def audit_manifest(manifest, budget=None):
 # Human-readable (blog-ready) rendering
 # ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# Human-readable (blog-ready) rendering
-# ---------------------------------------------------------------------------
+def _render_behavioral(report):
+    """Render the behavioral (temporal) verdict section (Phase B, B2.5 -- G8).
+
+    Returns a list of lines.  The behavioral verdict is the model-check of the
+    manifest's safety property over the adversarial agent's tool-call sequences:
+    the status (PROVEN / VIOLATED / UNKNOWN), the witness (the attack path), the
+    lethal-trifecta risk (a warning), and the explored state space.  When the
+    behavioral audit was not run, it renders a single honest note.
+    """
+    lines = ["behavioral audit (adversarial agent, tool-call sequences):"]
+    b = getattr(report, "behavioral", None)
+    if b is None:
+        lines.append("  (not run -- structural declaration checks only)")
+        lines.append("")
+        return lines
+    if b.is_proven():
+        lines.append("  status : PROVEN -- the property holds in all %d "
+                     "reachable states" % b.n_states)
+    elif b.is_violated():
+        lines.append("  status : VIOLATED -- a reachable tool-call sequence "
+                     "breaks the property")
+        if b.path:
+            lines.append("  attack : %s" % " -> ".join(b.path))
+        if b.witness:
+            w = json.dumps(b.witness, sort_keys=True)
+            if len(w) > 160:
+                w = w[:157] + "..."
+            lines.append("  witness: %s" % w)
+        lines.append("  broken : %s" % ", ".join(b.properties))
+    else:
+        lines.append("  status : UNKNOWN -- the state budget was exhausted "
+                     "before the reachable space drained (not a proof)")
+    if b.trifecta:
+        lines.append("  risk   : LETHAL TRIFECTA -- the agent can hold the "
+                     "tenant's private data AND reach an outbound channel "
+                     "(flag, per the thesis; not a hard violation)")
+    else:
+        lines.append("  risk   : no lethal-trifecta configuration reachable")
+    lines.append("")
+    return lines
+
+
 def render_narrative(report):
     """Render a human-readable (blog-ready) narrative of the report.
 
@@ -848,6 +931,11 @@ def render_narrative(report):
     if report.tools:
         lines.append("tools    %s" % ", ".join(report.tools))
     lines.append("")
+
+    # The behavioral (temporal) verdict -- the G8 fix.  Printed in both the
+    # PASS and BLOCK cases: it is the model-check over the adversarial agent's
+    # tool-call sequences, the witness (attack path), and the trifecta risk.
+    lines.extend(_render_behavioral(report))
 
     if not report.has_findings():
         if report.any_unknown:

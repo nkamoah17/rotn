@@ -385,7 +385,8 @@ def _cmd_check_manifest(args):
         print("REJECTED: %s" % exc, file=sys.stderr)
         return EXIT_VIOLATED
 
-    report = mcp.audit_manifest(manifest, budget=budget)
+    report = mcp.audit_manifest(manifest, budget=budget,
+                                max_states=budget.max_states)
 
     # Write the JSON artifact (the MCP/CI artifact).
     out_dir = args.out or os.path.join(_repo_root(), "out")
@@ -419,7 +420,8 @@ def _trace_manifest(manifest_path, budget, horizon, tier):
         print("ERROR: %s" % exc, file=sys.stderr)
         return None, EXIT_ERROR
 
-    report = mcp.audit_manifest(manifest, budget=budget)
+    report = mcp.audit_manifest(manifest, budget=budget,
+                                max_states=budget.max_states)
     result = trace.build_trace(
         manifest, report,
         budget=budget,

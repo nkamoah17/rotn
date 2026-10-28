@@ -152,16 +152,93 @@ same `McpManifest`, and `parse_manifest(m.to_dict())` round-trips.
 `rot check --manifest mcp.json` (Phase B, B2) does **not** re-derive a policy
 from the manifest. Instead it:
 
-1. maps `tools[].name` → the allowed action universe (the dogwood
-   `AgentStep` model, `rot.ir.AdversarialPolicy`);
+1. maps `tools[].name` → the action universe (the agent's tool catalog);
 2. runs the **field/tenant structural checks** in `rot.mcp_adapter`:
    * `write_fields ⊄ allowed_write_fields` → **Overly Permissive**
      (field permission);
    * `read_fields` outside `tenant_scope` (cross-tenant) → **Overly
      Permissive** (tenant isolation);
-3. emits the Cedar-AR findings report and the gate exit code
-   (`0` PASS / `1` BLOCK / `2` OUT_OF_SCOPE / `3` error).
+3. runs the **behavioral (temporal) audit** in `rot.mcp_behavioral` (B2.5,
+   closes gap G8): the manifest's safety property is *model-checked* over
+   the adversarial agent's tool-call **sequences** (see §7);
+4. emits the Cedar-AR findings report (structural + behavioral) and the
+   gate exit code (`0` PASS / `1` BLOCK / `2` OUT_OF_SCOPE / `3` error).
 
 The manifest is the *ingestion* surface; `rot.mcp_adapter` is the *finding*
-surface. Neither imports the other's internals — both sit above the narrow
-waist (`rot.ir`) and below the CLI (`rot/__main__.py`).
+surface; `rot.mcp_behavioral` is the *proof* surface. None imports the
+other's internals — all sit above the narrow waist (`rot.ir`,
+`rot.agent_harness`) and below the CLI (`rot/__main__.py`).
+
+---
+
+## 7. The behavioral (temporal) audit — G8
+
+The structural checks above are a *declaration* check: they inspect the
+fields each tool **declares**. Gap G8 (the audit's own words) flagged
+exactly this — Product 4's claim, *"no user's agent can read another
+user's data through this connector,"* is a *declaration* check, not a
+*behavioral* proof. There was no temporal/concurrency verification of tool
+use, and no adversarial agent calling the MCP tools in sequence.
+
+`rot.mcp_behavioral` closes that by turning the manifest into an instance
+of the general **adversarial agent + policy harness** model
+(`rot.agent_harness`, the G1 generalization) and *model-checking* the
+safety property over the reachable state space of tool-call sequences:
+
+* **the agent** is a nondeterministic actor that may attempt *any* tool in
+  the catalog, in *any order*, *repeatedly* (the thesis's "a fully
+  compromised model");
+* **the harness** (the thing under test) is the manifest's declared
+  configuration — the exposed tools and their declared data access;
+* **the property** is the guarantee proven to hold in *every* reachable
+  state: the agent never reads another tenant's data and never writes
+  outside the allowed write set.
+
+The state tracks the *cumulative* data the agent has touched (four
+precise boolean latches: `read_foreign`, `wrote_unapproved`,
+`holding_private`, `used_outbound`), so the model is genuinely
+*temporal*: a violation is a reachable state produced only by a
+*sequence* of tool calls.
+
+### The lethal-trifecta risk (flagged, not gated)
+
+One property the declaration check cannot see at all is the
+**exfiltration** configuration — the thesis's "lethal trifecta": the
+agent reads the tenant's own private data (an *in-scope*,
+structurally-clean read) **and** reaches an outbound (`openWorldHint`)
+channel. Each tool is individually in-scope (the structural check PASSES),
+but the *sequence* read-then-exfiltrate is the risk. The behavioral audit
+**proves** the two hard guarantees and **reports** the trifecta as a
+*risk warning* (`behavioral.trifecta_risk: true`) — it is never a
+gate-affecting finding, matching the thesis's "flag this combination."
+
+### Verdicts (bounded, fail-closed, like the rest of the engine)
+
+| status | meaning |
+|--------|---------|
+| `proven` | the whole reachable state space was explored and the property holds in every state (a proof over the bounded model); |
+| `violated` | a reachable state violates the property; the **witness** is that state *and* the tool-call **attack path** that reaches it; |
+| `unknown` | the state budget was exhausted before the space drained — an honest `OUT_OF_SCOPE`, never read as proven. |
+
+The audit is a **pure function** of the manifest + budget, so it is
+deterministic, JSON-serialisable, and hashable. It is tier-gated exactly
+like the rest of the engine: the manifest's tenant-scope count must be
+within the tier's `max_tenant_scopes`, and the model-check respects the
+tier's `max_states` (a truncated search is an honest `unknown`).
+
+The verdict is attached to the findings report (`report.behavioral`)
+and rendered in the narrative; a behavioral **violation blocks** even if
+the structural check missed it (a safety net), and a behavioral
+`unknown` is reported as `OUT_OF_SCOPE`.
+
+See `tests/test_mcp_behavioral.py` for the worked cases (proven /
+violated / trifecta / budget-exhausted) and the examples:
+
+```bash
+# Hard guarantees proven + the trifecta *risk* flagged (a warning).
+rot check --manifest examples/mcp-manifest-good.json --tier free
+
+# A cross-tenant read + an unapproved write, proven as a *sequence* with
+# the attack path attached (the paid tier lifts the tenant-scope cap).
+rot check --manifest examples/mcp-manifest-bad.json --tier paid
+```
