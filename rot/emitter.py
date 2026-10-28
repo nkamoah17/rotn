@@ -242,7 +242,16 @@ class Emitter(object):
         if guard is not None and not _is_true_expr(guard):
             parts.append(self.to_tla(guard))
         for e in a.effects:
-            parts.append("%s' = %s" % (self._tla_name(e.var), self.to_tla(e.expr)))
+            rhs_tla = self.to_tla(e.expr)
+            # A compound RHS (e.g. ``a \/ b`` or ``x + 1``) must be parenthesised:
+            # inside the action body it sits in a ``/\`` (conjunction) chain, and
+            # TLC rejects an unparenthesised binary op on the right of ``' =`` as
+            # a precedence conflict between the assignment's ``\land`` and the op.
+            # (``If`` is already self-parenthesised by ``to_tla``; atomic RHS are
+            # left bare.)
+            if isinstance(e.expr, (BinOp, AllOf, AnyOf)):
+                rhs_tla = "(" + rhs_tla + ")"
+            parts.append("%s' = %s" % (self._tla_name(e.var), rhs_tla))
         if unchanged:
             parts.append("UNCHANGED << %s >>"
                          % ", ".join(self._tla_name(v) for v in unchanged))

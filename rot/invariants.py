@@ -52,6 +52,7 @@ import rot.zab as zab
 import rot.payment as payment
 import rot.spendcap as spendcap
 import rot.agent_step as agent_step
+import rot.agent_harness as agent_harness
 
 
 # ---------------------------------------------------------------------------
@@ -467,6 +468,35 @@ def spendcap_within_cap(n=1):
     )
 
 
+def no_exfiltration(n=1):
+    """AgentHarness: private data never reaches an unapproved channel.
+
+    ``NOT exfiltrated`` in every reachable state of the exfiltration
+    agent-harness IR.  The agent is a *nondeterministic actor* that may attempt
+    any tool in its catalog; only the harness's policy decision (the guard on
+    ``send_unapproved``) can stop an exfiltration.  This is the structural,
+    provable half of the thesis's ``NoExfiltration`` rule -- a correct policy
+    makes it unreachable (PROVEN), a buggy one leaves it reachable (VIOLATED,
+    witness = the exfiltration path).
+
+    ``n`` is accepted for registry compatibility (the slice is single-actor).
+    Single-actor (the agent) property on the :data:`RUNG_PROTOCOL` rung (the
+    agent's decision plane): pinned, :data:`LABEL_BOUNDED`, a blocking gate.
+    """
+    return Invariant(
+        name="no_exfiltration",
+        description="agent-harness: private data never reaches an unapproved "
+                    "channel (NOT exfiltrated in every reachable state)",
+        expression=agent_harness.no_exfiltration_property(),
+        kind=KIND_SAFETY,
+        label=LABEL_BOUNDED,
+        pinned=True,
+        rung=RUNG_PROTOCOL,  # the agent's decision plane: a blocking gate
+        policy_clause="exfiltration: sending while holding private data must "
+                      "be denied by the harness policy",
+    )
+
+
 def policy_conformance(n=1, policy=None):
     """AgentStep: the agent never takes an action denied by its policy.
 
@@ -539,6 +569,7 @@ _REGISTRY = {
     "charge_requires_order": charge_requires_order,
     "settle_requires_charge": settle_requires_charge,
     "spendcap_within_cap": spendcap_within_cap,
+    "no_exfiltration": no_exfiltration,
 }
 
 
@@ -550,7 +581,8 @@ def names():
             "pbft_quorum", "pbft_prepare_before_commit",
             "no_double_charge", "charge_requires_order",
             "settle_requires_charge",
-            "spendcap_within_cap"]
+            "spendcap_within_cap",
+            "no_exfiltration"]
 
 
 def get(name, n=3):

@@ -160,7 +160,7 @@ class RegisteredInvariantTests(unittest.TestCase):
                     "zab_apply_persisted", "pbft_quorum",
                     "pbft_prepare_before_commit", "no_double_charge",
                     "charge_requires_order", "settle_requires_charge",
-                    "spendcap_within_cap"]
+                    "spendcap_within_cap", "no_exfiltration"]
         self.assertEqual(names(), expected)
 
     def test_agreement_label_and_pinned(self):

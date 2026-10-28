@@ -68,6 +68,7 @@ import rot.pbft as pbft
 import rot.payment as payment
 import rot.spendcap as spendcap
 import rot.agent_step as agent_step
+import rot.agent_harness as agent_harness
 
 
 class TargetSpec(object):
@@ -104,6 +105,7 @@ PAYMENT_PROPS = ["no_double_charge", "charge_requires_order",
                  "settle_requires_charge"]
 AGENT_PROPS = ["policy_conformance", "bounded_eventually"]
 SPENDCAP_PROPS = ["spendcap_within_cap"]
+EXFIL_PROPS = ["no_exfiltration"]
 
 
 def _spec(name, description, buggy, build, properties, default_property,
@@ -230,6 +232,27 @@ _REGISTRY = {
         properties=AGENT_PROPS,
         default_property="policy_conformance",
         protocol="AGENT_STEP"),
+    "exfil-correct": _spec(
+        "exfil-correct",
+        "Agent harness (NoExfiltration): the policy denies an unapproved send "
+        "while the agent holds private data, so private data never reaches an "
+        "unapproved channel (the correct implementation; no_exfiltration "
+        "holds).",
+        buggy=False,
+        build=agent_harness.exfiltrate_build_ir,
+        properties=EXFIL_PROPS,
+        default_property="no_exfiltration",
+        protocol="EXFILTRATION"),
+    "exfil-buggy": _spec(
+        "exfil-buggy",
+        "Agent harness (NoExfiltration): the policy admits an unapproved send "
+        "even while the agent holds private data, so an exfiltration is "
+        "reachable (a seeded bug; no_exfiltration breaks).",
+        buggy=True,
+        build=agent_harness.exfiltrate_build_ir,
+        properties=EXFIL_PROPS,
+        default_property="no_exfiltration",
+        protocol="EXFILTRATION"),
 }
 
 
@@ -239,7 +262,8 @@ def names():
             "pbft-correct", "pbft-buggy",
             "payment-correct", "payment-buggy",
             "spendcap-correct", "spendcap-buggy",
-            "agent-step", "agent-step-buggy"]
+            "agent-step", "agent-step-buggy",
+            "exfil-correct", "exfil-buggy"]
 
 
 def get(name):
@@ -273,6 +297,6 @@ def default_property(target):
 
 
 __all__ = ["TargetSpec", "TWOPC_PROPS", "ZAB_PROPS", "PBFT_PROPS",
-           "PAYMENT_PROPS", "SPENDCAP_PROPS", "AGENT_PROPS",
+           "PAYMENT_PROPS", "SPENDCAP_PROPS", "AGENT_PROPS", "EXFIL_PROPS",
            "names", "get", "build",
            "list_properties", "get_property", "default_property"]
