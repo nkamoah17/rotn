@@ -9,12 +9,58 @@
     "source": "free",
     "tier": "free"
   },
+  "compliance": {
+    "controls": {
+      "AIUC-1": "Caravel AIUC-1 -- Autonomy (agent must not act beyond policy)",
+      "CC6.1": "SOC 2 CC6.1 -- Logical access security",
+      "CC6.3": "SOC 2 CC6.3 -- Network security (tenant isolation)"
+    },
+    "controls_touched": [
+      "AIUC-1",
+      "CC6.1",
+      "CC6.3"
+    ],
+    "evidence": {
+      "by_control": {
+        "AIUC-1": 2,
+        "CC6.1": 1,
+        "CC6.3": 1
+      },
+      "findings_total": 2
+    },
+    "frameworks": [
+      "SOC2",
+      "AIUC"
+    ],
+    "profile": "caravel.compliance/v1",
+    "result": "violated"
+  },
   "counterexample": {
     "allowed_write_fields": [
       "account.balance"
     ],
     "over_permission": [
       "account.ssn"
+    ],
+    "steps": [
+      {
+        "action": "write account.ssn",
+        "state": {
+          "field": "account.ssn",
+          "kind": "write",
+          "tool": "leaky_balance"
+        },
+        "step": 0
+      },
+      {
+        "action": "read tenant:globex.account.balance",
+        "state": {
+          "field": "tenant:globex.account.balance",
+          "kind": "read",
+          "tool": "leaky_balance"
+        },
+        "step": 1
+      }
     ],
     "tool": "leaky_balance",
     "write_fields": [
@@ -174,7 +220,7 @@
     ],
     "tenant_scope": "tenant:acme"
   },
-  "hash": "560446e2349ad402a043eb9d34ec9a2c26f3a369243222638dcc78cbe787929b",
+  "hash": "e3d1c76dfa9d8fa081717919c576ccc4aed2d651c230073a0d8bce78cb86b203",
   "horizon": 12,
   "manifest_id": "mf-61c0c11ae7156e0d",
   "narration": "ROTN MCP findings  (Cedar-AR vocabulary, temporal proof)\n====================================================\nmanifest server=caravel-agent-tools  version=1.0.0\n         tenant_scope=tenant:acme  allowed_write_fields=['account.balance']\ntools    leaky_balance\n\nRESULT: BLOCK -- 2 Cedar-AR finding(s)\n\n[ERROR] Overly Permissive\n    facet: policy   property: field_write_permission\n    controls: CC6.1, AIUC-1\n    tool 'leaky_balance' writes field(s) ['account.ssn'] not in the tenant's allowed write set ['account.balance']\n    witness: {\"allowed_write_fields\": [\"account.balance\"], \"over_permission\": [\"account.ssn\"], \"tool\": \"leaky_balance\", \"write_fields\": [\"account.balance\", \"account.ssn\"]}\n\n[ERROR] Overly Permissive\n    facet: policy   property: tenant_read_isolation\n    controls: CC6.3, AIUC-1\n    tool 'leaky_balance' reads cross-tenant field(s) ['tenant:globex.account.balance'] outside its tenant_scope 'tenant:acme'\n    witness: {\"cross_tenant_fields\": [\"tenant:globex.account.balance\"], \"read_fields\": [\"tenant:acme.account.balance\", \"tenant:globex.account.balance\"], \"tenant_scope\": \"...\n",
@@ -187,29 +233,53 @@
     "tenant_scope": "tenant:acme",
     "version": "1.0.0"
   },
+  "provenance": {
+    "budget": {
+      "limits": {
+        "max_horizon": 4,
+        "max_states": 1000,
+        "max_tenant_scopes": 1,
+        "max_tools": 5
+      },
+      "source": "free",
+      "tier": "free"
+    },
+    "engines": [
+      "structural"
+    ],
+    "horizon": 12,
+    "horizon_complete": true,
+    "n_states": 4,
+    "policy_hash": "61c0c11ae7156e0d2c3d1142061112e5d8b60b17df5d323c01d95e25ec0e5fc9",
+    "policy_source": "examples/mcp-manifest-bad.json"
+  },
   "rot_version": "0.1.0",
   "schema": "caravel.rtf/v1",
   "source": {
     "hash": "61c0c11ae7156e0d2c3d1142061112e5d8b60b17df5d323c01d95e25ec0e5fc9",
-    "path": "examples\\mcp-manifest-bad.json",
+    "path": "examples/mcp-manifest-bad.json",
     "schema": "caravel.mcp-manifest/v1"
   },
   "timeline": [
     {
+      "narration": "Parsed the manifest: 1 tool(s), tenant scope tenant:acme, allowed writes ['account.balance'].",
       "status": "ok",
       "step": "parse_manifest"
     },
     {
       "findings": 1,
+      "narration": "Checked field-write permission: tool 'leaky_balance' writes field(s) ['account.ssn'] not in the tenant's allowed write set ['account.balance']",
       "status": "fail",
       "step": "field_write_permission"
     },
     {
       "findings": 1,
+      "narration": "Checked tenant read isolation: tool 'leaky_balance' reads cross-tenant field(s) ['tenant:globex.account.balance'] outside its tenant_scope 'tenant:acme'",
       "status": "fail",
       "step": "tenant_read_isolation"
     },
     {
+      "narration": "Verdict: VIOLATED -- a counterexample exists; the violating path is highlighted.",
       "status": "violated",
       "step": "verdict"
     }

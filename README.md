@@ -36,8 +36,11 @@ that replays as an **interactive proof** on GitHub Pages — a verdict card,
 the counterexample graph (Cytoscape), the step-by-step attack timeline with
 narration, the Cedar-AR findings, and the SOC 2 / AIUC control mapping:
 
-> **<https://caravel.github.io/rot-verify/>**
-> *(to be deployed — the Ship plane; see `docs/architecture.md`)*
+> **Live replay: [caravel.github.io/rot-verify](https://caravel.github.io/rot-verify/)**
+>
+> Published to GitHub Pages on every push to `main` (the **Ship plane** — a pure
+> function of the RTF trace; see `docs/architecture.md` §1.4 and
+> `.github/workflows/pages.yml`).
 
 ---
 

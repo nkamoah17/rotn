@@ -152,8 +152,8 @@ support it:
 | artifact | status | notes |
 |----------|--------|-------|
 | `rot ci` — CI gate (verdict + JUnit XML + SARIF) | **shipped** | `rot ci --policy … --out ci`; exit-code aware; PR annotations |
-| static site (Cytoscape graph, verdict card, replay, findings, compliance) | **planned** | a pure static bundle rendered from the RTF trace — no server, no runtime deps |
-| GitHub Pages deploy (`deploy-pages`) | **planned** | the static bundle is committed/deployed to `caravel.github.io/rot-verify` |
+| static site (Cytoscape graph, verdict card, replay, findings, compliance) | **shipped** | a pure static bundle rendered from the RTF trace — no server, no runtime deps |
+| GitHub Pages deploy (`deploy-pages`) | **shipped** | `.github/workflows/pages.yml` rebuilds `rot site --out site/data` on push to `main` and publishes to `caravel.github.io/rot-verify` |
 
 The Ship plane is a **pure function of the RTF trace**: it renders the verdict
 card, draws the counterexample graph (states = nodes, actions = edges) with

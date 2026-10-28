@@ -82,9 +82,9 @@
     ],
     "witness_path": []
   },
-  "hash": "2b7dcf86b65fa01237ce32a566a068d74fff6d67a108409688b98893164ccfe5",
+  "hash": "bad91eb97c3e93e48186db59e743d35fd03e7a54ecfc74117526597eb7b71c74",
   "horizon": 12,
-  "manifest_id": "mf-d4afedbf694a46b8",
+  "manifest_id": "mf-97c802024552fe2f",
   "narration": "The spend-cap policy is PROVEN. The ``spend_ok`` guard charges in-flight requests against the cap, so the settled + in-flight amount never exceeds 200 in any of the 5 reachable states.",
   "policy": {
     "amount": 100,
@@ -111,13 +111,13 @@
     "horizon": 12,
     "horizon_complete": true,
     "n_states": 5,
-    "policy_hash": "d4afedbf694a46b81a9d7136d3f52860f55fb79f3645d2a7a0ea4030f72fe735",
+    "policy_hash": "97c802024552fe2fcf7fbf2e04f2a2e083d93acb40331b68c160401400630352",
     "policy_source": "samples/spendcap-correct.dw"
   },
   "rot_version": "0.1.0",
   "schema": "caravel.rtf/v1",
   "source": {
-    "hash": "d4afedbf694a46b81a9d7136d3f52860f55fb79f3645d2a7a0ea4030f72fe735",
+    "hash": "97c802024552fe2fcf7fbf2e04f2a2e083d93acb40331b68c160401400630352",
     "path": "samples/spendcap-correct.dw",
     "schema": "caravel.dogwood/v1"
   },

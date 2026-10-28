@@ -663,6 +663,97 @@ def cmd_coach(args):
     return EXIT_VIOLATED
 
 
+# ---------------------------------------------------------------------------
+# rot site
+# ---------------------------------------------------------------------------
+
+# The canonical replay-site recipe (the Ship plane's 10 audit cases).  Each is
+# a pure function of a committed sample policy + the *current* engine:
+#   (trace_id, kind, source_path, max_inflight)
+# ``kind`` is "policy" (a spend-cap .dw) or "manifest" (an MCP manifest JSON).
+# The base spend-cap traces use K=4 (the default pool); the K-sweep traces
+# expose the masking (K=1 proves clean, K>=2 reveals the violation).  The
+# source paths are repo-relative (they are recorded verbatim in each trace's
+# provenance, so they must be run from the repo root).
+_SITE_RECIPES = (
+    ("spendcap-buggy",      "policy",   "samples/spendcap-buggy.dw",      4),
+    ("spendcap-correct",    "policy",   "samples/spendcap-correct.dw",    4),
+    ("spendcap-buggy-k1",   "policy",   "samples/spendcap-buggy.dw",      1),
+    ("spendcap-buggy-k2",   "policy",   "samples/spendcap-buggy.dw",      2),
+    ("spendcap-buggy-k3",   "policy",   "samples/spendcap-buggy.dw",      3),
+    ("spendcap-correct-k1", "policy",   "samples/spendcap-correct.dw",    1),
+    ("spendcap-correct-k2", "policy",   "samples/spendcap-correct.dw",    2),
+    ("spendcap-correct-k3", "policy",   "samples/spendcap-correct.dw",    3),
+    ("bad",                 "manifest", "examples/mcp-manifest-bad.json",   None),
+    ("good",                "manifest", "examples/mcp-manifest-good.json",  None),
+)
+
+
+def cmd_site(args):
+    """Regenerate the replay site's RTF trace data + the JS registry.
+
+    The Ship plane is a *pure function* of the committed sample policies and
+    the current engine.  This command re-runs ``rot trace`` for the 10
+    canonical audit cases (the spend-cap K-sweep + the MCP manifest pair) into
+    ``--out`` (a ``data/`` directory, default ``site/data``), then mirrors
+    them into the deterministic ``traces.js`` registry
+    (``scripts/gen_site_data.generate_data``) so the gallery works over both
+    ``file://`` (registry fallback) and HTTP (fetch).
+
+    The result is a byte-stable, hashable site bundle whose verdicts are the
+    *current* engine's, and whose registry always mirrors the trace JSON files
+    (the invariant ``tests/test_site.py`` enforces).
+
+    Exit codes: ``0`` success, ``3`` error (a trace failed to generate).
+    """
+    root = _repo_root()
+    out_dir = os.path.abspath(args.out or os.path.join(root, "site", "data"))
+    os.makedirs(out_dir, exist_ok=True)
+
+    failures = []
+    for trace_id, kind, source, k in _SITE_RECIPES:
+        out_path = os.path.join(out_dir, trace_id + ".trace.json")
+        a = argparse.Namespace(
+            policy=source if kind == "policy" else None,
+            manifest=source if kind == "manifest" else None,
+            max_inflight=k,
+            amount=None, cap=None, window=None, kind=None,
+            out=out_path,
+            quiet=True,
+            tier=None, depth=None, license=None, key=None,
+            liveness_horizon=None,
+        )
+        code = cmd_trace(a)
+        if code not in (EXIT_PROVEN, EXIT_VIOLATED) or not os.path.isfile(out_path):
+            failures.append((trace_id, code))
+
+    if failures:
+        for trace_id, code in failures:
+            print("ERROR: failed to regenerate %s (exit=%s)"
+                  % (trace_id, code), file=sys.stderr)
+        return EXIT_ERROR
+
+    # Mirror the trace JSON files into the deterministic JS registry (which
+    # lives in the same data/ dir).  Reuse the tested generator.
+    scripts = os.path.join(root, "scripts")
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    import gen_site_data
+    out_registry, ids = gen_site_data.generate_data(out_dir)
+
+    if not getattr(args, "quiet", False):
+        print(_BAR)
+        print("  SITE  : regenerated %d RTF trace(s) -> %s"
+              % (len(ids), out_dir))
+        for trace_id in ids:
+            with open(os.path.join(out_dir, trace_id + ".trace.json"), "r") as fh:
+                verdict = json.load(fh)["verdict"]
+            print("    %-22s %s" % (trace_id, verdict))
+        print("  registry: %s" % out_registry)
+        print(_BAR)
+    return EXIT_PROVEN
+
+
 def cmd_check(args):
     """Verify a policy; on VIOLATED emit narrative + attack.jsonl."""
     if getattr(args, "mcp", False):
@@ -1428,6 +1519,16 @@ def main(argv=None):
     p.add_argument("--quiet", action="store_true",
                    help="suppress the human summary")
 
+    p = sub.add_parser(
+        "site",
+        help="regenerate the replay site's RTF trace data + registry "
+             "(the Ship plane: a pure function of the sample policies)")
+    p.add_argument("--out", default=None, metavar="DIR",
+                   help="data/ dir for the traces + registry "
+                        "[default: <repo>/site/data]")
+    p.add_argument("--quiet", action="store_true",
+                   help="suppress the human summary")
+
     args = parser.parse_args(argv)
     if args.command is None:
         parser.print_help()
@@ -1435,7 +1536,7 @@ def main(argv=None):
     return {"check": cmd_check, "replay": cmd_replay, "ci": cmd_ci,
             "demo": cmd_demo, "corpus": cmd_corpus,
             "license": cmd_license, "trace": cmd_trace,
-            "coach": cmd_coach}[args.command](args)
+            "coach": cmd_coach, "site": cmd_site}[args.command](args)
 
 
 if __name__ == "__main__":

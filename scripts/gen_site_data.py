@@ -28,7 +28,7 @@ import json
 import os
 import sys
 
-__all__ = ["generate"]
+__all__ = ["generate", "generate_data"]
 
 
 def _repo_root():
@@ -41,13 +41,12 @@ def _read_trace(path):
         return json.load(fh)
 
 
-def generate(site_dir):
-    """Mirror ``<site_dir>/data/*.trace.json`` into ``data/traces.js``.
+def generate_data(data_dir):
+    """Mirror ``data_dir/*.trace.json`` into ``data_dir/traces.js``.
 
     Returns ``(out_path, trace_ids)`` where ``trace_ids`` is the sorted list
     of trace ids (the file stems without the ``.trace.json`` suffix).
     """
-    data_dir = os.path.join(site_dir, "data")
     if not os.path.isdir(data_dir):
         raise SystemExit("ERROR: no data dir: %s" % data_dir)
 
@@ -72,6 +71,15 @@ def generate(site_dir):
     with open(out_path, "w") as fh:
         fh.write(out)
     return out_path, sorted(entries)
+
+
+def generate(site_dir):
+    """Mirror ``<site_dir>/data/*.trace.json`` into ``data/traces.js``.
+
+    Thin wrapper over :func:`generate_data` for the conventional site layout
+    (a ``data/`` subdirectory under the site root).
+    """
+    return generate_data(os.path.join(site_dir, "data"))
 
 
 def main(argv=None):
