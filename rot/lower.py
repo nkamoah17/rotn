@@ -24,6 +24,13 @@ Supported shapes (detected by duck-typed traversal of the ``.dw`` AST):
    e.g. ``refund_budget_settled_plus_current`` -- a cap on settled refunds
    plus the current request's amount.
 
+5. **Taint-egress** (``formerly within <window> <event>``):
+   a bare temporal *trigger* predicate (not wrapped in an aggregate and not
+   compared to a cap) -- the thesis's "never contact outsiders after touching
+   confidential data" shape (temporal + data-dependent).  The trigger event
+   taints the agent's context; the policy's scope names the egress action
+   that is forbidden while the taint is held.
+
 :func:`rot.spendcap.build_ir` (``buggy=...``) is retained as a **test oracle**
 for shape 1 -- the expected output this lowering must reproduce -- not the
 production path.  The two are asserted equal in ``tests/test_dw.py``
@@ -837,6 +844,135 @@ def _lower_refund_budget(node, detected, window=None, dw_window=None):
                   "window": window, "dw_window": dw_window},
     )
 
+
+# ---------------------------------------------------------------------------
+# Shape 5: taint-egress (``formerly within <window> <event>``)
+# ---------------------------------------------------------------------------
+
+def _is_formerly_within(node):
+    """True if ``node`` looks like a :class:`rot.dw.FormerlyWithin`."""
+    return (node is not None
+            and getattr(node, "window", None) is not None
+            and getattr(node, "body", None) is not None)
+
+
+def _detect_taint_egress(node):
+    """Detect the taint-egress shape.
+
+    Returns ``(trigger_ref, formerly_within_node)`` if ``node`` is a bare
+    ``formerly within <window> <event_ref>`` predicate -- a *temporal trigger*
+    predicate, not wrapped in an aggregate (sum / count / exists) and not
+    compared to a cap -- else ``None``.
+
+    This is the thesis's "never contact outsiders after touching confidential
+    data" shape (temporal + data-dependent): the body is the confidential-data
+    event that *triggers* the obligation, and the policy's scope names the
+    egress action that is forbidden once the trigger has fired.
+    """
+    if not _is_formerly_within(node):
+        return None
+    body = node.body
+    # Exclude the aggregate shapes (their body wraps a Sum / Count / Exists);
+    # the taint-egress body is a bare event reference (or a simple predicate
+    # over one).
+    if _is_sum(body) or _is_count(body) or _is_exists(body):
+        return None
+    refs = _collect_event_refs(body)
+    if not refs:
+        return None
+    return (refs[0], node)
+
+
+def _lower_taint_egress(node, detected, window=None, dw_window=None):
+    """Lower the taint-egress shape to a :class:`ProtocolIR`.
+
+    ``detected`` is the ``(trigger_ref, formerly_within_node)`` tuple from
+    :func:`_detect_taint_egress`.
+
+    The IR is the exfiltration model (the same one as
+    :func:`rot.agent_harness.exfiltrate_build_ir`): the trigger (touching
+    confidential data) sets ``holding_private``; the egress (contacting an
+    outsider) sets ``exfiltrated`` iff the agent is holding private data; the
+    pinned property is ``NOT exfiltrated`` (NoExfiltration).
+
+    The correct / buggy distinction is driven by the event kind of the
+    trigger, mirroring the spend-cap shape:
+
+    * **request-trigger** (SAFE): the egress is admitted only when the agent
+      is NOT holding private data (the ``NoExfiltration`` rule holds);
+    * **response-trigger** (UNSAFE): the egress is always admitted (the hole:
+      private data can reach an unapproved channel while held).
+    """
+    trigger_ref, _fw = detected
+    kind = getattr(trigger_ref, "kind", None)
+    trigger_action = getattr(trigger_ref, "action", "ReadConfidential")
+
+    if kind == "request":
+        # request-trigger (SAFE): the egress is guarded by NoExfiltration.
+        egress_guard = ir.Not(ir.V("holding_private"))
+        deny_guard = ir.V("holding_private")
+        buggy = False
+    else:
+        # response-trigger (UNSAFE): the egress is unguarded (the hole).
+        egress_guard = ir.T()
+        deny_guard = ir.F()
+        buggy = True
+
+    variables = [
+        ir.StateVar("holding_private", ir.Bool(), ir.MODE_PRECISE, "service",
+                    "the agent currently holds private (confidential) data"),
+        ir.StateVar("exfiltrated", ir.Bool(), ir.MODE_PRECISE, "service",
+                    "private data has been sent to an unapproved channel"),
+    ]
+    actions = [
+        ir.Action(name="init", owner="service", guard=ir.T(),
+                  effects=[ir.Assignment("holding_private", ir.C(False)),
+                           ir.Assignment("exfiltrated", ir.C(False))],
+                  is_initial=True,
+                  source="lower.py:init"),
+        # The trigger: the agent touches confidential data (taints context).
+        ir.Action(name="touch_confidential", owner="service", guard=ir.T(),
+                  effects=[ir.Assignment("holding_private", ir.C(True))],
+                  linearization="send(touch_confidential)",
+                  source="lower.py:touch_confidential"),
+        # The egress (the thing under test): contacting an outsider.  If the
+        # agent is holding private data this is an exfiltration.
+        ir.Action(name="contact_outsider", owner="service", guard=egress_guard,
+                  effects=[ir.Assignment("exfiltrated",
+                                         ir.Or(ir.V("exfiltrated"),
+                                               ir.V("holding_private")))],
+                  linearization="send(contact_outsider)",
+                  source="lower.py:contact_outsider"),
+        # The other branch of the decision: deny the egress.
+        ir.Action(name="contact_deny", owner="service", guard=deny_guard,
+                  effects=[],
+                  source="lower.py:contact_deny"),
+        # The clear: the agent strips private data from its context.
+        ir.Action(name="redact", owner="service", guard=ir.T(),
+                  effects=[ir.Assignment("holding_private", ir.C(False))],
+                  linearization="send(redact)",
+                  source="lower.py:redact"),
+    ]
+    pinned = ir.Not(ir.V("exfiltrated"))
+    ref_sig = _event_ref_signature(trigger_ref)
+
+    return ir.ProtocolIR(
+        name="taint-egress",
+        variables=variables,
+        channels=[],
+        actions=actions,
+        init=ir.T(),
+        pinned_property=pinned,
+        source_path="tests/fixtures/aws_dogwood/spendcap",
+        metadata={"protocol": "TAINT_EGRESS", "target": "taint_egress",
+                  "buggy": buggy,
+                  "dw_event_kind": kind,
+                  "event": "%s::%s" % (ref_sig[0], ref_sig[1]),
+                  "egress_event": "Send",
+                  "window": window, "dw_window": dw_window},
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public dispatcher
 # ---------------------------------------------------------------------------
@@ -844,13 +980,16 @@ def _lower_refund_budget(node, detected, window=None, dw_window=None):
 def lower_policy(node, amount=None, cap=None, max_inflight=None, window=None):
     """Lower a parsed ``when`` expression to a :class:`rot.ir.ProtocolIR`.
 
-    The four temporal-policy shapes are tried in order, most specific first:
+    The five temporal-policy shapes are tried in order, most specific first:
 
     1. count-window arithmetic (``Count - Count < cap``);
     2. refund budget (``Sum + context.* <op> cap``);
     3. exists-sum (``Exists(total, Sum == total && total <op> cap)`` or the
        equivalent ``let_`` macro call);
-    4. spend-cap (``Sum <op> cap``) -- the fallback and the original shape.
+    4. taint-egress (``formerly within <window> <event>`` -- a bare temporal
+       trigger predicate; the "never contact outsiders after touching
+       confidential data" shape);
+    5. spend-cap (``Sum <op> cap``) -- the fallback and the original shape.
 
     Args:
         node: the parsed ``when`` expression (a :class:`rot.dw` AST node).
@@ -896,6 +1035,11 @@ def lower_policy(node, amount=None, cap=None, max_inflight=None, window=None):
     if detected is not None:
         return _lower_exists_sum(node, detected, k,
                                  window=w, dw_window=dw_window)
+
+    detected = _detect_taint_egress(node)
+    if detected is not None:
+        return _lower_taint_egress(node, detected,
+                                   window=w, dw_window=dw_window)
 
     # Fallback: the basic spend-cap shape (``Sum <op> cap``).
     return _lower_spendcap(node, amt, cp, k,

@@ -35,6 +35,10 @@ _DW_DIR = os.path.join(_ROOT, "tests", "fixtures", "aws_dogwood",
                        "spendcap", "policies")
 _DW_CORRECT = os.path.join(_DW_DIR, "spendcap-correct.dw")
 _DW_BUGGY = os.path.join(_DW_DIR, "spendcap-buggy.dw")
+# The taint-egress fixture (the "never contact outsiders after touching
+# confidential data" shape -- temporal + data-dependent).
+_DW_TEGRESS_CORRECT = os.path.join(_DW_DIR, "taint-egress-correct.dw")
+_DW_TEGRESS_BUGGY = os.path.join(_DW_DIR, "taint-egress-buggy.dw")
 
 
 class DispatcherTests(unittest.TestCase):
@@ -210,6 +214,42 @@ class SemanticsTests(unittest.TestCase):
         inflight = counterexample["inflight"]
         self.assertGreater(settled + inflight * amt, cap,
                            "witness %r should exceed cap %d" % (counterexample, cap))
+        # And it is not the vacuous default: the property is False there.
+        self.assertFalse(ir.pinned_property.eval(counterexample))
+
+    def test_taint_egress_correct_proven(self):
+        # The correct taint-egress policy (request-trigger) admits the egress
+        # only when the agent is NOT holding private data, so private data
+        # never reaches an unapproved channel -- NoExfiltration holds over
+        # every reachable state.
+        ir = policy_frontends.build_ir(_DW_TEGRESS_CORRECT, None, 1)
+        finder = modelfind.ModelFinder.from_ir(ir)
+        ok, witness = finder.forall_reachable(
+            lambda s: ir.pinned_property.eval(s))
+        self.assertTrue(ok, "correct taint-egress model must be proven")
+        self.assertIsNone(witness)
+        # The pinned property is the real NoExfiltration predicate, not True.
+        self.assertFalse(ir.pinned_property.eval(
+            {"holding_private": True, "exfiltrated": True}))
+
+    def test_taint_egress_buggy_violates(self):
+        # The buggy taint-egress policy (response-trigger) admits the egress
+        # unconditionally, so an agent that has touched confidential data can
+        # contact an outsider while still holding it -- the model checker must
+        # return the exfiltration state as a counterexample.
+        ir = policy_frontends.build_ir(_DW_TEGRESS_BUGGY, None, 1)
+        finder = modelfind.ModelFinder.from_ir(ir)
+        ok, counterexample = finder.forall_reachable(
+            lambda s: ir.pinned_property.eval(s))
+        self.assertFalse(ok, "buggy taint-egress model must violate")
+        self.assertIsNotNone(counterexample)
+        # The witness really is an exfiltration: private data held AND sent.
+        self.assertTrue(counterexample.get("holding_private"),
+                        "witness %r should be holding private data"
+                        % (counterexample,))
+        self.assertTrue(counterexample.get("exfiltrated"),
+                        "witness %r should have exfiltrated"
+                        % (counterexample,))
         # And it is not the vacuous default: the property is False there.
         self.assertFalse(ir.pinned_property.eval(counterexample))
 

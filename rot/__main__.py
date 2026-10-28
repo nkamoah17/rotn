@@ -1300,7 +1300,8 @@ def cmd_corpus(args):
 
     Phase B.2 deliverable. Each policy is classified as:
       - shape:       the temporal shape (spendcap / count_window / exists_sum /
-                     refund_budget), from the IR metadata ``protocol`` field.
+                     refund_budget / taint_egress), from the IR metadata
+                     ``protocol`` field.
       - lowerable:   whether the general temporal lowering produced a valid IR.
       - verdict:     PROVEN / VIOLATED / OUT_OF_SCOPE.
                      OUT_OF_SCOPE is an honest classification (the reachable

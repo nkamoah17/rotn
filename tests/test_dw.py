@@ -13,6 +13,7 @@ Python 3.6 compatible.
 import unittest
 
 import rot.spendcap as spendcap
+import rot.ir as ir
 from rot.dw import DwParseError, DwPolicy, parse_file, parse_policy
 from rot.expr_render import render_expr
 from rot.ir import ProtocolIR
@@ -236,6 +237,56 @@ class TestComplexFixtures(unittest.TestCase):
                 "refund_budget_settled_plus_current/policy.dw")
         self.assertEqual(parse_file(path).to_ir(),
                          shapes.build_refund_budget_ir(100, "<="))
+
+    def test_taint_egress_matches_oracle(self):
+        """The taint-egress shape must reproduce the hand-written oracle.
+
+        The two fixtures differ only in the trigger event's kind
+        (``request`` vs. ``response``) -- the SAFE / UNSAFE distinction.
+        """
+        import rot.shapes as shapes
+        correct = ("tests/fixtures/aws_dogwood/spendcap/policies/"
+                   "taint-egress-correct.dw")
+        buggy = ("tests/fixtures/aws_dogwood/spendcap/policies/"
+                 "taint-egress-buggy.dw")
+        # correct (request-trigger) must match the SAFE oracle
+        self.assertEqual(
+            parse_file(correct).to_ir(),
+            shapes.build_taint_egress_ir(buggy=False,
+                                         trigger_action="ReadConfidential",
+                                         trigger_kind="request"))
+        # buggy (response-trigger) must match the UNSAFE oracle
+        self.assertEqual(
+            parse_file(buggy).to_ir(),
+            shapes.build_taint_egress_ir(buggy=True,
+                                         trigger_action="ReadConfidential",
+                                         trigger_kind="response"))
+
+    def test_taint_egress_protocol_and_buggy_flag(self):
+        """The taint-egress IR must be tagged and the buggy flag correct."""
+        correct = ("tests/fixtures/aws_dogwood/spendcap/policies/"
+                   "taint-egress-correct.dw")
+        buggy = ("tests/fixtures/aws_dogwood/spendcap/policies/"
+                 "taint-egress-buggy.dw")
+        ir_c = parse_file(correct).to_ir()
+        ir_b = parse_file(buggy).to_ir()
+        self.assertEqual(ir_c.metadata.get("protocol"), "TAINT_EGRESS")
+        self.assertEqual(ir_c.metadata.get("buggy"), False)
+        self.assertEqual(ir_c.metadata.get("dw_event_kind"), "request")
+        self.assertEqual(ir_b.metadata.get("protocol"), "TAINT_EGRESS")
+        self.assertEqual(ir_b.metadata.get("buggy"), True)
+        self.assertEqual(ir_b.metadata.get("dw_event_kind"), "response")
+        # the only structural difference is the egress guard:
+        #   correct -> NOT holding_private ; buggy -> True (unguarded)
+        egress_c = dict((a.name, a) for a in ir_c.actions)
+        egress_b = dict((a.name, a) for a in ir_b.actions)
+        self.assertNotEqual(egress_c["contact_outsider"].guard.to_dict(),
+                            egress_b["contact_outsider"].guard.to_dict())
+        # and the deny branch is the negation in the correct variant
+        self.assertEqual(egress_c["contact_outsider"].guard.to_dict(),
+                         ir.Not(ir.V("holding_private")).to_dict())
+        self.assertEqual(egress_b["contact_outsider"].guard.to_dict(),
+                         ir.T().to_dict())
 
 
 if __name__ == "__main__":

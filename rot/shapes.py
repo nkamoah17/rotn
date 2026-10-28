@@ -14,6 +14,9 @@ reproduce structurally -- the same discipline the spend-cap shape has with
     the corpus ``0299`` / ``0301`` filtered-sum shape.
   * **refund-budget** (``(Sum + context.*) <op> cap``) -- the
     ``refund_budget_settled_plus_current`` shape.
+  * **taint-egress** (``formerly within <window> <event>``) -- the
+    thesis's "never contact outsiders after touching confidential data"
+    shape (temporal + data-dependent).
 
 Pure stdlib, Python 3.6 compatible.
 """
@@ -24,6 +27,7 @@ __all__ = [
     "build_count_window_ir",
     "build_exists_sum_ir",
     "build_refund_budget_ir",
+    "build_taint_egress_ir",
 ]
 
 
@@ -299,5 +303,112 @@ def build_refund_budget_ir(cap, op="<=", context_ref="context.input.amount"):
                   "op": op, "cap": cap,
                   "event": "Transfer::response",
                   "context_ref": context_ref},
+    )
+
+
+
+# ---------------------------------------------------------------------------
+# Shape 5: taint-egress (``formerly within <window> <event>``)
+# ---------------------------------------------------------------------------
+
+def build_taint_egress_ir(buggy=False, trigger_action="ReadConfidential",
+                          trigger_kind="request",
+                          egress_action="Send"):
+    """Hand-written oracle for the taint-egress shape.
+
+    The thesis's "never contact outsiders after touching confidential data"
+    rule -- a *temporal + data-dependent* policy that the four aggregate
+    shapes (spend-cap / count-window / exists-sum / refund-budget) cannot
+    express.  The model is the same exfiltration model as
+    :func:`rot.agent_harness.exfiltrate_build_ir`:
+
+    * the trigger (touching confidential data) sets ``holding_private``;
+    * the egress (contacting an outsider) sets ``exfiltrated`` iff the agent
+      is holding private data;
+    * the pinned property is ``NOT exfiltrated`` (NoExfiltration).
+
+    The correct / buggy distinction is driven by the event kind of the
+    trigger, mirroring the spend-cap shape:
+
+    * **request-trigger** (SAFE): the egress is admitted only when the agent
+      is NOT holding private data (the ``NoExfiltration`` rule);
+    * **response-trigger** (UNSAFE): the egress is always admitted (the hole:
+      private data can reach an unapproved channel while held).
+
+    Parameters
+    ----------
+    buggy : bool
+        Select the *policy* variant (the thing under test).
+    trigger_action : str
+        The policy action name for the confidential-data event.
+    trigger_kind : str
+        The event kind of the trigger (``"request"`` for SAFE,
+        ``"response"`` for UNSAFE).
+    egress_action : str
+        The policy action name for the egress (contact-outsider) event.
+
+    Returns
+    -------
+    rot.ir.ProtocolIR
+        A structurally valid IR with two state variables, five actions, and
+        the pinned property ``NOT exfiltrated``.
+    """
+    if not buggy:
+        egress_guard = ir.Not(ir.V("holding_private"))
+        deny_guard = ir.V("holding_private")
+    else:
+        egress_guard = ir.T()
+        deny_guard = ir.F()
+
+    variables = [
+        ir.StateVar("holding_private", ir.Bool(), ir.MODE_PRECISE, "service",
+                    "the agent currently holds private (confidential) data"),
+        ir.StateVar("exfiltrated", ir.Bool(), ir.MODE_PRECISE, "service",
+                    "private data has been sent to an unapproved channel"),
+    ]
+    actions = [
+        ir.Action(name="init", owner="service", guard=ir.T(),
+                  effects=[ir.Assignment("holding_private", ir.C(False)),
+                           ir.Assignment("exfiltrated", ir.C(False))],
+                  is_initial=True,
+                  source="lower.py:init"),
+        # The trigger: the agent touches confidential data (taints its context).
+        ir.Action(name="touch_confidential", owner="service", guard=ir.T(),
+                  effects=[ir.Assignment("holding_private", ir.C(True))],
+                  linearization="send(touch_confidential)",
+                  source="lower.py:touch_confidential"),
+        # The egress (the thing under test): contacting an outsider.  If the
+        # agent is holding private data this is an exfiltration.
+        ir.Action(name="contact_outsider", owner="service", guard=egress_guard,
+                  effects=[ir.Assignment("exfiltrated",
+                                         ir.Or(ir.V("exfiltrated"),
+                                               ir.V("holding_private")))],
+                  linearization="send(contact_outsider)",
+                  source="lower.py:contact_outsider"),
+        # The other branch of the decision: deny the egress.
+        ir.Action(name="contact_deny", owner="service", guard=deny_guard,
+                  effects=[],
+                  source="lower.py:contact_deny"),
+        # The clear: the agent strips private data from its context.
+        ir.Action(name="redact", owner="service", guard=ir.T(),
+                  effects=[ir.Assignment("holding_private", ir.C(False))],
+                  linearization="send(redact)",
+                  source="lower.py:redact"),
+    ]
+    pinned = ir.Not(ir.V("exfiltrated"))
+
+    return ir.ProtocolIR(
+        name="taint-egress",
+        variables=variables,
+        channels=[],
+        actions=actions,
+        init=ir.T(),
+        pinned_property=pinned,
+        source_path="tests/fixtures/aws_dogwood/spendcap",
+        metadata={"protocol": "TAINT_EGRESS", "target": "taint_egress",
+                  "buggy": bool(buggy),
+                  "dw_event_kind": trigger_kind,
+                  "event": "%s::%s" % (trigger_action, trigger_kind),
+                  "egress_event": egress_action},
     )
 
