@@ -34,6 +34,13 @@ from rot.trifecta_risk import (  # noqa: E402
     TrifectaRisk,
     classify_action,
     detect,
+    checkable_property,
+    ExfiltrationCheck,
+    PROVEN,
+    VIOLATED,
+    NOT_APPLICABLE,
+    UNKNOWN,
+    _crosscheck_two,
 )
 
 DETECTED_MSG = ("TRIFECTA: detected (facets: private-data-access, "
@@ -184,6 +191,158 @@ class TrifectaRiskStructureTests(unittest.TestCase):
 
     def test_detect_rejects_none(self):
         self.assertRaises(TypeError, detect, None)
+
+
+class CheckablePropertyTests(unittest.TestCase):
+    """The G3 *checkable* Lethal-Trifecta property (the soundness upgrade).
+
+    The heuristic (:func:`detect`) is the applicability pre-filter; when it
+    fires, :func:`checkable_property` runs a real bounded model check of
+    ``NoExfiltration`` over the agent-harness exfiltration IR for the
+    policy-named egress action.
+    """
+
+    def test_egress_denied_is_proven(self):
+        # The spend-cap policy: egress (``exfiltrate_secret``) is in the
+        # *denied* set, so the harness blocks it while private data is held
+        # -> NoExfiltration is proven (the exfiltration is unreachable).
+        res = checkable_property(_SPENDCAP_POLICY)
+        self.assertIsInstance(res, ExfiltrationCheck)
+        self.assertEqual(res.status, PROVEN)
+        self.assertTrue(res.is_proven())
+        self.assertFalse(res.is_violated())
+        self.assertEqual(res.egress_action, "exfiltrate_secret")
+        self.assertTrue(res.harness_denies)
+        self.assertGreater(res.n_states, 0)
+        self.assertIn("proven", res.message)
+        # Proven -> no counterexample, no attack path.
+        self.assertIsNone(res.witness)
+        self.assertIsNone(res.attack_path)
+
+    def test_egress_allowed_is_violated(self):
+        # The same capability set, but the egress action is now *allowed*:
+        # the harness admits it unconditionally -> NoExfiltration is violated
+        # (the exfiltration is reachable), with the attack path as witness.
+        policy = ir.AdversarialPolicy(
+            allowed=["read_private_ledger", "fetch_external_quote",
+                     "exfiltrate_secret"],
+            denied=[])
+        res = checkable_property(policy)
+        self.assertEqual(res.status, VIOLATED)
+        self.assertTrue(res.is_violated())
+        self.assertEqual(res.egress_action, "exfiltrate_secret")
+        self.assertFalse(res.harness_denies)
+        # The witness state has exfiltrated == True (private data reached an
+        # unapproved channel).
+        self.assertIsNotNone(res.witness)
+        self.assertTrue(res.witness["exfiltrated"])
+        # The attack path is the real bypass: read private data, then the
+        # egress action (named after the policy's egress capability).
+        self.assertIsNotNone(res.attack_path)
+        names = [step[1] for step in res.attack_path]
+        self.assertIn("agent_take_read_private", names)
+        self.assertIn("agent_take_exfiltrate_secret", names)
+        # The final step flips exfiltrated to True.
+        self.assertEqual(res.attack_path[-1][2].get("exfiltrated"), True)
+
+    def test_not_applicable_when_heuristic_clear(self):
+        # A benign policy (no lethal combination) -> the checkable property
+        # does not apply (there is no egress channel to police).
+        res = checkable_property(_BENIGN_POLICY)
+        self.assertEqual(res.status, NOT_APPLICABLE)
+        self.assertFalse(res.is_proven())
+        self.assertFalse(res.is_violated())
+        self.assertIsNone(res.egress_action)
+        self.assertIsNone(res.harness_denies)
+        self.assertIn("not applicable", res.message)
+
+    def test_agent_step_default_policy_not_applicable(self):
+        # AgentStep's DEFAULT_POLICY names ``exfiltrate_secret`` but has no
+        # untrusted-content-intake action -> the heuristic does not fire ->
+        # the checkable property is not applicable (not a false proven).
+        res = checkable_property(agent_step.DEFAULT_POLICY)
+        self.assertEqual(res.status, NOT_APPLICABLE)
+
+    def test_rejects_none(self):
+        self.assertRaises(TypeError, checkable_property, None)
+
+    def test_json_serialisable_and_deterministic(self):
+        res = checkable_property(_SPENDCAP_POLICY)
+        self.assertEqual(res.to_json(), res.to_json())
+        d = json.loads(res.to_json())  # must not raise
+        self.assertEqual(d["status"], PROVEN)
+        self.assertEqual(d["egress_action"], "exfiltrate_secret")
+        self.assertIn("risk", d)
+        self.assertTrue(d["risk"]["detected"])
+
+    def test_violated_json_attack_path_serialises(self):
+        policy = ir.AdversarialPolicy(
+            allowed=["read_private_ledger", "fetch_external_quote",
+                     "exfiltrate_secret"],
+            denied=[])
+        d = json.loads(checkable_property(policy).to_json())
+        self.assertEqual(d["status"], VIOLATED)
+        self.assertTrue(d["attack_path"])
+        for step in d["attack_path"]:
+            self.assertIn("pre", step)
+            self.assertIn("action", step)
+            self.assertIn("delta", step)
+            self.assertIsInstance(step["delta"], dict)
+
+
+class TwoEngineJoinTests(unittest.TestCase):
+    """The G3 two-engine (SMT + TLC) conservative join.
+
+    These test the *pure* join semantics (no TLC jar required): a two-engine
+    decision is PROVEN only when both engines agree on PROVEN, VIOLATED only
+    when both agree on VIOLATED, and anything else (disagreement, unknown,
+    error) collapses to UNKNOWN.  No single engine can mint a two-engine
+    decision alone -- the same guarantee the cross-check gives the spend-cap
+    property.
+    """
+
+    def test_both_proven_is_proven(self):
+        cc = _crosscheck_two(PROVEN, PROVEN)
+        self.assertEqual(cc["joined"], PROVEN)
+        self.assertTrue(ExfiltrationCheck(
+            PROVEN, None, crosscheck=cc).is_proven_two_engine())
+
+    def test_both_violated_is_violated(self):
+        cc = _crosscheck_two(VIOLATED, VIOLATED)
+        self.assertEqual(cc["joined"], VIOLATED)
+        self.assertTrue(ExfiltrationCheck(
+            VIOLATED, None, crosscheck=cc).is_violated_two_engine())
+
+    def test_disagreement_is_unknown(self):
+        # SMT proves it, TLC refutes it (or vice versa): no single engine may
+        # mint the two-engine decision -> UNKNOWN.
+        self.assertEqual(_crosscheck_two(PROVEN, VIOLATED)["joined"], UNKNOWN)
+        self.assertEqual(_crosscheck_two(VIOLATED, PROVEN)["joined"], UNKNOWN)
+        self.assertFalse(ExfiltrationCheck(
+            PROVEN, None,
+            crosscheck=_crosscheck_two(PROVEN, VIOLATED)
+        ).is_proven_two_engine())
+
+    def test_non_decisive_engine_is_unknown(self):
+        # A non-decisive engine (unknown / error) collapses the join.
+        for other in (UNKNOWN, "error"):
+            self.assertEqual(_crosscheck_two(PROVEN, other)["joined"], UNKNOWN)
+            self.assertEqual(_crosscheck_two(VIOLATED, other)["joined"], UNKNOWN)
+
+    def test_no_crosscheck_is_not_two_engine(self):
+        # Without a TLC confirmation, the two-engine predicates are False
+        # (the single-engine verdict still stands on its own).
+        self.assertFalse(ExfiltrationCheck(PROVEN, None).is_proven_two_engine())
+        self.assertFalse(ExfiltrationCheck(VIOLATED, None).is_violated_two_engine())
+
+    def test_crosscheck_serialises_into_dict(self):
+        cc = _crosscheck_two(PROVEN, PROVEN)
+        d = ExfiltrationCheck(PROVEN, None, crosscheck=cc).to_dict()
+        self.assertIn("crosscheck", d)
+        self.assertEqual(d["crosscheck"]["joined"], PROVEN)
+        # The raw single-engine fields are still present and stable.
+        self.assertIn("status", d)
+        self.assertEqual(d["status"], PROVEN)
 
 
 if __name__ == "__main__":

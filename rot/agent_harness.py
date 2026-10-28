@@ -292,6 +292,87 @@ def exfiltrate_build_ir(n=1, buggy=False):
     )
 
 
+def exfil_ir_for_egress(egress_action, harness_denies):
+    """Build the exfiltration IR for a *policy-named* egress action.
+
+    This is the G3 "checkable property" half of the Lethal-Trifecta flag
+    (:mod:`rot.trifecta_risk`).  Instead of the fixed ``send_unapproved``
+    tool, the model's unapproved channel is the *specific* egress action the
+    policy names (e.g. ``exfiltrate_secret``), and the harness's decision on
+    it is the thing under test:
+
+    * ``harness_denies=True``  -- the harness admits the egress only when the
+      agent is NOT holding private data (the ``NoExfiltration`` rule holds);
+    * ``harness_denies=False`` -- the harness admits the egress unconditionally
+      (the hole: private data can reach the unapproved channel).
+
+    The agent is always adversarial (it may attempt any tool); the ``read_
+    private`` tool taints the agent's context, and the egress tool exfiltrates
+    *iff* the agent is holding private data.  This is the same shape as
+    :func:`exfiltrate_build_ir`, parameterised by the policy's action set so
+    the lethal-trifecta flag becomes a *checkable* property rather than a
+    name heuristic.
+
+    Parameters
+    ----------
+    egress_action : str
+        The egress action name from the policy (must be non-empty).
+    harness_denies : bool
+        ``True`` iff the harness policy denies the egress action while the
+        agent holds private data (i.e. the action is in the policy's
+        ``denied`` set); ``False`` iff the policy allows it.
+
+    Returns
+    -------
+    rot.ir.ProtocolIR
+    """
+    if not egress_action:
+        raise ValueError("exfil_ir_for_egress requires a non-empty egress action")
+    state_vars = [
+        ir.StateVar("holding_private", ir.Bool(), ir.MODE_PRECISE, "agent",
+                    "the agent currently holds private data"),
+        ir.StateVar("exfiltrated", ir.Bool(), ir.MODE_PRECISE, "agent",
+                    "private data has been sent to an unapproved channel"),
+    ]
+    tools = [
+        Tool("read_private",
+             [("holding_private", ir.C(True))],
+             "read a private document (taints the agent's context)"),
+        Tool(egress_action,
+             [("exfiltrated",
+               ir.Or(ir.V("exfiltrated"), ir.V("holding_private")))],
+             "the policy-named egress action; if the agent is holding private "
+             "data this is an exfiltration"),
+        Tool("send_approved",
+             [],
+             "send to an approved recipient (a safe channel; no effect)"),
+        Tool("redact",
+             [("holding_private", ir.C(False))],
+             "strip private data from the agent's context"),
+    ]
+    if harness_denies:
+        policy = HarnessPolicy(
+            {egress_action: ir.Not(ir.V("holding_private"))},
+            name="exfil-deny-%s" % egress_action)
+    else:
+        policy = HarnessPolicy(
+            {egress_action: ir.T()},
+            name="exfil-allow-%s" % egress_action)
+    return build_ir(
+        tools=tools,
+        policy=policy,
+        state_vars=state_vars,
+        property=no_exfiltration_property(),
+        init={"holding_private": False, "exfiltrated": False},
+        name="agent-harness-exfil-egress-%s" % egress_action,
+        metadata={
+            "protocol": "EXFILTRATION",
+            "egress_action": egress_action,
+            "harness_denies": bool(harness_denies),
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # Instance 2: SpendCap (AWS Dogwood) as an instance of the general builder
 # ---------------------------------------------------------------------------
@@ -381,6 +462,7 @@ __all__ = [
     "exfiltrate_tools",
     "exfiltrate_policy",
     "exfiltrate_build_ir",
+    "exfil_ir_for_egress",
     "spendcap_tools",
     "spendcap_policy",
     "spendcap_build_ir",

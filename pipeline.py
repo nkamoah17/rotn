@@ -442,12 +442,22 @@ def _cmd_trifecta(args):
     wraps :func:`rot.trifecta.audit`), and -- when ``--manifest`` is set --
     writes the deterministic report to ``<out>/trifecta_manifest.json``.
 
-    Also runs the D6 "Lethal Trifecta" design-time risk flag
-    (:func:`rot.trifecta_risk.detect`) over the policy's action set and prints
-    it in the summary; with ``--manifest`` it is written to
-    ``<out>/trifecta_risk.json``.  The flag is a design-time heuristic (no
-    engine, no soundness claim) and does NOT affect the audit result or the
-    exit code.
+    Also runs the D6 "Lethal Trifecta" risk check in two layers
+    (:mod:`rot.trifecta_risk`):
+
+    * the **design-time heuristic** (:func:`rot.trifecta_risk.detect`) -- a
+      fast pre-filter over the policy's action *names* (no engine, no
+      soundness claim).  It decides *whether* the lethal combination is
+      exposed, i.e. whether the checkable property applies.
+    * the **checkable property** (:func:`rot.trifecta_risk.checkable_property`)
+      -- when the heuristic fires, a real bounded model check of
+      ``NoExfiltration`` over the :mod:`rot.agent_harness` exfiltration IR for
+      the policy-named egress action.  This one is a soundness claim and,
+      when it is ``violated``, it is folded into the exit code.
+
+    With ``--manifest`` the heuristic is written to
+    ``<out>/trifecta_risk.json`` and the checkable property to
+    ``<out>/exfil_check.json``.
 
     Returns the process exit code (0 proven / 1 violated / 2 unknown / 3 error).
     """
@@ -482,20 +492,60 @@ def _cmd_trifecta(args):
         return EXIT_ERROR
 
     result = m.overall["result"]
-    exit_code = {"proven": EXIT_PROVEN,
+    base_exit = {"proven": EXIT_PROVEN,
                  "violated": EXIT_VIOLATED}.get(result, EXIT_UNKNOWN)
 
-    # D6 "Lethal Trifecta" design-time risk flag over the policy's action
-    # set.  Informational only: it never changes the audit result or the
-    # exit code (a design-time heuristic, not a soundness claim).
+    # D6 "Lethal Trifecta" risk check -- two layers.
+    #  (a) the design-time heuristic (fast pre-filter, no engine, no soundness
+    #      claim) decides *whether* the lethal combination is exposed;
+    #  (b) the checkable property -- a real bounded model check of
+    #      NoExfiltration over the agent-harness exfiltration IR for the
+    #      policy-named egress action.  A *violated* checkable property is a
+    #      soundness claim and is folded into the exit code below.
     try:
         risk = trifecta_risk.detect(policy)
     except Exception as exc:
         print("WARNING: D6 risk flag failed: %s" % exc, file=sys.stderr)
         risk = None
 
+    # Resolve the TLC jar for the optional two-engine (SMT + TLC) confirmation
+    # of the G3 NoExfiltration verdict.  --tlc-confirm is opt-in so the default
+    # path stays dependency-free; when requested we resolve the jar from
+    # --tlc-jar / $TLA2TOOLS_JAR / the local install (Config.tlc_jar_path).
+    tlc_jar = None
+    if getattr(args, "tlc_confirm", False):
+        tlc_jar = args.tlc_jar
+        if tlc_jar is None:
+            try:
+                from rot.config import Config
+                tlc_jar = Config().tlc_jar_path()
+            except Exception:
+                tlc_jar = None
+        if tlc_jar is None:
+            print("WARNING: --tlc-confirm requested but tla2tools.jar could "
+                  "not be resolved; running single-engine (SMT) only",
+                  file=sys.stderr)
+
+    try:
+        exfil = trifecta_risk.checkable_property(policy, max_states=max_states,
+                                                 tlc_jar=tlc_jar)
+    except Exception as exc:
+        print("WARNING: G3 exfiltration check failed: %s" % exc,
+              file=sys.stderr)
+        exfil = None
+
+    # Fold the checkable property into the exit code.  A *violated*
+    # NoExfiltration is a real (refuted) soundness claim -> EXIT_VIOLATED.
+    # *not_applicable* (heuristic did not fire) and *proven* never worsen the
+    # audit result; *unknown* (inconclusive model check) does not either --
+    # the heuristic remains informational in that case.
+    exit_code = base_exit
+    if exfil is not None and exfil.is_violated():
+        exit_code = EXIT_VIOLATED
+
     path = None
     risk_path = None
+    exfil_path = None
     if args.manifest:
         try:
             os.makedirs(args.out_dir, exist_ok=True)
@@ -515,6 +565,17 @@ def _cmd_trifecta(args):
                 print("WARNING: could not write D6 risk flag: %s" % exc,
                       file=sys.stderr)
                 risk_path = None
+        if exfil is not None:
+            try:
+                exfil_path = os.path.join(args.out_dir, "exfil_check.json")
+                with open(exfil_path, "w") as f:
+                    f.write(exfil.to_json())
+            except Exception as exc:
+                print("WARNING: could not write G3 exfil check: %s" % exc,
+                      file=sys.stderr)
+                exfil_path = None
+        else:
+            exfil_path = None
 
     if not args.quiet:
         bar = "-" * 62
@@ -532,6 +593,8 @@ def _cmd_trifecta(args):
         print("  overall   : %s" % result.upper())
         if risk is not None:
             print("  risk      : %s" % risk.message)
+        if exfil is not None:
+            print("  exfil     : %s" % exfil.message)
         if m.witness is not None:
             print("  witness   : %s" % json.dumps(m.witness, sort_keys=True))
         print("  manifest  : %s" % m.manifest_id[:16])
@@ -539,6 +602,8 @@ def _cmd_trifecta(args):
             print("  report    : %s" % path)
         if risk_path:
             print("  risk file : %s" % risk_path)
+        if exfil_path:
+            print("  exfil file: %s" % exfil_path)
         print(bar)
 
     return exit_code
@@ -1190,6 +1255,15 @@ def main(argv=None):
                         help="with --trifecta: audit the ADVERSARIAL agent "
                              "(denied actions left enabled) instead of the "
                              "conforming one")
+    parser.add_argument("--tlc-confirm", dest="tlc_confirm",
+                        action="store_true",
+                        help="with --trifecta: also run TLC (a genuinely "
+                             "independent TLA+ model checker) over the same "
+                             "exfiltration IR and record the conservative "
+                             "two-engine (SMT + TLC) join on the G3 "
+                             "NoExfiltration verdict; resolves tla2tools.jar "
+                             "from --tlc-jar / $TLA2TOOLS_JAR / the local "
+                             "install")
     # -- Phase 4 refinement (rot.refine): verify a rewritten protocol ----------
     parser.add_argument("--before", default=None,
                         help="refinement: before model (target name or JSON IR file)")
