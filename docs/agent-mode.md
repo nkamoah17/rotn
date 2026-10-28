@@ -28,6 +28,7 @@ right bounded checker:
 | `property_kind` | pinned property            | checker                     | question asked                                |
 |-----------------|----------------------------|-----------------------------|-----------------------------------------------|
 | `safety`        | `policy_conformance`       | `forall_reachable`          | does the agent *never* take a denied action?  |
+| `safety`        | `policy_denies_forbidden`  | `forall_reachable`          | is *every* forbidden Cedar request denied?    |
 | `realizability` | `policy_permits_request`   | `exists_reachable`          | does the policy permit *at least one* request?|
 | `liveness`      | `bounded_eventually`       | `reach_within` (horizon B)  | does the agent *act within* B steps?          |
 
@@ -42,20 +43,25 @@ All commands run from the repository root. The samples ship in `samples/`.
 #    Asks: does the policy set permit at least one concrete request?
 python pipeline.py --policy samples/agent.cedar --engine symbolic
 
-# 2. Dogwood policy -- conformance (safety).
+# 2. Cedar policy -- safety (forbid-holds / no over-granting).
+#    Asks: is every forbidden request denied (forbidden -> not decision)
+#    across the whole bounded request space?
+python pipeline.py --policy samples/agent.cedar --kind safety --engine symbolic
+
+# 3. Dogwood policy -- conformance (safety).
 #    Asks: does the conforming agent never take a denied action?
 python pipeline.py --policy samples/policy.json --tools samples/tools.json \
     --engine symbolic
 
-# 3. Dogwood policy -- bounded liveness.
+# 4. Dogwood policy -- bounded liveness.
 #    Asks: does the agent commit to an action within the horizon (default 12)?
 python pipeline.py --policy samples/policy.json --tools samples/tools.json \
     --kind liveness --engine symbolic --liveness-horizon 3
 
-# 4. Registry target -- the *conforming* agent must be PROVEN.
+# 5. Registry target -- the *conforming* agent must be PROVEN.
 python pipeline.py agent-step --property policy_conformance --engine symbolic
 
-# 5. Registry target -- the *compromised* agent must be VIOLATED (+ witness).
+# 6. Registry target -- the *compromised* agent must be VIOLATED (+ witness).
 python pipeline.py agent-step-buggy --property policy_conformance --engine symbolic
 ```
 
@@ -71,7 +77,7 @@ bash scripts/run_agent_mode.sh
 |----------------------|-----------|----------------------------------------------------------------|
 | `--policy FILE`      | —         | the policy file (`.cedar` -> Cedar, `.json` -> Dogwood)        |
 | `--tools FILE`       | —         | Dogwood `tools.json` catalog (ignored for Cedar, provenance only) |
-| `--kind {safety,realizability,liveness}` | auto | force the property kind (default: auto-route by extension) |
+| `--kind {safety,realizability,liveness}` | auto | force the property kind (default: auto-route by extension; `safety` pins Cedar `policy_denies_forbidden`, `realizability` pins Cedar `policy_permits_request`) |
 | `--n-steps N`        | `1`       | agent-step horizon bound (recorded in metadata)                |
 | `--liveness-horizon B` | `12`    | bounded-liveness horizon B (only for `--kind liveness`)        |
 
@@ -177,18 +183,21 @@ an engine (`rot.modelfind`, `rot.symbolic`, `rot.emitter`, `rot.tlc`).
 
 | front-end | file       | module | property pinned | kind          |
 |-----------|-----------|--------|-----------------|---------------|
-| **Cedar**   | `*.cedar` | `rot.frontends.policy.cedar`   | `policy_permits_request` | `realizability` |
+| **Cedar**   | `*.cedar` | `rot.frontends.policy.cedar`   | `policy_permits_request` (default) / `policy_denies_forbidden` (`--kind safety`) | `realizability` / `safety` |
 | **Dogwood** | `*.json`  | `rot.frontends.policy.dogwood` | `policy_conformance`     | `safety`        |
 | **liveness twin** | `*.json` | `rot.frontends.policy.agent_step_liveness` | `bounded_eventually` | `liveness` |
 
 The public entry point is `rot.frontends.policy.build_ir(policy_path,
 tools_path=None, n_steps=1, kind=None)`:
 
-* `kind=None` (default) — auto-routes by file extension (`.cedar` -> Cedar,
-  `.json` -> Dogwood safety).
+* `kind=None` (default) — auto-routes by file extension (`.cedar` -> Cedar
+  non-vacuity, `.json` -> Dogwood safety).
 * `kind="liveness"` — orthogonal to the policy family: the *same* Dogwood
   policy can be checked for safety **or** for bounded liveness.
-* `kind="safety"` / `"realizability"` — force the respective front-end.
+* `kind="safety"` — Dogwood conformance, **or** Cedar
+  `policy_denies_forbidden` (every forbidden request is denied) for `.cedar`.
+* `kind="realizability"` — Cedar `policy_permits_request` (at least one
+  request is permitted).
 
 Every returned IR carries `pinned_property`, `metadata["property_kind"]`,
 `metadata["property_name"]`, and provenance (`policy_source` / `tools_source`).
@@ -198,8 +207,17 @@ Every returned IR carries `pinned_property`, `metadata["property_kind"]`,
 A declarative policy: `permit` / `forbid` rules over `(principal, action,
 resource)`. Cedar is **default-deny**, and `forbid` overrides `permit`. The
 sample permits `read_log` and `update_balance` and forbids `exfiltrate_secret`.
-The front-end parses the policy into a `ProtocolIR` and pins *non-vacuity* —
-the policy must permit at least one concrete request.
+The front-end parses the policy into a `ProtocolIR` and pins one of two
+*twin* properties (the pair that makes Cedar a real verifier):
+
+* **non-vacuity** (default, `realizability`) — `policy_permits_request`: the
+  policy must permit at least one concrete request (`exists` over the bounded
+  request space).
+* **safety** (`--kind safety`) — `policy_denies_forbidden`: every forbidden
+  request is denied, i.e. `forbidden -> not decision` holds in *every*
+  reachable state (`forall` over the whole bounded request space). This is the
+  "forbid rules hold / permit rules don't over-grant" direction that a
+  realizability-only query cannot express.
 
 ### Dogwood (`samples/policy.json` + `samples/tools.json`)
 
@@ -221,6 +239,7 @@ conformance*.
 | command (see Quick start) | property | verdict | exit |
 |---------------------------|----------|---------|:----:|
 | `--policy samples/agent.cedar` | `policy_permits_request` (realizability) | **PROVEN** — witness `read_log` | `0` |
+| `--policy samples/agent.cedar --kind safety` | `policy_denies_forbidden` (safety) | **PROVEN** — no forbidden request permitted | `0` |
 | `--policy samples/policy.json` | `policy_conformance` (safety) | **PROVEN** | `0` |
 | `--policy samples/policy.json --kind liveness` | `bounded_eventually` | **PROVEN** — reached at step 1 | `0` |
 | `agent-step --property policy_conformance` | `policy_conformance` | **PROVEN** (3 reachable states) | `0` |
@@ -239,8 +258,9 @@ distinguish a *regression* from a vacuous invariant.
 | file | role |
 |------|------|
 | `rot/agent_step.py` | the `AgentStep` model (`build_ir(buggy=...)`, `policy_conformance_property`) |
+| `rot/policy_verify.py` | the Cedar verification half: `policy_denies_forbidden` (safety) + `policy_permits_request` (non-vacuity) sweeps |
 | `rot/frontends/policy/__init__.py` | `build_ir` entry point + `kind` routing (safety / realizability / liveness) |
-| `rot/frontends/policy/cedar.py` | Cedar policy to IR, pins non-vacuity |
+| `rot/frontends/policy/cedar.py` | Cedar policy to IR, pins `policy_permits_request` (realizability) or `policy_denies_forbidden` (safety) |
 | `rot/frontends/policy/dogwood.py` | Dogwood JSON to IR, pins `policy_conformance` |
 | `rot/frontends/policy/agent_step_liveness.py` | bounded-liveness twin, pins `bounded_eventually` |
 | `samples/agent.cedar`, `samples/policy.json`, `samples/tools.json` | shipped sample policies |

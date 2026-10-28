@@ -1153,9 +1153,14 @@ def main(argv=None):
                         help="property kind to pin for --policy "
                              "[default: auto-route by extension "
                              "(.cedar -> realizability, .dw / .json -> safety); "
-                             "'liveness' pins the agent-step bounded-liveness "
-                             "goal (decision != idle) that must be reachable "
-                             "within --liveness-horizon]")
+                             "'safety' also pins Cedar policy_denies_forbidden "
+                             "(every forbidden request is denied, a forall "
+                             "sweep); 'realizability' pins Cedar "
+                             "policy_permits_request (at least one request is "
+                             "permitted, an exists query); 'liveness' pins the "
+                             "agent-step bounded-liveness goal (decision != "
+                             "idle) that must be reachable within "
+                             "--liveness-horizon]")
     parser.add_argument("--liveness-horizon", dest="liveness_horizon",
                         type=int, default=None,
                         help="bounded-liveness horizon (max steps) for "

@@ -59,7 +59,7 @@ pinned property. It never imports an engine.
 |-------|--------------------|-----------------|------|
 | Dogwood `policy.json` (+ optional `tools.json`) | **shipped** `rot.frontends.policy.dogwood` | `policy_conformance` — the conforming agent never takes a denied action | safety |
 | Dogwood `.dw` spend-cap source | **shipped** `rot.frontends.policy.dw` → `rot.dw` / `rot.spendcap` | `spendcap_within_cap` — settled + in-flight amount ≤ cap | safety |
-| Cedar `.cedar` policy | **shipped** `rot.frontends.policy.cedar` | non-vacuity — some concrete request is permitted | realizability |
+| Cedar `.cedar` policy | **shipped** `rot.frontends.policy.cedar` | default: `policy_permits_request` — some concrete request is permitted (realizability); with `kind="safety"`: `policy_denies_forbidden` — every forbidden request is denied (safety) | realizability / safety |
 | bounded-liveness view of any policy | **shipped** `rot.frontends.policy.agent_step_liveness` | `decision != idle` reachable within horizon `H` | liveness |
 | **standard MCP manifest** | **planned** `rot.frontends.policy.mcp` | `policy_conformance` over the MCP tool universe | safety |
 

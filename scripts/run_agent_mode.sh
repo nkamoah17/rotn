@@ -53,6 +53,10 @@ echo "-----------------------------------"
 check "cedar: policy_permits_request (realizability)" 0 \
   "$PY" pipeline.py --policy samples/agent.cedar --engine "$ENGINE"
 
+# 1b. Cedar policy -> safety (forbid-holds / no over-granting): PROVEN (0).
+check "cedar: policy_denies_forbidden (safety)" 0 \
+  "$PY" pipeline.py --policy samples/agent.cedar --kind safety --engine "$ENGINE"
+
 # 2. Dogwood policy -> safety (conformance): must be PROVEN (0).
 check "dogwood: policy_conformance (safety)" 0 \
   "$PY" pipeline.py --policy samples/policy.json --tools samples/tools.json --engine "$ENGINE"

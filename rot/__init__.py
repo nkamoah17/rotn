@@ -30,4 +30,5 @@ __all__ = [
     "config",
     "cpg_reader",
     "mcp_adapter",
+    "policy_verify",
 ]

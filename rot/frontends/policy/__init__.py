@@ -13,8 +13,11 @@ Public entry point
 policy file extension:
 
 * ``.cedar`` -- Cedar policy text (:mod:`rot.frontends.policy.cedar`).
-  Pinned property: the policy is *non-vacuous* -- some concrete request is
-  permitted (a realizability query, checked with ``exists_reachable``).
+  Default pinned property: the policy is *non-vacuous* -- some concrete
+  request is permitted (a realizability query, checked with
+  ``exists_reachable``).  With ``kind="safety"`` it pins
+  ``policy_denies_forbidden`` -- every forbidden request is denied (a safety
+  query, checked with ``forall_reachable`` over the bounded request space).
 * ``.dw``    -- Dogwood (AWS) spend-cap source
   (:mod:`rot.frontends.policy.dw`).  Pinned property: ``spendcap_within_cap``
   -- the settled + in-flight amount never exceeds the cap (a safety query,
@@ -70,7 +73,8 @@ def build_ir(policy_path, tools_path=None, n_steps=1, kind=None,
         agent-step model is a single decision step, matching
         ``rot.agent_step``).
     kind : str or None
-        Property kind to force: ``"safety"`` (Dogwood conformance),
+        Property kind to force: ``"safety"`` (Dogwood conformance, or Cedar
+        ``policy_denies_forbidden`` for ``.cedar`` files),
         ``"realizability"`` (Cedar non-vacuity) or ``"liveness"`` (the
         bounded-liveness front-end :mod:`agent_step_liveness`, which pins
         ``decision != idle`` as a goal reachable within the horizon).
@@ -135,6 +139,12 @@ def build_ir(policy_path, tools_path=None, n_steps=1, kind=None,
             except _asl.PolicyFrontendError as exc:
                 raise PolicyFrontendError(str(exc))
         if kind == "safety":
+            if ext == ".cedar":
+                # Cedar safety: every forbidden request is denied
+                # (policy_denies_forbidden, a forall-reachable sweep).
+                from . import cedar as _cedar
+                return _cedar.build_ir(policy_path, tools_path=tools_path,
+                                       n_steps=n_steps, kind="safety")
             from . import dogwood as _dogwood
             return _dogwood.build_ir(policy_path, tools_path=tools_path,
                                      n_steps=n_steps)
