@@ -12,6 +12,13 @@ verbal suggestion. It is the third leg of the ROTN triad:
                  policy + the plain-English rationale + the *re-verification
                  proof* that the corrected behaviour is safe.
 
+The coach is **generalized over the IR** (G7): the ``to_proceed`` list is
+*computed mathematically* from the corrected policy's guard (the spec) -- the
+condition(s) under which the blocked action would become enabled, read
+straight from the guard (see :mod:`rot.to_proceed`) -- and the same 5-step
+loop coaches the **exfiltration** (NoExfiltration) shape via
+:func:`coach_exfiltration`, not just the spend-cap shape.
+
 The 5-step loop
 ---------------
 
@@ -68,12 +75,14 @@ Pure stdlib, Python 3.6 compatible.
 
 import rot
 from rot import trace as _trace  # reuse canonical_json + trace_hash (one source)
+from rot.to_proceed import compute_to_proceed  # the computed to_proceed list (G7)
 
 __all__ = [
     "SCHEMA",
     "CLOSED", "OPEN",
     "CoachingArtifact",
     "coach",
+    "coach_exfiltration",
     "coach_hash",
     "canonical_json",
 ]
@@ -306,6 +315,11 @@ def coach(policy, max_inflight=None, amount=None, cap=None, window=None,
     corrected_status, corrected_witness, corrected_n_states = _verify(
         ir_corrected, max_states)
 
+    # 4b. To-proceed: compute, from the corrected IR (the spec), the
+    #     condition(s) under which the blocked decision action would become
+    #     enabled -- the thesis's "computed mathematically" claim (G7).
+    to_proceed = compute_to_proceed(ir_corrected, "spend_ok", witness)
+
     # 5. Close: package the artifact (fail-closed).
     closed = (corrected_status == "proven")
     status = CLOSED if closed else OPEN
@@ -351,6 +365,151 @@ def coach(policy, max_inflight=None, amount=None, cap=None, window=None,
             "n_states": corrected_n_states,
             "engine": "symbolic",
         },
+        "to_proceed": to_proceed,
+        "close": {
+            "status": status,
+            "discharge": discharge,
+        },
+    }
+    return CoachingArtifact(body)
+
+
+def _explain_exfiltration(witness):
+    """Derive a plain-English rationale *from the witness* (deterministic).
+
+    The exfiltration shape: the buggy policy admits the unapproved send
+    unconditionally, so when the agent is holding private data and sends it to
+    the unapproved channel, the ``NoExfiltration`` rule is violated.  The
+    rationale is a pure function of the witness state -- the same discipline
+    the spend-cap :func:`_explain` uses.
+    """
+    holding = bool((witness or {}).get("holding_private", False))
+    exfiltrated = bool((witness or {}).get("exfiltrated", False))
+    rationale = (
+        "The buggy policy admits the unapproved send unconditionally (its "
+        "guard is always true). In the witness (holding_private=%s, "
+        "exfiltrated=%s) the agent is holding private data and sends it to "
+        "the unapproved channel, so the NoExfiltration rule is violated."
+        % (holding, exfiltrated)
+    )
+    root_cause = (
+        "the send_unapproved guard is unconditional; the harness does not "
+        "check whether the agent is holding private data before admitting "
+        "the send to the unapproved channel"
+    )
+    return {
+        "rationale": rationale,
+        "root_cause": root_cause,
+        "witness": witness,
+    }
+
+
+def _correct_exfiltration(ir_buggy, ir_corrected, action_name):
+    """The corrected exfiltration decision, rendered from the IRs (the spec).
+
+    The delta is the guard on the unapproved-send action: from unconditional
+    (``True``) to ``not holding_private`` -- the ``NoExfiltration`` rule.
+    """
+    from rot.design_view import expr_to_str
+    buggy_guard = expr_to_str(ir_buggy.action(action_name).guard)
+    correct_guard = expr_to_str(ir_corrected.action(action_name).guard)
+    return {
+        "action": action_name,
+        "guard": correct_guard,
+        "buggy_guard": buggy_guard,
+        "delta": "%s -> %s (deny the send while private data is held)"
+                 % (buggy_guard, correct_guard),
+        "policy": "exfiltration harness decision on the unapproved channel",
+    }
+
+
+def coach_exfiltration(max_states=100000, corrected=None):
+    """Run the 5-step coaching loop on the exfiltration (NoExfiltration) shape.
+
+    This is the G7 generalization: the *same* coaching loop (Detect ->
+    Explain -> Correct -> Re-check -> Close) and the *same* computed
+    ``to_proceed`` list, now over a **different shape** -- the
+    adversarial-agent + policy-harness model (:mod:`rot.agent_harness`)
+    rather than the spend-cap ``.dw`` policy.  The buggy policy admits the
+    unapproved send unconditionally (the hole); the corrected policy denies it
+    while the agent holds private data (``NoExfiltration``).  The
+    ``to_proceed`` list is computed from the corrected IR's guard (the spec),
+    not a hardcoded string -- the thesis's "computed mathematically" claim.
+
+    Parameters
+    ----------
+    max_states : int, optional
+        The state budget for the engine (default 100000).
+    corrected : rot.ir.ProtocolIR, optional
+        The corrected exfiltration IR to re-check (defaults to the
+        ``not holding_private``-guard variant). Pass an IR that does *not*
+        re-prove to exercise the fail-closed path (status :data:`OPEN`).
+
+    Returns
+    -------
+    CoachingArtifact
+        The deterministic, hashable coaching artifact (fail-closed).
+    """
+    import rot.agent_harness as _ah
+
+    action_name = "agent_take_send_unapproved"
+
+    # 1. Build the buggy + corrected IRs (the general agent-harness builder).
+    ir_buggy = _ah.exfiltrate_build_ir(buggy=True)
+    if corrected is None:
+        ir_corrected = _ah.exfiltrate_build_ir(buggy=False)
+    else:
+        ir_corrected = corrected
+
+    # 2. Detect: verify the buggy policy; capture the witness.
+    buggy_status, witness, buggy_n_states = _verify(ir_buggy, max_states)
+
+    # 3. Explain: derive the rationale from the witness.
+    explain = _explain_exfiltration(witness)
+
+    # 4. Re-check: verify the corrected policy.
+    corrected_status, corrected_witness, corrected_n_states = _verify(
+        ir_corrected, max_states)
+
+    # 4b. To-proceed: computed from the corrected IR's guard (the spec).
+    to_proceed = compute_to_proceed(ir_corrected, action_name, witness)
+
+    # 5. Close: package the artifact (fail-closed).
+    closed = (corrected_status == "proven")
+    status = CLOSED if closed else OPEN
+    discharge = (
+        "the corrected policy is proven safe over %d states: the coaching "
+        "is discharged" % corrected_n_states
+        if closed else
+        "the corrected policy did not re-prove (status=%s); the coaching is "
+        "NOT discharged (fail-closed)" % corrected_status
+    )
+
+    body = {
+        "schema": SCHEMA,
+        "rot_version": rot.__version__,
+        "status": status,
+        "policy": {
+            "shape": "exfiltration",
+            "action": "send_unapproved",
+            "property": "no_exfiltration",
+            "adversarial_agent": True,
+        },
+        "detect": {
+            "status": buggy_status,
+            "witness": witness,
+            "n_states": buggy_n_states,
+            "engine": "symbolic",
+        },
+        "explain": explain,
+        "correct": _correct_exfiltration(ir_buggy, ir_corrected, action_name),
+        "recheck": {
+            "status": corrected_status,
+            "witness": corrected_witness,
+            "n_states": corrected_n_states,
+            "engine": "symbolic",
+        },
+        "to_proceed": to_proceed,
         "close": {
             "status": status,
             "discharge": discharge,

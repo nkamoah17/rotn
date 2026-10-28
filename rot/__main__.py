@@ -595,9 +595,17 @@ def cmd_coach(args):
     """Coach the agent back in bounds, *with a proof* (the CoachingArtifact).
 
     Runs the 5-step coaching loop (Detect -> Explain -> Correct -> Re-check ->
-    Close) on a buggy spend-cap policy and emits the deterministic, hashable
+    Close) on a buggy policy and emits the deterministic, hashable
     :class:`rot.coach.CoachingArtifact` (the corrected policy + the
-    plain-English rationale + the re-verification proof).
+    plain-English rationale + the re-verification proof + the computed
+    ``to_proceed`` list).
+
+    Two shapes are supported (``--shape``):
+
+    * ``spendcap`` (the default) -- a ``.dw`` spend-cap policy
+      (``--policy FILE`` required);
+    * ``exfiltration`` -- the NoExfiltration policy-harness shape, built from
+      the general adversarial-agent model (no policy file needed).
 
     Exit codes: ``0`` closed (the corrected policy re-proved), ``1`` open
     (the correction did not re-prove -- fail-closed), ``3`` error.
@@ -605,33 +613,45 @@ def cmd_coach(args):
     import rot.coach as coachmod
     import rot.dw as dw
 
-    policy_path = getattr(args, "policy", None)
-    if not policy_path:
-        print("ERROR: specify --policy FILE (a spend-cap .dw policy)",
-              file=sys.stderr)
-        return EXIT_ERROR
+    shape = getattr(args, "shape", "spendcap")
+    policy_path = None
 
-    try:
-        policy = dw.parse_file(policy_path)
-    except (dw.DwParseError, IOError, OSError) as exc:
-        print("ERROR: %s" % exc, file=sys.stderr)
-        return EXIT_ERROR
-    if not hasattr(policy, "to_ir"):
-        print("ERROR: %s is not a spend-cap policy (no to_ir)" % policy_path,
-              file=sys.stderr)
-        return EXIT_ERROR
+    if shape == "exfiltration":
+        # The exfiltration shape is built from the general agent-harness model
+        # (the NoExfiltration rule) -- no .dw policy file is required.
+        try:
+            artifact = coachmod.coach_exfiltration()
+        except Exception as exc:  # fail-closed on any coaching error
+            print("ERROR: %s" % exc, file=sys.stderr)
+            return EXIT_ERROR
+    else:
+        policy_path = getattr(args, "policy", None)
+        if not policy_path:
+            print("ERROR: specify --policy FILE (a spend-cap .dw policy)",
+                  file=sys.stderr)
+            return EXIT_ERROR
 
-    try:
-        artifact = coachmod.coach(
-            policy,
-            max_inflight=getattr(args, "max_inflight", None),
-            amount=getattr(args, "amount", None),
-            cap=getattr(args, "cap", None),
-            window=getattr(args, "window", None),
-        )
-    except (ValueError, dw.DwParseError) as exc:
-        print("ERROR: %s" % exc, file=sys.stderr)
-        return EXIT_ERROR
+        try:
+            policy = dw.parse_file(policy_path)
+        except (dw.DwParseError, IOError, OSError) as exc:
+            print("ERROR: %s" % exc, file=sys.stderr)
+            return EXIT_ERROR
+        if not hasattr(policy, "to_ir"):
+            print("ERROR: %s is not a spend-cap policy (no to_ir)" % policy_path,
+                  file=sys.stderr)
+            return EXIT_ERROR
+
+        try:
+            artifact = coachmod.coach(
+                policy,
+                max_inflight=getattr(args, "max_inflight", None),
+                amount=getattr(args, "amount", None),
+                cap=getattr(args, "cap", None),
+                window=getattr(args, "window", None),
+            )
+        except (ValueError, dw.DwParseError) as exc:
+            print("ERROR: %s" % exc, file=sys.stderr)
+            return EXIT_ERROR
 
     out = getattr(args, "out", None)
     if out:
@@ -650,12 +670,15 @@ def cmd_coach(args):
     if not getattr(args, "quiet", False):
         print(_BAR)
         print("  COACHING: %s" % artifact.status().upper())
-        print("  policy    : %s" % policy_path)
+        print("  shape     : %s" % shape)
+        if policy_path:
+            print("  policy    : %s" % policy_path)
         print("  detect    : %s %s" % (artifact.body["detect"]["status"],
                                       json.dumps(artifact.body["detect"]["witness"],
                                                  sort_keys=True)))
         print("  explain   : %s" % artifact.body["explain"]["rationale"])
         print("  correct   : %s" % artifact.body["correct"]["delta"])
+        print("  to-proceed: %s" % "; ".join(artifact.body["to_proceed"]["conditions"]))
         print("  recheck   : %s" % artifact.body["recheck"]["status"])
         print("  hash      : %s" % artifact.hash)
         print(_BAR)
@@ -1594,9 +1617,14 @@ def main(argv=None):
         "coach",
         help="coach the agent back in bounds, *with a proof* "
              "(the CoachingArtifact: corrected policy + rationale + re-proof)")
+    p.add_argument("--shape", default="spendcap",
+                   choices=["spendcap", "exfiltration"], metavar="SHAPE",
+                   help="which shape to coach: 'spendcap' (a .dw policy, the "
+                        "default) or 'exfiltration' (the NoExfiltration "
+                        "harness -- no policy file needed)")
     p.add_argument("--policy", default=None, metavar="FILE",
                    help="spend-cap policy file (.dw) to coach "
-                        "(the AWS Dogwood vertical slice)")
+                        "(the AWS Dogwood vertical slice; --shape spendcap)")
     p.add_argument("--out", default=None, metavar="FILE",
                    help="write the coaching artifact JSON here [default: stdout]")
     p.add_argument("--max-inflight", type=int, default=None, metavar="K",

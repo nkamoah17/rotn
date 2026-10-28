@@ -26,8 +26,10 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from rot.coach import (  # noqa: E402
-    SCHEMA, CLOSED, OPEN, CoachingArtifact, coach, coach_hash, canonical_json)
+    SCHEMA, CLOSED, OPEN, CoachingArtifact, coach, coach_exfiltration,
+    coach_hash, canonical_json)
 from rot.dw import parse_file  # noqa: E402
+import rot.agent_harness as agent_harness  # noqa: E402
 
 #: The canonical buggy spend-cap .dw fixture (the ``response``-sum variant).
 _POLICY_BUGGY = os.path.join(
@@ -174,6 +176,74 @@ class KsweepTests(unittest.TestCase):
             self.assertEqual(a.body["recheck"]["status"], "proven",
                              "K=%d" % k)
             self.assertEqual(a.status(), CLOSED, "K=%d" % k)
+
+
+class ToProceedSpendcapTests(unittest.TestCase):
+    """The spend-cap coach now carries the computed to_proceed list (G7)."""
+
+    def test_artifact_carries_to_proceed(self):
+        a = coach(_buggy_policy(), max_inflight=3)
+        self.assertIn("to_proceed", a.body)
+        tp = a.body["to_proceed"]
+        self.assertEqual(tp["action"], "spend_ok")
+        self.assertTrue(tp["blocked"])
+        # the enabling condition is read from the corrected guard (the spec).
+        self.assertIn("completed + inflight * 100 + 100 <= 200",
+                      tp["conditions"])
+
+    def test_to_proceed_evaluates_in_the_witness(self):
+        # to_proceed is anchored to the same witness the detect step found.
+        a = coach(_buggy_policy(), max_inflight=3)
+        tp = a.body["to_proceed"]
+        self.assertEqual(tp["state"], a.body["detect"]["witness"])
+        self.assertTrue(tp["conditions"])
+        self.assertEqual(len(tp["conditions"]), len(tp["blockers"]))
+
+    def test_to_proceed_is_deterministic(self):
+        a1 = coach(_buggy_policy(), max_inflight=3)
+        a2 = coach(_buggy_policy(), max_inflight=3)
+        self.assertEqual(a1.body["to_proceed"], a2.body["to_proceed"])
+
+
+class ExfiltrationCoachTests(unittest.TestCase):
+    """The generalized coach over the exfiltration (NoExfiltration) shape."""
+
+    def test_closed_when_recheck_proven(self):
+        a = coach_exfiltration()
+        self.assertIsInstance(a, CoachingArtifact)
+        self.assertEqual(a.body["recheck"]["status"], "proven")
+        self.assertEqual(a.status(), CLOSED)
+
+    def test_detect_is_violated_with_witness(self):
+        a = coach_exfiltration()
+        self.assertEqual(a.body["detect"]["status"], "violated")
+        self.assertEqual(a.body["detect"]["witness"],
+                         {"holding_private": True, "exfiltrated": True})
+
+    def test_corrected_guard_is_no_exfiltration(self):
+        a = coach_exfiltration()
+        self.assertEqual(a.body["correct"]["guard"], "not holding_private")
+        self.assertEqual(a.body["correct"]["buggy_guard"], "True")
+
+    def test_to_proceed_is_computed_from_spec(self):
+        a = coach_exfiltration()
+        tp = a.body["to_proceed"]
+        self.assertEqual(tp["action"], "agent_take_send_unapproved")
+        self.assertTrue(tp["blocked"])
+        self.assertEqual(tp["conditions"], ["not holding_private"])
+        self.assertEqual(tp["blockers"], ["holding_private"])
+
+    def test_open_when_correction_does_not_reprove(self):
+        # Passing the buggy IR as the "correction" -> recheck VIOLATED -> OPEN.
+        a = coach_exfiltration(
+            corrected=agent_harness.exfiltrate_build_ir(buggy=True))
+        self.assertEqual(a.status(), OPEN)
+        self.assertEqual(a.body["recheck"]["status"], "violated")
+        self.assertIn("NOT discharged", a.body["close"]["discharge"])
+
+    def test_deterministic(self):
+        self.assertEqual(coach_exfiltration().hash,
+                         coach_exfiltration().hash)
 
 
 if __name__ == "__main__":
