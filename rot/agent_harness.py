@@ -454,6 +454,100 @@ def spendcap_build_ir(n=1, buggy=False, max_inflight=spendcap.MAX_INFLIGHT,
     )
 
 
+# ---------------------------------------------------------------------------
+# Instance: OverPrivilegedTool (G6 "over-privileged tool" bind, model-checked)
+# ---------------------------------------------------------------------------
+def no_over_privileged_tool_property():
+    """The rule: the agent never takes a tool it was not required to.
+
+    ``NOT took_unneeded`` in every reachable state, where ``took_unneeded``
+    is set when the agent takes an *over-privileged* tool -- a tool the harness
+    *permits* but the task does not *require* (its effect is reachable, yet
+    never needed by any task-completing path).  This is the thesis's
+    *over-privileged tool* bind expressed as a harness state predicate: the
+    correct policy denies the unneeded tool (so the property holds), and the
+    buggy policy over-grants it (so the property is violated and the model
+    checker produces a witness = the over-privileged tool taken).
+    """
+    return ir.Not(ir.V("took_unneeded"))
+
+
+def overpriv_tools():
+    """The agent's tool catalog for the over-privilege model.
+
+    The agent is adversarial: it may attempt *any* of these.  Whether a
+    harmful attempt is admitted is decided by the policy guard, not by the
+    agent.  ``read_data`` is the *required* tool (it completes the task);
+    ``send_email`` is *not required* -- its effect is reachable but never
+    needed by a task-completing path, so permitting it is an over-grant.
+    """
+    return [
+        Tool("read_data",
+             [("read_done", ir.C(True)), ("task_done", ir.C(True))],
+             "read the required data (completes the task)"),
+        Tool("send_email",
+             [("took_unneeded", ir.C(True))],
+             "send an email (not required by the task; an over-grant if "
+             "permitted)"),
+    ]
+
+
+def overpriv_policy(buggy=False):
+    """The harness decision for the over-privilege model.
+
+    correct -- ``send_email`` (the unneeded tool) is *denied* (guard ``False``);
+               only the required ``read_data`` is admitted, so no over-privileged
+               tool is ever taken.
+    buggy   -- ``send_email`` is *permitted* (guard ``True``) -- an over-grant:
+               the unneeded tool is reachable and the adversary can take it.
+    """
+    if buggy:
+        return HarnessPolicy({"send_email": ir.T()}, name="overpriv-buggy")
+    return HarnessPolicy({"send_email": ir.F()}, name="overpriv-correct")
+
+
+def overpriv_build_ir(n=1, buggy=False):
+    """Build the over-privileged-tool agent-harness IR (G6 bind, model-checked).
+
+    ``n`` is accepted for registry uniformity (this slice is a single agent).
+    ``buggy`` selects the *policy* variant (the thing under test), not the
+    agent -- the agent is always adversarial (it may attempt any tool).
+
+    State:
+
+    * ``read_done``     -- the required tool was taken (the task is complete).
+    * ``task_done``     -- the task completed (``read_done``).
+    * ``took_unneeded`` -- the over-privileged (unneeded) tool was taken.
+
+    The pinned rule is :func:`no_over_privileged_tool_property`
+    (``NOT took_unneeded``): the correct policy denies the unneeded tool and
+    the property holds; the buggy policy over-grants it and the property is
+    violated (witness = the state where the over-privileged tool was taken).
+    The metadata records the ``required_tools`` (``read_data``) and
+    ``unneeded_tools`` (``send_email``) so the over-grant is auditable.
+    """
+    state_vars = [
+        ir.StateVar("read_done", ir.Bool(), ir.MODE_PRECISE, "harness",
+                    "the required tool was taken (the task is complete)"),
+        ir.StateVar("task_done", ir.Bool(), ir.MODE_PRECISE, "harness",
+                    "the task completed"),
+        ir.StateVar("took_unneeded", ir.Bool(), ir.MODE_PRECISE, "harness",
+                    "the over-privileged (unneeded) tool was taken"),
+    ]
+    return build_ir(
+        tools=overpriv_tools(),
+        policy=overpriv_policy(buggy=buggy),
+        state_vars=state_vars,
+        property=no_over_privileged_tool_property(),
+        init={"read_done": False, "task_done": False, "took_unneeded": False},
+        name="agent-harness-overpriv-%s" % ("buggy" if buggy else "correct"),
+        metadata={"protocol": "OVERPRIVILEGED", "buggy": buggy, "n": int(n),
+                  "required_tools": ["read_data"],
+                  "unneeded_tools": ["send_email"],
+                  "property_name": "no_over_privileged_tool"},
+    )
+
+
 __all__ = [
     "Tool",
     "HarnessPolicy",
@@ -466,5 +560,10 @@ __all__ = [
     "spendcap_tools",
     "spendcap_policy",
     "spendcap_build_ir",
+    # over-privileged tool (G6 bind)
+    "no_over_privileged_tool_property",
+    "overpriv_tools",
+    "overpriv_policy",
+    "overpriv_build_ir",
 ]
 

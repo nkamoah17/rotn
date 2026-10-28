@@ -60,7 +60,12 @@ __all__ = [
     "FINDING_OVERLY_PERMISSIVE",
     "FINDING_OVERLY_RESTRICTIVE",
     "FINDING_INEFFECTIVE",
+    "FINDING_DEADLOCK",
+    "FINDING_LIVELOCK",
+    "FINDING_OVER_PRIVILEGED",
     "ALL_FINDINGS",
+    "BINDS",
+    "bind_finding_for",
     # Severities.
     "SEVERITY_ERROR",
     "SEVERITY_WARNING",
@@ -85,6 +90,10 @@ FINDING_UNREACHABLE_RULES = "unreachable rules"
 FINDING_OVERLY_PERMISSIVE = "Overly Permissive"
 FINDING_OVERLY_RESTRICTIVE = "Overly Restrictive"
 FINDING_INEFFECTIVE = "Ineffective"
+# G6 binds (liveness + privilege), added to the Cedar-AR findings vocabulary.
+FINDING_DEADLOCK = "deadlock"
+FINDING_LIVELOCK = "livelock"
+FINDING_OVER_PRIVILEGED = "over-privileged tool"
 
 #: The full Cedar-AR findings vocabulary, in a stable (documented) order.
 ALL_FINDINGS = (
@@ -93,6 +102,9 @@ ALL_FINDINGS = (
     FINDING_OVERLY_PERMISSIVE,
     FINDING_OVERLY_RESTRICTIVE,
     FINDING_INEFFECTIVE,
+    FINDING_DEADLOCK,
+    FINDING_LIVELOCK,
+    FINDING_OVER_PRIVILEGED,
 )
 
 # Severity levels (a finding is either a hard error or a warning).
@@ -132,7 +144,94 @@ _FINDING_EXPLANATION = {
         "a policy action or a catalog tool is not referenced by the other: "
         "the rule can never fire"
     ),
+    FINDING_DEADLOCK: (
+        "the system reaches a stuck circular-wait state (no action enabled) "
+        "and the task never terminates: a deadlock"
+    ),
+    FINDING_LIVELOCK: (
+        "the task never completes or escalates even though the system keeps "
+        "making progress: a livelock"
+    ),
+    FINDING_OVER_PRIVILEGED: (
+        "the harness permits a tool the task does not require, so the agent "
+        "can take an over-privileged action (an over-grant)"
+    ),
 }
+
+
+# ---------------------------------------------------------------------------
+# The "binds" table (Product 1: "finds attack paths, binds and bypasses")
+# ---------------------------------------------------------------------------
+#: The Cedar-AR "binds" ROTN detects, each mapped to the ROTN property that
+#: detects it and the registry target that *demonstrates* the violation.  This
+#: is the "finds ... binds" claim made real: every row is backed by a property
+#: that the model checker verifies (PROVEN on the correct target, VIOLATED on
+#: the buggy target) and, where applicable, a reusable stuck-state check
+#: (:func:`rot.modelfind.find_deadlock_state`) that separates a *deadlock*
+#: (stuck) from a *livelock* (progressing but never terminating).
+BINDS = {
+    "contradiction": {
+        "finding": FINDING_CONTRADICTIONS,
+        "property": "policy_conformance",
+        "detect": "structural_findings: allowed ∩ denied ≠ ∅",
+        "target": None,
+    },
+    "unreachable rule": {
+        "finding": FINDING_UNREACHABLE_RULES,
+        "property": "policy_conformance",
+        "detect": "structural_findings: a tool not referenced by the policy",
+        "target": None,
+    },
+    "deadlock": {
+        "finding": FINDING_DEADLOCK,
+        "property": "no_deadlock / task_ends_or_escalates",
+        "detect": ("no_deadlock VIOLATED (circular wait reachable) OR a stuck "
+                   "state via find_deadlock_state (no action enabled)"),
+        "target": "deadlock-buggy",
+    },
+    "livelock": {
+        "finding": FINDING_LIVELOCK,
+        "property": "task_ends_or_escalates",
+        "detect": ("task_ends_or_escalates VIOLATED (never ends) AND NOT stuck "
+                   "(find_deadlock_state finds no stuck state)"),
+        "target": "livelock-buggy",
+    },
+    "over-privileged tool": {
+        "finding": FINDING_OVER_PRIVILEGED,
+        "property": "no_over_privileged_tool",
+        "detect": "no_over_privileged_tool VIOLATED (over-grant witness)",
+        "target": "overpriv-buggy",
+    },
+}
+
+#: Direct map: a ROTN property name -> the Cedar-AR finding it binds.
+_PROPERTY_TO_FINDING = {
+    "no_deadlock": FINDING_DEADLOCK,
+    "task_ends_or_escalates": FINDING_LIVELOCK,
+    "no_over_privileged_tool": FINDING_OVER_PRIVILEGED,
+    "policy_conformance": FINDING_CONTRADICTIONS,
+}
+
+
+def bind_finding_for(property_name):
+    """Map a ROTN property name to the Cedar-AR finding it binds.
+
+    This is the "binds" half of the Product 1 claim: given a property the
+    model checker verifies, return the Cedar-AR finding name it corresponds
+    to (e.g. ``no_over_privileged_tool`` -> ``over-privileged tool``).
+
+    Parameters
+    ----------
+    property_name : str
+        A ROTN property name (e.g. ``"no_deadlock"``).
+
+    Returns
+    -------
+    str or None
+        The Cedar-AR finding name, or ``None`` if the property does not bind
+        a finding.
+    """
+    return _PROPERTY_TO_FINDING.get(property_name)
 
 
 def _json_default(obj):

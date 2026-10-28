@@ -160,7 +160,10 @@ class RegisteredInvariantTests(unittest.TestCase):
                     "zab_apply_persisted", "pbft_quorum",
                     "pbft_prepare_before_commit", "no_double_charge",
                     "charge_requires_order", "settle_requires_charge",
-                    "spendcap_within_cap", "no_exfiltration"]
+                    "spendcap_within_cap", "no_exfiltration",
+                    "no_unapproved_irreversible", "no_privilege_escalation",
+                    "no_deadlock", "task_ends_or_escalates",
+                    "no_runaway_budget", "no_over_privileged_tool"]
         self.assertEqual(names(), expected)
 
     def test_agreement_label_and_pinned(self):
@@ -227,9 +230,12 @@ class RegisteredInvariantTests(unittest.TestCase):
         self.assertEqual(inv.rung, RUNG_LOCAL)
 
     def test_all_invariants_have_expected_label(self):
+        # The liveness invariants use the bounded-eventually label; all the
+        # safety invariants use the bounded-depth label.
+        liveness_names = {"bounded_eventually", "task_ends_or_escalates"}
         for name in names():
             inv = get(name, n=3)
-            if name == "bounded_eventually":
+            if name in liveness_names:
                 self.assertEqual(inv.label, LABEL_EVENTUALLY, name)
             else:
                 self.assertEqual(inv.label, LABEL_BOUNDED,

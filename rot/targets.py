@@ -56,6 +56,25 @@ variant that share state and actions and differ only in a seeded decision rule:
     Both expose the one named invariant: ``spendcap_within_cap`` (service-
     local, RUNG_PROTOCOL, blocking).
 
+  G4 governance (rot.approval) -- the approval / delegation / multi-agent
+  orchestration family.  Each is a correct and a buggy variant that share
+  state and actions and differ only in a seeded governance decision:
+    * ``approval-correct`` / ``approval-buggy`` -- the
+      ``NoUnapprovedIrreversible`` rule: the irreversible action executes only
+      once approved.  The buggy harness executes without a valid approval
+      (``no_unapproved_irreversible`` breaks).
+    * ``delegation-correct`` / ``delegation-buggy`` -- no privilege escalation
+      through delegation: the delegatee never executes what the delegator was
+      not entitled to.  The buggy harness delegates regardless (
+      ``no_privilege_escalation`` breaks).
+    * ``orchestration-correct`` / ``orchestration-buggy`` -- no deadlock plus
+      the liveness rule ``TaskEndsOrEscalates``.  The buggy orchestration
+      closes the A -> B -> approver -> A cycle (``no_deadlock`` breaks); the
+      ``escalate`` escape hatch keeps ``task_ends_or_escalates`` reachable.
+    * ``budget-correct`` / ``budget-buggy`` -- no runaway budget across agents:
+      the shared total spend stays within the cap.  The buggy harness accounts
+      local spend only (``no_runaway_budget`` breaks).
+
 Adding a new target is a registration of a builder that returns a ProtocolIR
 plus its property list -- nothing else in the pipeline needs to change.
 Pure stdlib, Python 3.6 compatible.
@@ -69,6 +88,7 @@ import rot.payment as payment
 import rot.spendcap as spendcap
 import rot.agent_step as agent_step
 import rot.agent_harness as agent_harness
+import rot.approval as approval
 
 
 class TargetSpec(object):
@@ -106,6 +126,15 @@ PAYMENT_PROPS = ["no_double_charge", "charge_requires_order",
 AGENT_PROPS = ["policy_conformance", "bounded_eventually"]
 SPENDCAP_PROPS = ["spendcap_within_cap"]
 EXFIL_PROPS = ["no_exfiltration"]
+# G4: approval / delegation / multi-agent orchestration (rot.approval).
+APPROVAL_PROPS = ["no_unapproved_irreversible"]
+DELEGATION_PROPS = ["no_privilege_escalation"]
+ORCHESTRATION_PROPS = ["no_deadlock", "task_ends_or_escalates"]
+BUDGET_PROPS = ["no_runaway_budget"]
+# G5 liveness core (livelock): the real TaskEndsOrEscalates rule.
+LIVELOCK_PROPS = ["task_ends_or_escalates"]
+# G6 over-privileged tool bind (model-checked over-grant).
+OVERPRIV_PROPS = ["no_over_privileged_tool"]
 
 
 def _spec(name, description, buggy, build, properties, default_property,
@@ -253,6 +282,165 @@ _REGISTRY = {
         properties=EXFIL_PROPS,
         default_property="no_exfiltration",
         protocol="EXFILTRATION"),
+    # G4: approval / delegation / multi-agent orchestration (rot.approval).
+    "approval-correct": _spec(
+        "approval-correct",
+        "Approval state machine (NoUnapprovedIrreversible): the irreversible "
+        "action executes only once approved (the correct implementation; "
+        "no_unapproved_irreversible holds).",
+        buggy=False,
+        build=approval.approval_build_ir,
+        properties=APPROVAL_PROPS,
+        default_property="no_unapproved_irreversible",
+        protocol="APPROVAL"),
+    "approval-buggy": _spec(
+        "approval-buggy",
+        "Approval state machine (NoUnapprovedIrreversible): the harness "
+        "executes the irreversible action without a valid approval (a seeded "
+        "bug; no_unapproved_irreversible breaks).",
+        buggy=True,
+        build=approval.approval_build_ir,
+        properties=APPROVAL_PROPS,
+        default_property="no_unapproved_irreversible",
+        protocol="APPROVAL"),
+    "delegation-correct": _spec(
+        "delegation-correct",
+        "Delegation (NoPrivilegeEscalation): the delegatee never executes an "
+        "action the delegator was not entitled to (the correct implementation; "
+        "no_privilege_escalation holds).",
+        buggy=False,
+        build=approval.delegation_build_ir,
+        properties=DELEGATION_PROPS,
+        default_property="no_privilege_escalation",
+        protocol="DELEGATION"),
+    "delegation-buggy": _spec(
+        "delegation-buggy",
+        "Delegation (NoPrivilegeEscalation): the delegator delegates "
+        "regardless of its own entitlement, so the delegatee executes a "
+        "permission the delegator never held (a seeded bug; "
+        "no_privilege_escalation breaks).",
+        buggy=True,
+        build=approval.delegation_build_ir,
+        properties=DELEGATION_PROPS,
+        default_property="no_privilege_escalation",
+        protocol="DELEGATION"),
+    "orchestration-correct": _spec(
+        "orchestration-correct",
+        "Multi-agent orchestration (NoDeadlock + TaskEndsOrEscalates): an "
+        "acyclic A -> B -> approver dependency chain that always unwinds or "
+        "escalates (the correct implementation; no_deadlock holds and "
+        "task_ends_or_escalates is reachable).",
+        buggy=False,
+        build=approval.orchestration_build_ir,
+        properties=ORCHESTRATION_PROPS,
+        default_property="no_deadlock",
+        protocol="ORCHESTRATION"),
+    "orchestration-buggy": _spec(
+        "orchestration-buggy",
+        "Multi-agent orchestration (NoDeadlock + TaskEndsOrEscalates): the "
+        "approver waits on A, closing the A -> B -> approver -> A cycle, so a "
+        "circular-wait (deadlock) state is reachable (a seeded bug; no_deadlock "
+        "breaks; task_ends_or_escalates still reachable via escalate).",
+        buggy=True,
+        build=approval.orchestration_build_ir,
+        properties=ORCHESTRATION_PROPS,
+        default_property="no_deadlock",
+        protocol="ORCHESTRATION"),
+    "budget-correct": _spec(
+        "budget-correct",
+        "Multi-agent budget (NoRunawayBudget): both agents' spend is charged "
+        "against the shared cap, so the shared total stays within it (the "
+        "correct implementation; no_runaway_budget holds).",
+        buggy=False,
+        build=approval.budget_build_ir,
+        properties=BUDGET_PROPS,
+        default_property="no_runaway_budget",
+        protocol="BUDGET"),
+    "budget-buggy": _spec(
+        "budget-buggy",
+        "Multi-agent budget (NoRunawayBudget): each agent accounts only its "
+        "local spend, so the shared total runs past the cap (a seeded bug; "
+        "no_runaway_budget breaks).",
+        buggy=True,
+        build=approval.budget_build_ir,
+        properties=BUDGET_PROPS,
+        default_property="no_runaway_budget",
+        protocol="BUDGET"),
+    # G5 liveness core: livelock (progress without completion).  The correct
+    # model ends or escalates the task (TaskEndsOrEscalates REACHED); the
+    # buggy harness never admits completion or escalation, so the task bounces
+    # forever (TaskEndsOrEscalates NOT_REACHED) -- a livelock, not a deadlock.
+    "livelock-correct": _spec(
+        "livelock-correct",
+        "Livelock (G5 liveness core): the task is admitted to complete (or be "
+        "escalated), so TaskEndsOrEscalates is REACHED (the correct "
+        "implementation; liveness holds).",
+        buggy=False,
+        build=approval.livelock_build_ir,
+        properties=LIVELOCK_PROPS,
+        default_property="task_ends_or_escalates",
+        protocol="LIVELOCK"),
+    "livelock-buggy": _spec(
+        "livelock-buggy",
+        "Livelock (G5 liveness core): the harness never admits completion or "
+        "escalation, so the task bounces between the agents forever "
+        "(TaskEndsOrEscalates NOT_REACHED) -- the system keeps making progress "
+        "(no stuck state), so this is a livelock, not a deadlock.",
+        buggy=True,
+        build=approval.livelock_build_ir,
+        properties=LIVELOCK_PROPS,
+        default_property="task_ends_or_escalates",
+        protocol="LIVELOCK"),
+    # G6 over-privileged tool bind (model-checked over-grant): the correct
+    # policy denies the unneeded tool (no_over_privileged_tool holds); the
+    # buggy policy over-grants it, so the agent can take it and the property
+    # is refuted (witness = the over-privileged tool taken).
+    "overpriv-correct": _spec(
+        "overpriv-correct",
+        "Over-privileged tool (G6 bind): the harness denies the unneeded tool, "
+        "so the agent never takes a tool it was not required to (the correct "
+        "implementation; no_over_privileged_tool holds).",
+        buggy=False,
+        build=agent_harness.overpriv_build_ir,
+        properties=OVERPRIV_PROPS,
+        default_property="no_over_privileged_tool",
+        protocol="OVERPRIVILEGED"),
+    "overpriv-buggy": _spec(
+        "overpriv-buggy",
+        "Over-privileged tool (G6 bind): the harness over-grants the unneeded "
+        "tool, so the (adversarial) agent can take it -- no_over_privileged_tool "
+        "is refuted with a witness (the over-privileged tool taken).",
+        buggy=True,
+        build=agent_harness.overpriv_build_ir,
+        properties=OVERPRIV_PROPS,
+        default_property="no_over_privileged_tool",
+        protocol="OVERPRIVILEGED"),
+    # G6 deadlock bind: the buggy harness makes the two agents wait on each
+    # other, reaching a circular-wait state where NO action is enabled -- the
+    # system is *stuck* (a genuine deadlock).  TaskEndsOrEscalates is
+    # NOT_REACHED (liveness VIOLATED).  This contrasts with the livelock
+    # (also liveness-VIOLATED) which is NOT stuck -- it keeps making progress.
+    "deadlock-correct": _spec(
+        "deadlock-correct",
+        "Deadlock (G6 bind): the task is admitted to complete (or be "
+        "escalated), so it never reaches a stuck circular-wait state and "
+        "TaskEndsOrEscalates is REACHED (the correct implementation).",
+        buggy=False,
+        build=approval.deadlock_build_ir,
+        properties=LIVELOCK_PROPS,
+        default_property="task_ends_or_escalates",
+        protocol="DEADLOCK"),
+    "deadlock-buggy": _spec(
+        "deadlock-buggy",
+        "Deadlock (G6 bind): the harness never admits completion or "
+        "escalation, so the two agents wait on each other and reach a stuck "
+        "circular-wait state (no action enabled) -- a genuine deadlock; "
+        "TaskEndsOrEscalates is NOT_REACHED (liveness VIOLATED).",
+        buggy=True,
+        build=approval.deadlock_build_ir,
+        properties=LIVELOCK_PROPS,
+        default_property="task_ends_or_escalates",
+        protocol="DEADLOCK"),
 }
 
 
@@ -263,7 +451,14 @@ def names():
             "payment-correct", "payment-buggy",
             "spendcap-correct", "spendcap-buggy",
             "agent-step", "agent-step-buggy",
-            "exfil-correct", "exfil-buggy"]
+            "exfil-correct", "exfil-buggy",
+            "approval-correct", "approval-buggy",
+            "delegation-correct", "delegation-buggy",
+            "orchestration-correct", "orchestration-buggy",
+            "budget-correct", "budget-buggy",
+            "livelock-correct", "livelock-buggy",
+            "overpriv-correct", "overpriv-buggy",
+            "deadlock-correct", "deadlock-buggy"]
 
 
 def get(name):
@@ -298,5 +493,7 @@ def default_property(target):
 
 __all__ = ["TargetSpec", "TWOPC_PROPS", "ZAB_PROPS", "PBFT_PROPS",
            "PAYMENT_PROPS", "SPENDCAP_PROPS", "AGENT_PROPS", "EXFIL_PROPS",
+           "APPROVAL_PROPS", "DELEGATION_PROPS", "ORCHESTRATION_PROPS",
+           "BUDGET_PROPS",
            "names", "get", "build",
            "list_properties", "get_property", "default_property"]

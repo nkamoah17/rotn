@@ -36,6 +36,9 @@ Finding -> control mapping
     Ineffective                CC6.6   AIUC-1
     contradictions             CC6.1   AIUC-1
     unreachable rules          CC6.6   AIUC-1
+    deadlock                   CC6.6   AIUC-1   (stuck; task never terminates)
+    livelock                   CC6.6   AIUC-1   (progresses; never terminates)
+    over-privileged tool       CC6.1   AIUC-1   (agent can act beyond policy)
 
 ``AIUC-1`` applies to **every** finding: any condition in which the agent can
 act beyond its policy is an autonomy concern. ``Overly Permissive`` is one
@@ -124,6 +127,10 @@ FINDING_CONTROLS = {
     "Ineffective": (SOC2_CC66, AIUC_1),
     "contradictions": (SOC2_CC61, AIUC_1),
     "unreachable rules": (SOC2_CC66, AIUC_1),
+    # G6 binds (liveness + privilege), added to the Cedar-AR vocabulary.
+    "deadlock": (SOC2_CC66, AIUC_1),
+    "livelock": (SOC2_CC66, AIUC_1),
+    "over-privileged tool": (SOC2_CC61, AIUC_1),
 }
 
 #: Property-level refinement: a specific check refines the SOC 2 control for
