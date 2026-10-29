@@ -460,6 +460,18 @@ class MaxInflightKTests(unittest.TestCase):
         ir = build_ir(buggy=True)
         self.assertEqual(ir.metadata.get("max_inflight"), MAX_INFLIGHT)
 
+    def test_default_k_keeps_race_exposed(self):
+        # Guardrail: the default K must stay >= 2 so the parallel-fire race is
+        # exposed by default.  At K = 1 two in-flight requests cannot coexist
+        # and the buggy policy is masked (see test_k1_masks_the_bug); a
+        # default of 1 would therefore hide the seeded bug by default.  K = 1
+        # remains a valid explicit override -- it must never become the
+        # default.
+        self.assertGreaterEqual(
+            MAX_INFLIGHT, 2,
+            "default max-inflight K must stay >= 2 so the race is exposed by "
+            "default (K = 1 masks it)")
+
 
 class MaxInflightRouterTests(unittest.TestCase):
     """The router passes ``max_inflight`` through to the ``.dw`` spend-cap

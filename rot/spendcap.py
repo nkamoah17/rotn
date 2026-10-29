@@ -87,6 +87,11 @@ CAP = 200
 #: (in-flight) requests (``K``).  A resource limit shared by both variants --
 #: not the policy.  Overridable per run via :func:`build_ir`
 #: (``max_inflight=K``) / the CLI (``--max-inflight K``).
+#:
+#: GUARDRAIL: keep the default >= 2.  At K = 1 two in-flight requests cannot
+#: coexist, so the parallel-fire race is structurally masked -- a default of
+#: 1 would hide the seeded bug by default.  K = 1 stays a valid *explicit*
+#: override (the K-sweep uses it to demonstrate masking), never the default.
 MAX_INFLIGHT = 4
 
 
