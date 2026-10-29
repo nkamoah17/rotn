@@ -13,6 +13,11 @@ Subcommands
   rot corpus    Run the AWS Dogwood spend-cap corpus; emit a coverage matrix.
   rot trace     Emit the RTF v1 deterministic, hashable reasoning trace
                 (a superset of the MCP findings report; --manifest).
+  rot coach     Coach the agent back in bounds, *with a proof* (the
+                CoachingArtifact); --aggregate coaches the *rules* from a
+                decision ledger (the runtime coach, B5).
+  rot runtime   The runtime plane (Product 2): ``eval`` decides one live tool
+                call; ``serve`` runs the MCP tools/call gateway (HTTP).
   rot doctor    Diagnose the installation (Python, package, engines;
                 --deep runs a real end-to-end self-test).
 
@@ -620,6 +625,10 @@ def cmd_coach(args):
     import rot.coach as coachmod
     import rot.dw as dw
 
+    # The runtime coach (B5): coach the *rules* from the decision ledger.
+    if getattr(args, "aggregate", False):
+        return _cmd_coach_aggregate(args)
+
     shape = getattr(args, "shape", "spendcap")
     policy_path = None
 
@@ -693,6 +702,228 @@ def cmd_coach(args):
     if artifact.status() == coachmod.CLOSED:
         return EXIT_PROVEN
     return EXIT_VIOLATED
+
+
+def _cmd_coach_aggregate(args):
+    """``rot coach --aggregate``: coach the *rules* from the ledger (B5).
+
+    Exit codes: ``0`` relaxation SAFE / not applicable, ``1`` UNSAFE,
+    ``2`` UNVERIFIED (fail-closed), ``3`` error.
+    """
+    import rot.runtime.aggregate as agg
+    from rot.runtime.ledger import DecisionLedger, LedgerError
+
+    ledger_path = getattr(args, "ledger", None)
+    if not ledger_path:
+        print("ERROR: --aggregate requires --ledger FILE (a decision ledger)",
+              file=sys.stderr)
+        return EXIT_ERROR
+    if not os.path.exists(ledger_path):
+        print("ERROR: ledger not found: %s" % ledger_path, file=sys.stderr)
+        return EXIT_ERROR
+
+    rule = None
+    rule_name = getattr(args, "rule", None)
+    if not rule_name:
+        # Default: the rule named by --shape (spendcap / exfiltration).
+        rule_name = {"spendcap": "spendcap_within_cap",
+                     "exfiltration": "no_exfiltration"}.get(
+                         getattr(args, "shape", "spendcap"))
+    if rule_name:
+        from rot.runtime.rules import get_rule, RULES
+        if rule_name not in RULES:
+            print("ERROR: unknown rule %r (known: %s)"
+                  % (rule_name, ", ".join(sorted(RULES))), file=sys.stderr)
+            return EXIT_ERROR
+        rule = get_rule(rule_name)
+
+    try:
+        ledger = DecisionLedger.from_file(ledger_path)
+    except (LedgerError, ValueError, IOError, OSError) as exc:
+        print("ERROR: %s" % exc, file=sys.stderr)
+        return EXIT_ERROR
+
+    result = agg.aggregate_ledger(
+        ledger, rule=rule,
+        max_states=getattr(args, "max_states", None) or 100000)
+
+    out = getattr(args, "out", None)
+    if out:
+        out_dir = os.path.dirname(os.path.abspath(out))
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
+        with open(out, "w") as fh:
+            fh.write(result.to_json() + "\n")
+        if not getattr(args, "quiet", False):
+            print("  artifact  : %s" % out)
+    else:
+        sys.stdout.write(result.to_json() + "\n")
+
+    if not getattr(args, "quiet", False):
+        body = result.body
+        print(_BAR)
+        print("  COACHING (runtime): ledger %s -- %d blocks of %d"
+              % (ledger_path, body["ledger"]["blocked"],
+                 body["ledger"]["entries"]))
+        print("  top blockers: %s"
+              % (", ".join("%s(%d)" % (b["rule"], b["count"])
+                           for b in body["top_blockers"]) or "(none)"))
+        print("  relaxation  : %s" % body["relaxation"]["status"])
+        print("  explanation : %s" % body["relaxation"]["explanation"])
+        print("  hash        : %s" % result.hash)
+        print(_BAR)
+
+    status = result.body["relaxation"]["status"]
+    if status in (agg.SAFE, agg.NOT_APPLICABLE):
+        return EXIT_PROVEN
+    if status == agg.UNSAFE:
+        return EXIT_VIOLATED
+    return EXIT_UNKNOWN  # UNVERIFIED -- fail-closed
+
+
+def cmd_runtime(args):
+    """``rot runtime``: dispatch to ``eval`` / ``serve``."""
+    which = getattr(args, "runtime_command", None)
+    if which == "eval":
+        return cmd_runtime_eval(args)
+    if which == "serve":
+        return cmd_runtime_serve(args)
+    print("ERROR: specify 'rot runtime eval' or 'rot runtime serve'",
+          file=sys.stderr)
+    return EXIT_ERROR
+
+def _parse_kv(pairs, where):
+    """Parse ``k=v`` pairs into a dict (values: JSON if possible, else str)."""
+    out = {}
+    for pair in (pairs or []):
+        if "=" not in pair:
+            print("ERROR: %s: expected k=v, got %r" % (where, pair),
+                  file=sys.stderr)
+            return None
+        key, _, raw = pair.partition("=")
+        try:
+            out[key] = json.loads(raw)
+        except ValueError:
+            out[key] = raw
+    return out
+
+
+def _load_rule(args):
+    """Resolve ``--rule`` (id) to a concrete rule; None on error (printed)."""
+    from rot.runtime.rules import get_rule, RULES
+
+    name = getattr(args, "rule", None) or "spendcap_within_cap"
+    if name not in RULES:
+        print("ERROR: unknown rule %r (known: %s)"
+              % (name, ", ".join(sorted(RULES))), file=sys.stderr)
+        return None
+    return get_rule(name)
+
+
+def cmd_runtime_eval(args):
+    """``rot runtime eval``: decide one tool call with the deterministic core.
+
+    Exit codes: ``0`` allowed, ``1`` blocked, ``3`` error.
+    """
+    rule = _load_rule(args)
+    if rule is None:
+        return EXIT_ERROR
+    tool = getattr(args, "tool", None)
+    if not tool:
+        print("ERROR: specify --tool NAME (the tool call to decide)",
+              file=sys.stderr)
+        return EXIT_ERROR
+    args_kv = _parse_kv(getattr(args, "arg", None), "--arg")
+    if args_kv is None:
+        return EXIT_ERROR
+    state = {}
+    state_raw = getattr(args, "state", None)
+    if state_raw:
+        try:
+            state = json.loads(state_raw)
+        except ValueError:
+            print("ERROR: --state must be a JSON object, e.g. "
+                  "{\"completed\": 0, \"inflight\": 3}", file=sys.stderr)
+            return EXIT_ERROR
+        if not isinstance(state, dict):
+            print("ERROR: --state must be a JSON object", file=sys.stderr)
+            return EXIT_ERROR
+
+    from rot.runtime.core import RuntimeGuard, ALLOWED
+
+    decision = RuntimeGuard(rule).decide(
+        request={"tool": tool, "args": dict(args_kv), "state": state})
+    sys.stdout.write(decision.to_json() + "\n")
+    if not getattr(args, "quiet", False):
+        verdict = "ALLOWED" if decision.decision == ALLOWED else "BLOCKED"
+        print(_BAR)
+        print("  %s: %s (rule %s)" % (verdict, tool, rule.rule_id))
+        if decision.blocked:
+            print("  why       : %s" % decision.refusal.why)
+            print("  to-proceed: %s" % decision.refusal.to_proceed)
+        print(_BAR)
+    return EXIT_PROVEN if decision.allowed else EXIT_VIOLATED
+
+
+def cmd_runtime_serve(args):
+    """``rot runtime serve``: the MCP ``tools/call`` gateway (HTTP, stdlib)."""
+    rule = _load_rule(args)
+    if rule is None:
+        return EXIT_ERROR
+
+    from rot.runtime.mcp import McpGateway, build_http_server
+    from rot.runtime.ledger import DecisionLedger
+
+    manifest = None
+    manifest_path = getattr(args, "manifest", None)
+    if manifest_path:
+        from rot.mcp_manifest import McpManifest, McpManifestError
+        try:
+            with open(manifest_path, "r") as fh:
+                manifest = McpManifest.from_dict(json.load(fh))
+        except (IOError, OSError, ValueError, McpManifestError) as exc:
+            print("ERROR: %s" % exc, file=sys.stderr)
+            return EXIT_ERROR
+
+    ledger = None
+    ledger_path = getattr(args, "ledger", None)
+    if ledger_path:
+        from rot.runtime.ledger import LedgerError
+        if os.path.exists(ledger_path):
+            try:
+                ledger = DecisionLedger.from_file(ledger_path)
+            except (LedgerError, ValueError) as exc:
+                print("ERROR: %s" % exc, file=sys.stderr)
+                return EXIT_ERROR
+        else:
+            ledger = DecisionLedger()
+
+    gateway = McpGateway(default_rule=rule, manifest=manifest, ledger=ledger)
+    host = getattr(args, "host", "127.0.0.1")
+    port = getattr(args, "port", 8765)
+    server = build_http_server(gateway, host=host, port=port)
+    if not getattr(args, "quiet", False):
+        print(_BAR)
+        print("  ROTN runtime gateway (MCP tools/call interceptor)")
+        print("  rule      : %s" % rule.rule_id)
+        print("  manifest  : %s" % (manifest_path or "(none)"))
+        print("  ledger    : %s" % (ledger_path or "(in-memory)"))
+        print("  listening : http://%s:%d/  (POST JSON-RPC; GET info)"
+              % (host, server.server_address[1]))
+        print(_BAR)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+        if ledger is not None and ledger_path:
+            with open(ledger_path, "w") as fh:
+                fh.write(ledger.to_jsonl())
+            if not getattr(args, "quiet", False):
+                print("  ledger  : %s (%d entries)"
+                      % (ledger_path, len(ledger)))
+    return EXIT_PROVEN
 
 
 # ---------------------------------------------------------------------------
@@ -1695,8 +1926,59 @@ def main(argv=None):
                    help="spend cap override (spend-cap .dw policies)")
     p.add_argument("--window", type=int, default=None, metavar="W",
                    help="temporal window W (spend-cap .dw policies)")
+    # The runtime coach (B5): coach the *rules* from the decision ledger.
+    p.add_argument("--aggregate", action="store_true",
+                   help="coach the rules from the decision ledger: which "
+                        "prompts/tool-descriptions cause blocks, which rules "
+                        "block legitimate work, and a re-proof that any "
+                        "relaxation stays safe (B5)")
+    p.add_argument("--ledger", default=None, metavar="FILE",
+                   help="decision ledger (JSONL or JSON) to aggregate "
+                        "(required with --aggregate)")
+    p.add_argument("--max-states", type=int, default=None, metavar="N",
+                   help="bounded-search budget for the relaxation re-proof")
+    p.add_argument("--rule", default=None, metavar="ID",
+                   help="rule id for the relaxation re-proof "
+                        "[default: derived from --shape]")
     p.add_argument("--quiet", action="store_true",
                    help="suppress the human summary")
+
+    p = sub.add_parser(
+        "runtime",
+        help="the runtime plane (Product 2): enforce rules on live tool "
+             "calls (eval / serve)")
+    rt_sub = p.add_subparsers(dest="runtime_command")
+
+    pe = rt_sub.add_parser("eval",
+                           help="decide one tool call; emit the refusal JSON")
+    pe.add_argument("--rule", default=None, metavar="ID",
+                    help="rule id [default: spendcap_within_cap]")
+    pe.add_argument("--tool", default=None, metavar="NAME",
+                    help="the tool name being called (required)")
+    pe.add_argument("--arg", action="append", default=None, metavar="K=V",
+                    help="a tool argument (repeatable; JSON value if parseable)")
+    pe.add_argument("--state", default=None, metavar="JSON",
+                    help="the guard's state as a JSON object, e.g. "
+                         "{\"completed\": 0, \"inflight\": 3}")
+    pe.add_argument("--quiet", action="store_true",
+                    help="suppress the human summary")
+
+    ps = rt_sub.add_parser("serve",
+                           help="the MCP tools/call gateway (HTTP JSON-RPC)")
+    ps.add_argument("--rule", default=None, metavar="ID",
+                    help="rule id [default: spendcap_within_cap]")
+    ps.add_argument("--manifest", default=None, metavar="FILE",
+                    help="MCP Manifest v1 JSON (first-class input: the tool "
+                         "catalog this gateway governs)")
+    ps.add_argument("--ledger", default=None, metavar="FILE",
+                    help="decision ledger file (JSONL/JSON); appended to, "
+                         "persisted on exit")
+    ps.add_argument("--host", default="127.0.0.1", metavar="HOST",
+                    help="bind host [default: 127.0.0.1]")
+    ps.add_argument("--port", type=int, default=8765, metavar="PORT",
+                    help="bind port [default: 8765]")
+    ps.add_argument("--quiet", action="store_true",
+                    help="suppress the human summary")
 
     p = sub.add_parser(
         "site",
@@ -1725,7 +2007,8 @@ def main(argv=None):
     return {"check": cmd_check, "replay": cmd_replay, "ci": cmd_ci,
             "demo": cmd_demo, "corpus": cmd_corpus,
             "license": cmd_license, "trace": cmd_trace,
-            "coach": cmd_coach, "site": cmd_site,
+            "coach": cmd_coach, "runtime": cmd_runtime,
+            "site": cmd_site,
             "doctor": cmd_doctor}[args.command](args)
 
 
