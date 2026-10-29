@@ -1,0 +1,16 @@
+{
+  "dw_window": "24h",
+  "max_inflight": 4,
+  "n_steps": 1,
+  "policy_source": "C:\\Users\\jeren\\Documents\\KAMANU\\ROTN\\samples\\spendcap-buggy.dw",
+  "property_kind": "safety",
+  "property_name": "spendcap_within_cap",
+  "target": "policy-spendcap-buggy.dw",
+  "tools_source": null,
+  "verdict": "violated",
+  "window": 4,
+  "witness": {
+    "completed": 0,
+    "inflight": 3
+  }
+}

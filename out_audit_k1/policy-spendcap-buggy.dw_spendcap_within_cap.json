@@ -1,0 +1,15 @@
+{
+  "advisory": "MASKED_AT_LOW_K",
+  "advisory_message": "K=1 cannot express 2 concurrent in-flight requests (the minimal overshoot for amount=100, cap=200).  A settled-only (parallel-fire) race is NOT expressible at this bound, so this PROVEN does not rule it out -- re-check at K>=2 before treating the policy as safe.",
+  "dw_window": "24h",
+  "max_inflight": 1,
+  "n_steps": 1,
+  "policy_source": "C:\\Users\\jeren\\Documents\\KAMANU\\ROTN\\samples\\spendcap-buggy.dw",
+  "property_kind": "safety",
+  "property_name": "spendcap_within_cap",
+  "target": "policy-spendcap-buggy.dw",
+  "tools_source": null,
+  "verdict": "proven",
+  "window": 4,
+  "witness": null
+}
