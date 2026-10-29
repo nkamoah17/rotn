@@ -31,10 +31,40 @@ deterministic, so the whole pipeline runs in a bare Python environment.
 
 ## Hosted replay
 
-Every `rot check` run emits a **deterministic, hashed trace** (`trace.json`)
-that replays as an **interactive proof** on GitHub Pages — a verdict card,
-the counterexample graph (Cytoscape), the step-by-step attack timeline with
-narration, the Cedar-AR findings, and the SOC 2 / AIUC control mapping:
+Every `rot check` run emits a **deterministic, hashed trace** (`trace.json`,
+**RTF v1** — a pure function of the manifest + budget + horizon, pinned by a
+top-level SHA-256) that replays as an **interactive proof** on GitHub Pages.
+The site (`site/`) is a zero-framework, zero-build, zero-CDN presentation of
+that single artifact — it renders the trace and adds **no verification logic**.
+
+A replay page shows, as applicable to the trace:
+
+- **Verdict hero** — PROVEN / VIOLATED / UNKNOWN with the pinned invariant,
+  budget tier, horizon, and the trace hash (re-verifiable byte-for-byte).
+- **State-space / manifest graph** (Cytoscape, vendored) — the counterexample
+  attack path, with an **animated replay** that lights it step by step so the
+  in-flight amount visibly grows past the cap at the crossing moment.
+- **Audit timeline** — the ordered, colour-coded steps; for spend-cap traces a
+  **spend-cap chart** (in-flight exposure vs. cap, crossing highlighted) and the
+  **decision tree** (guard + per-step admit/deny checks).
+- **Narration** — the engine-generated, blog-ready plain-English narrative.
+- **Findings & controls** — Cedar-AR findings with severity, evidence, and
+  their SOC 2 / AIUC control chips.
+- **Compliance** — the SOC 2 / AIUC controls touched, with the evidence linking
+  each control to the findings that triggered it.
+- **Coaching** — the CoachingArtifact (Rule + Proof + Coach): Detect → Explain
+  → Correct → Re-check → Close, green when the correction re-proved, amber when
+  it did not.
+- **Compare + K-sweep** — buggy vs. correct side by side, with an animated
+  **K-sweep** over the concurrency bound `K` (`--max-inflight`) the verdict
+  depends on (`K=1` masks the race; `K≥2` exposes it).
+
+The design system (`site/app/style.css`) is hand-written CSS with light / dark
+/ **high-contrast** themes, a responsive layout, and accessibility hooks
+(`:focus-visible`, `prefers-reduced-motion`, `forced-colors`). It works offline
+from disk (`file://`) via a deterministic `data/traces.js` registry (`rot site`,
+`rot/sitegen.py`) and prefers `fetch('data/<id>.trace.json')` over HTTP — the
+JSON traces stay the source of truth.
 
 > **Live replay: [caravel.github.io/rot-verify](https://caravel.github.io/rot-verify/)**
 >
@@ -636,6 +666,22 @@ scripts/            # run_agent_mode.sh (CI matrix for Agent Mode)
 docs/               # agent-mode.md, phase3-eval.md (Step 3.7),
                     # novelty.md (B.3), corpus-eval.md (B.2),
                     # compliance.md (Phase C, SOC 2 / AIUC control map)
+site/                 # the hosted replay site (Ship plane) -- zero framework / build / CDN
+  index.html          # landing + gallery; #/replay/<id> replay page
+  404.html            # not-found page
+  app/app.js          # boot, hash routing, gallery, verdict hero, replay assembly
+  app/graph.js        # state-space / manifest graph (Cytoscape) + animated attack-path replay
+  app/timeline.js     # audit timeline (colour-coded steps)
+  app/narration.js    # blog-ready narration transcript
+  app/findings.js     # findings & SOC 2 / AIUC control chips
+  app/compliance.js   # compliance panel (controls + evidence)
+  app/coach.js        # CoachingArtifact panel (Detect -> Explain -> Correct -> Re-check -> Close)
+  app/compare.js      # compare mode + animated K-sweep (max-inflight bound)
+  app/spendcap.js     # spend-cap chart + decision tree
+  app/style.css       # design system (light / dark / high-contrast, responsive, a11y)
+  vendor/cytoscape.min.js  # vendored Cytoscape (no CDN)
+  data/*.trace.json   # RTF v1 traces (source of truth)
+  data/traces.js      # deterministic offline registry (rot site / rot/sitegen.py)
 tests/
   test_cegar.py             # CEGAR mapping + bounded refinement
   test_pipeline.py          # end-to-end (symbolic) + CLI exit codes

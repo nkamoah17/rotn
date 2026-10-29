@@ -42,6 +42,7 @@
 15. [File Map](#15-file-map)
 16. [Glossary](#16-glossary)
 17. [Agent Mode: policy-driven verification (Cedar / Dogwood / AgentStep)](#17-agent-mode-policy-driven-verification)
+18. [The Replay Site (Ship Plane)](#18-the-replay-site-ship-plane)
 
 ---
 
@@ -745,6 +746,12 @@ When changing the emitter, keep these Snowcat requirements intact (§9):
 | `samples/agent.cedar`, `samples/policy.json`, `samples/tools.json` | Agent Mode (§17) — shipped sample Cedar and Dogwood policies. |
 | `docs/agent-mode.md` | Agent Mode (§17) — full user guide, threat model, bounded-liveness caveats, CLI reference. |
 | `scripts/run_agent_mode.sh` | Agent Mode (§17) — CI / quick-start matrix (bash, exit 0 on all-pass). |
+| `rot/trace.py` | The Ship plane (§18) — RTF v1: the deterministic, hashable Reasoning Trace Format (the site's data contract). |
+| `rot/sitegen.py` | The Ship plane (§18) — mirrors `data/*.trace.json` into the offline `data/traces.js` registry (deterministic). |
+| `site/` | The Ship plane (§18) — the hosted replay site: `index.html`, `404.html`, `app/*.js` (verdict hero, graph, timeline, spend-cap, narration, findings, compliance, coach, compare/K-sweep), `app/style.css` (design system), `vendor/cytoscape.min.js`, `data/*.trace.json`. |
+| `tests/test_site.py` | The Ship plane (§18) — scaffold + RTF-v1 + registry-mirror + determinism invariants for `site/`. |
+| `scripts/gen_site_data.py` | The Ship plane (§18) — thin CLI wrapper over `rot.sitegen` (regenerate `data/traces.js`). |
+| `.github/workflows/pages.yml` | The Ship plane (§18) — regenerates the site data (`python -m rot site`) and deploys `site/` to GitHub Pages on push to `main`. |
 | `ROTN_Technical_Report.md` | This report. |
 
 ---
@@ -835,6 +842,99 @@ The **bounded-liveness** twin, `rot/frontends/policy/agent_step_liveness.py`, re
 - **CI:** `scripts/run_agent_mode.sh` runs the five checks above and exits 0 on all-pass.
 - **Spend-cap demo:** `demo.ps1` / `demo.sh` run the three-phase `.dw` policy demo (PROVEN → VIOLATED → trifecta audit + manifest) and are exit-code aware; see `docs/spendcap-demo.md` and `docs/spendcap-usage.md`.
 - **Tests:** `test_agent_step.py`, `test_agent_step_liveness.py`, `test_cedar_frontend.py`, `test_policy_pipeline.py`, `test_liveness.py`, `test_verdicts_liveness.py`.
+
+## 18. The Replay Site (Ship Plane)
+
+A verification run is only as convincing as its *evidence*. The **replay site**
+(`site/`) is the **Ship plane**: a pure static bundle that replays a
+verification run as an interactive, auditable proof. It is a **pure function of
+the RTF trace** — it renders what the engine already recorded and **adds no
+verification logic**. The site is zero-framework, zero-build-step, and
+zero-CDN (Cytoscape is vendored), so it runs from a `pip install .` checkout,
+from disk, or from GitHub Pages with no toolchain.
+
+### 18.1 The data contract (RTF v1)
+
+The single contract between the engine and the site is the **Reasoning Trace
+Format v1** (`rot/trace.py`, `data/*.trace.json`):
+
+- **Deterministic & hashable.** A trace is a pure function of the manifest +
+  budget + horizon (no timestamps, no random IDs, stable ordering), so the same
+  input always produces the same bytes. It carries a top-level `hash` (SHA-256
+  of its own canonical body) that pins the exact reasoning, so a trace can be
+  referenced, compared, and re-verified byte-for-byte.
+- **Self-contained.** It carries the provenance (schema, `manifest_id`, source
+  hash, policy, budget tier, horizon), the gate verdict, the engines that ran,
+  the reasoning (graph, counterexample, decision tree, timeline), the
+  blog-ready narration, and the findings (each with its SOC 2 / AIUC controls).
+- **Superset of the findings report.** It reuses `rot.mcp_adapter` (structural
+  checks + findings) and `rot/compliance.py` (SOC 2 / AIUC mapping); it only
+  re-assembles them into one deterministic artifact.
+
+The site reads the trace and presents it; it never re-derives the verdict.
+
+### 18.2 What a replay page shows
+
+Each panel is one module under `site/app/` and mounts only when the trace
+carries the relevant section (fail-closed: an absent section is not rendered,
+never faked):
+
+| Panel | Module | Renders |
+|-------|--------|---------|
+| Verdict hero | `app.js` | the gate verdict (PROVEN / VIOLATED / UNKNOWN), the pinned invariant, budget tier, horizon, and the trace hash. |
+| State-space / manifest graph | `graph.js` | the counterexample as an attack path (Cytoscape); an **animated replay** lights the path step by step so the in-flight amount visibly grows past the cap at the crossing moment. |
+| Audit timeline | `timeline.js` | the ordered, colour-coded audit steps. |
+| Spend-cap chart + decision tree | `spendcap.js` | total in-flight exposure (settled + in-flight · AMOUNT) vs. cap over the counterexample steps, crossing highlighted; plus the guard expression and per-step admit/deny checks. |
+| Narration | `narration.js` | the engine-generated, blog-ready plain-English narrative as a line-highlighted transcript. |
+| Findings & controls | `findings.js` | the Cedar-AR findings with severity, message, evidence, and their SOC 2 / AIUC control chips. |
+| Compliance | `compliance.js` | the SOC 2 / AIUC controls the trace touched, with the evidence linking each control to the findings that triggered it (normalises spend-cap and manifest traces). |
+| Coaching | `coach.js` | the CoachingArtifact (Rule + Proof + Coach): the 5-step loop Detect → Explain → Correct → Re-check → Close; green when the correction re-proved (closed), amber when it did not (open). |
+| Compare + K-sweep | `compare.js` | side-by-side buggy vs. correct, plus an **animated K-sweep** over the concurrency-pool bound `K` (`--max-inflight`) the verdict depends on — `K=1` masks the race (false negative), `K≥2` exposes it. |
+
+### 18.3 Offline-first architecture
+
+Browsers block `fetch()` of local files over `file://`. The site works around
+this without a server or build step:
+
+- `rot/sitegen.py` (CLI: `rot site`, wrapper `scripts/gen_site_data.py`) mirrors
+  `data/*.trace.json` into a single deterministic, script-loadable registry
+  `data/traces.js` (`window.ROT_TRACES`), loaded via a plain `<script>` tag —
+  so the gallery works offline from disk.
+- When served over HTTP (GitHub Pages), `app.js` prefers
+  `fetch('data/<id>.trace.json')` and falls back to the registry — the JSON
+  traces stay the **source of truth**.
+- Cytoscape is vendored at `vendor/cytoscape.min.js` (no CDN); if it is missing
+  the graph degrades to a static list.
+
+### 18.4 Design system & accessibility
+
+`site/app/style.css` is hand-written CSS (no framework):
+
+- **Theming** — a token set with **light**, **dark**, and **high-contrast**
+  modes (dark via `prefers-color-scheme`, explicit `data-theme` override, and
+  `forced-colors` for Windows High Contrast).
+- **Responsive** — the panels, gallery, and compare view collapse gracefully at
+  860px and 560px breakpoints.
+- **Accessibility** — `:focus-visible` outlines, `prefers-reduced-motion`
+  (disables the spinner and transitions), and semantic landmarks
+  (`<header>`/`<main>`/`<footer>`, a skip-link, `aria-*` on panels).
+
+### 18.5 Publishing & tests
+
+- **Publish** — `.github/workflows/pages.yml` (Phase I) runs on push to `main`:
+  it regenerates the site's RTF trace data from the committed sample policies
+  with the *current* engine (`python -m rot site`, pure stdlib — no Java, no Z3,
+  no network, no package install), uploads the `site/` bundle, and deploys it to
+  GitHub Pages (`https://caravel.github.io/rot-verify/`).
+- **Tests** — `tests/test_site.py` asserts the scaffold files exist, that
+  `index.html` wires the vendored Cytoscape + app modules + registry, that
+  `app.js` implements the `#/` and `#/replay/<id>` routes and the `file://`
+  registry fallback, that every `data/*.trace.json` is valid RTF v1 (top-level
+  hash = SHA-256 of the canonical body), that `data/traces.js` mirrors the
+  trace JSON exactly, and that the site data generator is deterministic
+  (byte-identical on re-run).
+
+---
 
 ## Appendix A — WP1–WP6 Evidence & Honest Fallbacks
 
