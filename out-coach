@@ -1,0 +1,74 @@
+{
+  "close": {
+    "discharge": "the corrected policy is proven safe within the bound (K=4, W=4): the coaching is discharged",
+    "status": "closed"
+  },
+  "correct": {
+    "buggy_guard": "completed + 100 <= 200 and inflight < 4",
+    "delta": "response -> request (charge in-flight against the cap)",
+    "event_kind": "request",
+    "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 4",
+    "policy": {
+      "action": "Transfer",
+      "buggy": false,
+      "cap": 200,
+      "event_kind": "request",
+      "policy_id": "spendcap_buggy",
+      "window": "24h"
+    }
+  },
+  "detect": {
+    "engine": "symbolic",
+    "n_states": 20,
+    "status": "violated",
+    "witness": {
+      "completed": 0,
+      "inflight": 3
+    }
+  },
+  "explain": {
+    "cap": 200,
+    "exposure": 300,
+    "rationale": "The policy sums over 'response' events, so it charges only settled requests. In the witness (completed=0, inflight=3) the 3 in-flight requests are invisible to the decision: each of the 3 parallel fires sees completed=0 and is admitted, pushing total exposure to 300 -- past the cap of 200.",
+    "root_cause": "the spend_ok guard sums over 'response' events only; in-flight (issued, unsettled) requests are not charged against the cap",
+    "witness": {
+      "completed": 0,
+      "inflight": 3
+    }
+  },
+  "hash": "92c2cbe7f7b12944b7d1a4d9ea905b5c0331473d83cdfd00d1d74f4061621839",
+  "policy": {
+    "action": "Transfer",
+    "amount": 100,
+    "cap": 200,
+    "event_kind": "response",
+    "max_inflight": 4,
+    "policy_id": "spendcap_buggy",
+    "window": 4
+  },
+  "recheck": {
+    "engine": "symbolic",
+    "n_states": 6,
+    "status": "proven",
+    "witness": null
+  },
+  "rot_version": "0.1.0",
+  "schema": "caravel.coach/v1",
+  "status": "closed",
+  "to_proceed": {
+    "action": "spend_ok",
+    "blocked": true,
+    "blockers": [
+      "not (completed + inflight * 100 + 100 <= 200)"
+    ],
+    "conditions": [
+      "completed + inflight * 100 + 100 <= 200"
+    ],
+    "explanation": "to proceed with 'spend_ok' from state {'completed': 0, 'inflight': 3}, the guard's currently-false condition(s) must hold: completed + inflight * 100 + 100 <= 200",
+    "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 4",
+    "state": {
+      "completed": 0,
+      "inflight": 3
+    }
+  }
+}

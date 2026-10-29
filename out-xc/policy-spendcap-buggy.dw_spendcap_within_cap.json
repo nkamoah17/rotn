@@ -1,0 +1,233 @@
+{
+  "target": "policy-spendcap-buggy.dw",
+  "property_name": "spendcap_within_cap",
+  "engine": "crosscheck",
+  "config": {
+    "engine": "crosscheck",
+    "resolved_engine": "crosscheck",
+    "tlc_jar": "C:\\Users\\jeren\\Downloads\\TLAToolbox-1.7.1-win32.win32.x86_64\\toolbox\\tla2tools.jar",
+    "tlc_available": true,
+    "tlc_timeout": 120,
+    "tlc_depth": null,
+    "tlc_workers": 1,
+    "max_states": 200000,
+    "cegar_max_iter": 6,
+    "liveness_horizon": 12,
+    "participant_bound": null,
+    "env_bound": null,
+    "itf_trace": null,
+    "apalache_enabled": false,
+    "apalache_jar": "C:\\apalache_install\\apalache-0.62.3\\lib\\apalache.jar",
+    "apalache_java": "C:\\java\\jdk-21.0.12.1+1\\bin\\java.exe",
+    "apalache_available": true,
+    "apalache_timeout": 120,
+    "apalache_length": null,
+    "out_dir": "out-xc",
+    "work_dir": "out-xc\\work",
+    "llm_enabled": false,
+    "llm_base_url": null,
+    "llm_api_key_env": "OPENAI_API_KEY",
+    "llm_model": null,
+    "llm_timeout": 120,
+    "llm_max_turns": 8
+  },
+  "abstraction": {
+    "property_name": "spendcap_within_cap",
+    "keep": [
+      "completed",
+      "inflight"
+    ],
+    "hide": [],
+    "bound": [
+      {
+        "var": "completed",
+        "kind": "bound",
+        "rationale": "wide integer domain [0..200] bounded for the model check",
+        "soundness": "bounded integer domain is a sound restriction; recorded as an assumption to be discharged",
+        "note": "bounded"
+      }
+    ],
+    "drop": [],
+    "assumptions": [
+      "Variable 'completed' domain bounded to [0..200] (sound restriction; verify the bound is sufficient for the property).",
+      "Property-directed abstraction: only variables in the free-variable closure of the pinned property (and their data dependences) are retained; all others are existentially hidden. This is a sound over-approximation for safety verification."
+    ],
+    "decisions": [
+      {
+        "var": "completed",
+        "kind": "keep",
+        "rationale": "in the property's free-variable closure, or required to preserve a property-relevant value through some enabled action",
+        "soundness": "keeping is always sound (no over-approximation introduced)",
+        "note": "property-relevant"
+      },
+      {
+        "var": "inflight",
+        "kind": "keep",
+        "rationale": "in the property's free-variable closure, or required to preserve a property-relevant value through some enabled action",
+        "soundness": "keeping is always sound (no over-approximation introduced)",
+        "note": "property-relevant"
+      },
+      {
+        "var": "completed",
+        "kind": "bound",
+        "rationale": "wide integer domain [0..200] bounded for the model check",
+        "soundness": "bounded integer domain is a sound restriction; recorded as an assumption to be discharged",
+        "note": "bounded"
+      }
+    ]
+  },
+  "verdict": {
+    "status": "violated",
+    "property_name": "spendcap_within_cap",
+    "engine": "crosscheck",
+    "counterexample": {
+      "completed": 0,
+      "inflight": 3
+    },
+    "assumptions": [
+      "cross-check policy: PROVEN/VIOLATED require ALL THREE engines (SMT/Z3, TLC, policy-direct) to agree",
+      "SMT (Z3) engine reported: violated",
+      "TLC engine reported: violated",
+      "policy-direct engine reported: violated"
+    ],
+    "soundness": [
+      "no PROVEN/VIOLATED is issued on a single engine's answer alone",
+      "disagreement or UNKNOWN/ERROR on any engine forces UNKNOWN",
+      "model independence: policy_direct uses a different model family (direct policy vs IR state-machine)"
+    ],
+    "evidence": {
+      "engine": "smtz3",
+      "model": "concrete-state BFS (rot.modelfind)",
+      "z3": "sat",
+      "crosscheck": {
+        "policy": "PROVEN/VIOLATED require ALL THREE engines to agree; disagreement or UNKNOWN -> UNKNOWN",
+        "smt": {
+          "engine": "smtz3",
+          "model": "ir_state_machine",
+          "status": "violated",
+          "normalized": "violated",
+          "note": "",
+          "counterexample": {
+            "completed": 0,
+            "inflight": 3
+          }
+        },
+        "tlc": {
+          "engine": "tlc",
+          "model": "ir_state_machine",
+          "status": "violated",
+          "normalized": "violated",
+          "note": "TLC found a counterexample",
+          "n_states": 5,
+          "complete": true,
+          "witness": {
+            "completed": 0,
+            "inflight": 3
+          }
+        },
+        "policy_direct": {
+          "engine": "policy_direct",
+          "model": "direct_policy",
+          "status": "violated",
+          "normalized": "violated",
+          "note": "policy_direct: counterexample found (steps=4)",
+          "witness": {
+            "completed": 0,
+            "inflight": 3
+          }
+        },
+        "apalache": null,
+        "independence": {
+          "engine": "SMT/Z3, TLC, Apalache are independent model checkers (different engines) over the IR state-machine model",
+          "model": "policy_direct is a different model family (direct Z3 encoding of the policy obligation) checked by the same Z3 engine -- a soundness leak in one model family cannot hide a bug in the other"
+        },
+        "joined": "violated",
+        "witness_match": true
+      }
+    },
+    "cegar_iterations": 0,
+    "n_states": 0,
+    "note": "cross-check: SMT (Z3), TLC, and policy-direct all found a counterexample",
+    "property_kind": "safety",
+    "violation_code": null,
+    "trace": [
+      [
+        {
+          "completed": 0,
+          "inflight": 0
+        },
+        "spend_ok",
+        "completed + 100 <= 200 and inflight < 3",
+        "",
+        {
+          "inflight": 1
+        }
+      ],
+      [
+        {
+          "completed": 0,
+          "inflight": 1
+        },
+        "spend_ok",
+        "completed + 100 <= 200 and inflight < 3",
+        "",
+        {
+          "inflight": 2
+        }
+      ],
+      [
+        {
+          "completed": 0,
+          "inflight": 2
+        },
+        "spend_ok",
+        "completed + 100 <= 200 and inflight < 3",
+        "",
+        {
+          "inflight": 3
+        }
+      ]
+    ]
+  },
+  "invariant": {
+    "name": "spendcap_within_cap",
+    "description": "policy cross-check: spendcap_within_cap",
+    "kind": "safety",
+    "label": "bounded_depth",
+    "pinned": true,
+    "bound": null,
+    "n_traces": null,
+    "rung": 2,
+    "policy_clause": null,
+    "permission": "block",
+    "blocking_permission": true,
+    "expression": {
+      "tag": "bin",
+      "op": "<=",
+      "left": {
+        "tag": "bin",
+        "op": "+",
+        "left": {
+          "tag": "var",
+          "name": "completed"
+        },
+        "right": {
+          "tag": "bin",
+          "op": "*",
+          "left": {
+            "tag": "var",
+            "name": "inflight"
+          },
+          "right": {
+            "tag": "const",
+            "value": 100
+          }
+        }
+      },
+      "right": {
+        "tag": "const",
+        "value": 200
+      }
+    }
+  }
+}
