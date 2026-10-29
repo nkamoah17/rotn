@@ -184,11 +184,16 @@ def _read_attack(path):
 
 
 def _narrative(policy, target, prop, kind, status, witness, steps,
-               note, report_path, attack_path):
+               note, report_path, attack_path,
+               adv_code=None, adv_msg=None):
     """Print the human-readable verdict block."""
     print(_BAR)
     print("  ROTN verdict: %s" % status.upper())
     print(_BAR)
+    if adv_code:
+        print("  WARNING   : %s" % adv_code)
+        if adv_msg:
+            print("             %s" % adv_msg)
     print("  policy    : %s" % policy)
     print("  target    : %s" % target)
     print("  property  : %s (%s)" % (prop, kind))
@@ -895,6 +900,12 @@ def cmd_check(args):
     status, witness, note = _verify(ir, args)
     code = _code_for(status)
 
+    # K-masking advisory (A1): a cap/budget PROVEN at a K that cannot express
+    # the minimal overshoot is a *silent false-negative* risk (the K=1 trap).
+    # Loud, non-fatal -- it does not change the verdict or the exit code.
+    from rot.verdicts import k_masking_advisory
+    adv_code, adv_msg = k_masking_advisory(ir.metadata, status)
+
     steps = []
     attack_path = None
     if status == "violated" and witness is not None:
@@ -930,6 +941,9 @@ def cmd_check(args):
             report["window"] = ir.metadata["window"]
         if ir.metadata.get("dw_window") is not None:
             report["dw_window"] = ir.metadata["dw_window"]
+        if adv_code:
+            report["advisory"] = adv_code
+            report["advisory_message"] = adv_msg
         if note:
             report["note"] = note
         with open(report_path, "w") as f:
@@ -937,7 +951,8 @@ def cmd_check(args):
 
     if not args.quiet:
         _narrative(policy, target, prop, kind, status, witness, steps,
-                   note, report_path, attack_path)
+                   note, report_path, attack_path,
+                   adv_code=adv_code, adv_msg=adv_msg)
     return code
 
 
@@ -1320,6 +1335,31 @@ def cmd_corpus(args):
         print("ERROR: corpus dir not found: %s" % corpus_dir, file=sys.stderr)
         return EXIT_ERROR
 
+    # A.4 (opt-in): fetch the remaining upstream corpus before discovering.
+    # Needs network.  An explicit --fetch that cannot reach upstream is a hard
+    # error (the user asked to fetch and it did not happen); --fetch-dry-run
+    # degrades softly (a warning) so an offline dry-run is never blocked.
+    if getattr(args, "fetch", False):
+        from rot import dogwood_fetch
+        try:
+            fetched, skipped, failures = dogwood_fetch.fetch_all(
+                dogwood_fetch.UPSTREAM_ROOTS, corpus_dir,
+                dry_run=getattr(args, "fetch_dry_run", False))
+            print("upstream fetch: %d new, %d already present, "
+                  "%d failure(s)" % (len(fetched), len(skipped),
+                                    len(failures)))
+            for f in failures:
+                print("  fetch FAIL %s: %s" % f, file=sys.stderr)
+            if getattr(args, "fetch_dry_run", False):
+                print("  (dry-run: nothing downloaded)")
+        except Exception as exc:  # noqa: BLE001
+            print("NOTE: upstream fetch skipped (no network?): %s" % exc,
+                  file=sys.stderr)
+            if not getattr(args, "fetch_dry_run", False):
+                # An explicit --fetch that could not even list upstream is a
+                # hard error (the user asked to fetch); dry-run degrades softly.
+                return EXIT_ERROR
+
     policies = []
     for dirpath, dirnames, filenames in os.walk(corpus_dir):
         dirnames.sort()
@@ -1362,6 +1402,14 @@ def cmd_corpus(args):
                     entry["witness"] = witness
                     if note:
                         entry["note"] = note
+                    # K-masking advisory (A1): a PROVEN cap/budget policy at a
+                    # K below the minimal overshoot is a silent false-negative
+                    # (the K=1 trap).  Loud, non-fatal -- the PROVEN stands.
+                    from rot.verdicts import k_masking_advisory
+                    adv_code, adv_msg = k_masking_advisory(ir.metadata, status)
+                    if adv_code:
+                        entry["advisory"] = adv_code
+                        entry["advisory_message"] = adv_msg
                 except ProductTooLarge as exc:
                     # Honest out-of-scope: the reachable state space exceeds the
                     # bounded-checking budget. A known limitation, not a bug.
@@ -1384,6 +1432,8 @@ def cmd_corpus(args):
                 w = repr(entry["witness"])
         elif entry.get("note"):
             w = entry["note"]
+        if entry.get("advisory"):
+            w = (w + "  " if w else "") + "ADVISORY: %s" % entry["advisory"]
         print("  %-40s %-14s %-6s %-13s %s" % (
             name[:40], entry["shape"] or "-",
             "yes" if entry["lowerable"] else "no", v, w))
@@ -1561,6 +1611,13 @@ def main(argv=None):
                    help="bounded concurrency pool K")
     p.add_argument("--out", default=None, metavar="DIR",
                    help="output dir for corpus_matrix.json")
+    p.add_argument("--fetch", action="store_true",
+                   help="opt-in: fetch the remaining upstream Dogwood corpus "
+                        "(SHA-provenanced) before running the matrix "
+                        "[needs network]")
+    p.add_argument("--fetch-dry-run", action="store_true",
+                   help="with --fetch: list what would be fetched, download "
+                        "nothing (still needs network to list upstream)")
 
     p = sub.add_parser("license",
                        help="manage Caravel licenses (Phase D): "

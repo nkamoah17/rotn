@@ -30,7 +30,7 @@ No Java and no TLC jar are required.
 | 1 | `--policy .../spendcap-correct.dw` | exit 0 — **PROVEN** | settled + in-flight amount never exceeds the cap |
 | 2 | `--policy .../spendcap-buggy.dw`   | exit 1 — **VIOLATED** | a parallel-fire burst overshoots the cap (witness emitted) |
 | 3 | `--trifecta --manifest --out out`  | exit 0 — **PROVEN** | three-facet audit (safety + liveness + conformance) + deterministic manifest + D6 risk flag (CLEAR) |
-| 4 | `--policy .../spendcap-buggy.dw --engine crosscheck` | exit 1 — **VIOLATED** | SMT/Z3 **and** TLC agree on the counterexample (skipped if TLC absent) |
+| 4 | `--policy .../spendcap-buggy.dw --engine crosscheck` | exit 1 — **VIOLATED** | SMT/Z3 + TLC + policy-direct agree on the counterexample (skipped if TLC absent) |
 | 5 | `--policy .../spendcap-buggy.dw --max-inflight {1,2,3}` | 0, 1, 1 | **K-dependence**: K=1 masks the bug, K≥2 exposes it (witness shape tracks K) |
 
 ## Run it

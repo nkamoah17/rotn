@@ -4,9 +4,9 @@
 
 <h1 align="center">ROTN — Regression-detection Oracle via Trace Non-emptiness</h1>
 
-> **CARAVEL** — *Agents are replacing the software that used to enforce our rules. We make the rules explicit, prove agents can't break them — even when compromised — and coach agents back in bounds when they try.*
+> **CARAVEL** — *Agents are replacing the software that used to enforce our rules. We make the rules explicit, prove the policy holds even when the model attempts to break it, and coach the agent back in bounds when it does.*
 
-**ROTN** (R**o**gression-detection **O**racle via **T**race **N**on-emptiness) is a small, fully offline, **Python 3.6-compatible**, pure-stdlib verification platform that checks distributed-transaction and replication protocols against named safety invariants - and, in **Agent Mode**, verifies an autonomous agent's action choices against **Cedar** / **Dogwood** policies (safety, non-vacuity, bounded liveness) - using **three independent engines** and a **bounded CEGAR** loop. Each protocol ships a *correct* variant (the invariant holds) and a *seeded-buggy* variant (the invariant is violated); the pipeline must discriminate them and, for the buggy one, hand back a **concrete, IR-feasible counterexample**.
+**ROTN** (R**o**gression-detection **O**racle via **T**race **N**on-emptiness) is a small, fully offline, **Python 3.6-compatible**, pure-stdlib verification platform that checks distributed-transaction and replication protocols against named safety invariants - and, in **Agent Mode**, verifies an autonomous agent's action choices against **Cedar** / **Dogwood** policies (safety, non-vacuity, bounded liveness) - using **three independent engines (SMT/Z3 + TLC + policy-direct), cross-confirmed by Apalache-ITF**, and a **bounded CEGAR** loop. Each protocol ships a *correct* variant (the invariant holds) and a *seeded-buggy* variant (the invariant is violated); the pipeline must discriminate them and, for the buggy one, hand back a **concrete, IR-feasible counterexample**.
 
 It is organised in verification planes over one sound core:
 
@@ -423,7 +423,7 @@ AWS's tooling: it is an **absence of a soundness-of-intent guarantee**.
 
 Full analysis (K-sweep, corpus coverage matrix, honest limits, and what ROTN
 does not claim): [`docs/novelty.md`](docs/novelty.md). The corpus coverage
-evaluation (per-policy verdicts, aggregate metrics, the honest 11-vs-59 note,
+evaluation (per-policy verdicts, aggregate metrics, the honest 13-vs-59 note,
 and the gaps): [`docs/corpus-eval.md`](docs/corpus-eval.md).
 
 ---

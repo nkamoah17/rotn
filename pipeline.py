@@ -732,6 +732,13 @@ def _cmd_policy(args):
             print("ERROR: unknown property kind %r" % kind, file=sys.stderr)
             return EXIT_ERROR
 
+    # K-masking advisory (A1): a cap/budget PROVEN at a K that cannot express
+    # the minimal overshoot is a *silent false-negative* risk (the K=1 trap).
+    # This is a loud, non-fatal warning -- it does not change the verdict or
+    # the exit code, it makes the bound visible.
+    from rot.verdicts import k_masking_advisory
+    adv_code, adv_msg = k_masking_advisory(ir.metadata, status)
+
     # 3. Auditable report (JSON) + human summary.
     report = {
         "target": target_name,
@@ -743,6 +750,9 @@ def _cmd_policy(args):
         "tools_source": ir.metadata.get("tools_source"),
         "witness": witness,
     }
+    if adv_code:
+        report["advisory"] = adv_code
+        report["advisory_message"] = adv_msg
     if ir.metadata.get("max_inflight") is not None:
         report["max_inflight"] = ir.metadata["max_inflight"]
     if ir.metadata.get("window") is not None:
@@ -783,6 +793,9 @@ def _cmd_policy(args):
                   % (ir.metadata["window"],
                      ir.metadata.get("dw_window") or "n/a"))
         print("  verdict   : %s" % status.upper())
+        if adv_code:
+            print("  WARNING   : %s" % adv_code)
+            print("             %s" % adv_msg)
         if note:
             print("  note      : %s" % note)
         if witness:
@@ -1013,6 +1026,15 @@ def _cmd_classify(args):
             entry["witness"] = witness
         else:
             entry["verdict"] = "UNKNOWN"
+        # K-masking advisory (A1): a SAFE (proven) cap/budget policy at a K
+        # below the minimal overshoot is a *silent false-negative* risk (the
+        # K=1 trap).  Loud, non-fatal -- it does not change the SAFE verdict.
+        if entry["verdict"] == "SAFE":
+            from rot.verdicts import k_masking_advisory
+            adv_code, adv_msg = k_masking_advisory(ir.metadata, "proven")
+            if adv_code:
+                entry["advisory"] = adv_code
+                entry["advisory_message"] = adv_msg
         results.append(entry)
 
     n_safe = sum(1 for r in results if r["verdict"] == "SAFE")
@@ -1067,6 +1089,11 @@ def _cmd_classify(args):
             print("  %-*s  %-8s  %-8s  %s" % (name_w, name, verdict, event, wit))
             if r["error"]:
                 print("  %*s    error: %s" % (name_w + 2, "", r["error"]))
+            if r.get("advisory"):
+                print("  %*s    WARNING: %s" % (name_w + 2, "", r["advisory"]))
+                if r.get("advisory_message"):
+                    print("  %*s      %s" % (name_w + 4, "",
+                                             r["advisory_message"]))
         print(bar)
         print("  %d SAFE, %d UNSAFE, %d UNKNOWN, %d ERROR"
               % (n_safe, n_unsafe, n_unknown, n_error))

@@ -140,22 +140,28 @@ as such, not hidden.
   Other temporal shapes in
   the upstream dogwood corpus are not yet lowerable and would be reported
   `OUT_OF_SCOPE` (honestly) if fetched.
-- **Only 11 policies present.** The upstream dogwood corpus is larger. Covering
+- **Only 13 policies present.** The upstream dogwood corpus is larger. Covering
   it is a separate fetch-and-verify task (§7).
 
 ## 7. Limitations & follow-up
 
-- **11 policies, not 59.** The corpus present is 11 policies. The roadmap's
+- **13 policies, not 59.** The corpus present is 13 policies. The roadmap's
   "59 fixtures" does not match the on-disk corpus. To cover the full upstream
-  dogwood corpus, fetch the additional `tests/passing/temporal_only/corpus/*`
-  policies (with SHA-verified provenance) and re-run `rot corpus`. That is a
-  separate task, deliberately not conflated with this evaluation.
+  dogwood corpus, run the **opt-in** fetch — `rot corpus --fetch` (or
+  `python -m rot.dogwood_fetch --dry-run` to preview) — which auto-discovers
+  the remaining upstream policy directories, downloads each file, and
+  **SHA-verifies every byte** against its git blob hash before writing, with a
+  per-directory `PROVENANCE.json`. It is idempotent (already-present policies
+  are skipped) and needs network. After fetching, re-run `rot corpus` to
+  extend the matrix. That is a separate task, deliberately not conflated with
+  this evaluation (which is built on the 13 policies present).
 - **Bounded, not unbounded.** Every verdict is within the state-space budget
   and the in-flight bound `K`. Beyond that, ROTN reports `OUT_OF_SCOPE`.
 - **5 shapes.** The lowering covers the five shapes above; other shapes are
   honestly `OUT_OF_SCOPE`.
 - **Follow-ups:** (1) raise the budget or add a symmetry reduction to bring
-  `refund_budget` in-scope; (2) fetch the full upstream corpus and re-evaluate;
+  `refund_budget` in-scope; (2) run the opt-in `rot corpus --fetch` to pull the
+  full upstream corpus (SHA-provenanced) and re-evaluate;
   (3) extend the lowering to additional temporal shapes.
 
 ## 8. Reproduce
@@ -165,12 +171,15 @@ cd ROTN
 rot corpus                    # matrix to stdout + out/corpus/
 # or, without installing:
 python -m rot corpus
+# opt-in: pull the remaining upstream corpus (needs network), then re-run:
+rot corpus --fetch            # or `python -m rot.dogwood_fetch --dry-run` to preview
 ```
 
 Exit `0` (the matrix is data; `VIOLATED` rows are honest findings, not tool
 failures). Artifacts: `out/corpus/corpus_matrix.json`,
 `out/corpus/corpus_matrix.md`, this document.
 
-Files: `rot/__main__.py` (`cmd_corpus`), `rot/lower.py` (general lowering),
+Files: `rot/__main__.py` (`cmd_corpus`), `rot/dogwood_fetch.py` (opt-in
+corpus fetch), `rot/lower.py` (general lowering), `tests/test_dogwood_fetch.py`,
 this document.
 

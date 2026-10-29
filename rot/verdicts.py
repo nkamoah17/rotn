@@ -56,6 +56,20 @@ LIVENESS_BOUND_EXCEEDED = "LIVENESS_BOUND_EXCEEDED"
 DEADLOCK = "DEADLOCK"
 _VIOLATION_CODES = (POLICY_DENIAL, LIVENESS_BOUND_EXCEEDED, DEADLOCK)
 
+# Advisory codes -- loud, non-fatal warnings attached to a verdict so a bounded
+# PROVEN is never a *silent* false-negative.  An advisory does NOT change the
+# verdict status or the process exit code; it makes the bound that produced the
+# verdict visible to a human (and to the manifest):
+#   MASKED_AT_LOW_K -- a cap/budget property was checked at a concurrency pool
+#                      bound K smaller than the minimal overshoot count, so a
+#                      settled-only (parallel-fire) race is not expressible in
+#                      the state space.  A PROVEN at that K is technically
+#                      correct *within the bound* but does not rule out the
+#                      race -- re-check at K >= the minimal overshoot count
+#                      (the K=1 trap).
+MASKED_AT_LOW_K = "MASKED_AT_LOW_K"
+_ADVISORY_CODES = (MASKED_AT_LOW_K,)
+
 
 def _strip(d, *keys):
     return {k: v for k, v in d.items() if k not in keys}
@@ -68,19 +82,112 @@ def _fmt_state(d):
     return ", ".join("%s=%s" % (k, d[k]) for k in sorted(d))
 
 
+def minimal_overshoot_count(amount, cap):
+    """The smallest number of concurrent in-flight requests whose total
+    amount, added to the settled amount a settled-only decision rule would
+    still admit, exceeds the cap.
+
+    This is the spend-cap "minimal overshoot count": the fewest in-flight
+    requests that can push ``completed + inflight * amount`` past ``cap``.  It
+    is what the concurrency pool bound ``K`` (``max_inflight``) must be at
+    least as large as for a settled-only (``response``-triggered) policy's
+    parallel-fire race to be *expressible* in the state space.
+
+    The settled-only guard admits a request while ``completed + amount <= cap``
+    (i.e. ``completed <= cap - amount``), so the maximum settled amount that
+    coexists with an admitted in-flight request is ``c_max = max(0, cap -
+    amount)``.  A violation needs ``c_max + m * amount > cap``, i.e.
+    ``m * amount > cap - c_max``; the smallest such ``m`` is
+    ``(cap - c_max) // amount + 1``.
+
+    For the canonical spend-cap (``amount = 100``, ``cap = 200``) this is
+    ``2`` -- exactly why ``K = 1`` (inflight bounded to 1) *masks* the
+    parallel-fire race while ``K >= 2`` exposes it.
+    """
+    amount = int(amount)
+    cap = int(cap)
+    if amount <= 0:
+        return 1
+    c_max = max(0, cap - amount)
+    need = cap - c_max  # the amount of overshoot still required
+    if need <= 0:
+        return 1
+    return need // amount + 1
+
+
+def _is_cap_budget(metadata):
+    """True if the IR metadata names a cap/budget (within-cap) property."""
+    if not metadata:
+        return False
+    if metadata.get("family") == "SPENDCAP":
+        return True
+    if metadata.get("property_name") == "spendcap_within_cap":
+        return True
+    return metadata.get("protocol") in (
+        "SPENDCAP", "COUNT_WINDOW", "EXISTS_SUM", "REFUND_BUDGET")
+
+
+def k_masking_advisory(metadata, status):
+    """Return ``(code, message)`` if a cap/budget property is PROVEN at a
+    concurrency pool bound ``K`` that cannot express the minimal overshoot,
+    else ``(None, None)``.
+
+    This is the **loud K-masking advisory** (Phase A, A1): a settled-only
+    (``response``-triggered) spend-cap policy checked at ``K`` below the
+    minimal overshoot count returns ``PROVEN`` because the parallel-fire race
+    is not expressible in the state space -- a *silent false-negative*.  The
+    advisory makes that bound visible (in the manifest and as a human warning)
+    without changing the verdict or the exit code.
+
+    ``metadata`` is the IR metadata dict; ``status`` is the verdict status
+    string (``"proven"`` / ``"violated"`` / ``"unknown"``).  The advisory
+    fires only on a positive (``proven``) verdict for a settled-only cap/budget
+    policy whose ``max_inflight`` (``K``) is below :func:`minimal_overshoot_count`.
+    """
+    if status != "proven":
+        return None, None
+    if not _is_cap_budget(metadata):
+        return None, None
+    # The advisory is about the *settled-only* (race-prone) guard -- the one a
+    # low K masks.  A correct (in-flight-charging) policy is safe at every K,
+    # so there is nothing to mask.
+    if not metadata.get("buggy"):
+        return None, None
+    amount = metadata.get("amount")
+    cap = metadata.get("cap")
+    k = metadata.get("max_inflight")
+    if amount is None or cap is None or k is None:
+        return None, None
+    k = int(k)
+    m_min = minimal_overshoot_count(amount, cap)
+    if k < m_min:
+        message = (
+            "K=%d cannot express %d concurrent in-flight requests (the minimal "
+            "overshoot for amount=%d, cap=%d).  A settled-only (parallel-fire) "
+            "race is NOT expressible at this bound, so this PROVEN does not "
+            "rule it out -- re-check at K>=%d before treating the policy as "
+            "safe." % (k, m_min, amount, cap, m_min))
+        return MASKED_AT_LOW_K, message
+    return None, None
+
+
 class Verdict(object):
     """The auditable outcome of one verification run."""
 
     def __init__(self, status, property_name, engine,
                  counterexample=None, assumptions=None, soundness=None,
                  evidence=None, cegar_iterations=0, n_states=0, note="",
-                 property_kind=None, violation_code=None, trace=None):
+                 property_kind=None, violation_code=None, trace=None,
+                 advisories=None):
         if status not in _STATUSES:
             raise ValueError("bad verdict status %r" % (status,))
         if property_kind is not None and property_kind not in _PROPERTY_KINDS:
             raise ValueError("bad property kind %r" % (property_kind,))
         if violation_code is not None and violation_code not in _VIOLATION_CODES:
             raise ValueError("bad violation code %r" % (violation_code,))
+        for _adv in (advisories or ()):
+            if _adv not in _ADVISORY_CODES:
+                raise ValueError("bad advisory code %r" % (_adv,))
         self.status = status
         self.property_name = property_name
         self.engine = engine
@@ -93,6 +200,10 @@ class Verdict(object):
         self.note = note
         self.property_kind = property_kind
         self.violation_code = violation_code
+        # Loud, non-fatal advisory codes (e.g. MASKED_AT_LOW_K).  These do not
+        # change the status or the exit code; they make a bound that produced a
+        # bounded PROVEN visible so it is never a *silent* false-negative.
+        self.advisories = list(advisories or [])
         # Step-by-step counterexample trace: a list of
         # (state, action, guard, policy_clause, delta) 5-tuples.  Set on
         # VIOLATED verdicts; each step records the state *before* the action,
@@ -150,6 +261,7 @@ class Verdict(object):
             "note": self.note,
             "property_kind": self.property_kind,
             "violation_code": self.violation_code,
+            "advisories": self.advisories,
             "trace": self.trace,
         }
 
@@ -186,6 +298,14 @@ class Verdict(object):
             lines.append("- Property kind: `%s`" % self.property_kind)
         if self.violation_code:
             lines.append("- Violation code: `%s`" % self.violation_code)
+        if self.advisories:
+            lines.append("")
+            lines.append("## Advisories (loud, non-fatal)")
+            lines.append("")
+            for a in self.advisories:
+                lines.append("- **%s** -- see the human warning; this bound "
+                             "does not change the verdict." % a)
+            lines.append("")
         lines.append("")
         if self.counterexample is not None:
             lines.append("## Counterexample")
@@ -298,5 +418,7 @@ class VerdictReport(object):
 __all__ = ["PROVEN", "VIOLATED", "UNKNOWN", "UNSOUND", "ERROR",
            "KIND_SAFETY", "KIND_LIVENESS",
            "POLICY_DENIAL", "LIVENESS_BOUND_EXCEEDED", "DEADLOCK",
+           "MASKED_AT_LOW_K",
+           "minimal_overshoot_count", "k_masking_advisory",
            "Verdict", "VerdictReport"]
 

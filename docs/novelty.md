@@ -288,13 +288,13 @@ repo root; `python -m rot` is the entry point, `rot` once installed):
   ```
   rot corpus
   ```
-  Discovers 11 policies under `tests/fixtures/aws_dogwood/spendcap` and
+  Discovers 13 policies under `tests/fixtures/aws_dogwood/spendcap` and
   writes [`out/corpus/corpus_matrix.json`](../out/corpus/corpus_matrix.json)
   and [`out/corpus/corpus_matrix.md`](../out/corpus/corpus_matrix.md).
-  Current summary: **3 PROVEN, 7 VIOLATED, 1 OUT_OF_SCOPE**, exit `0`
+  Current summary: **4 PROVEN, 8 VIOLATED, 1 OUT_OF_SCOPE**, exit `0`
   (the matrix is data; `VIOLATED` rows are honest findings, not tool
   failures). The full evaluation (per-policy verdicts, aggregate metrics,
-  the honest 11-vs-59 note, and the gaps) is in
+  the honest 13-vs-59 note, and the gaps) is in
   [`corpus-eval.md`](corpus-eval.md).
 - **The parallel-fire bug (Section 4).**
   ```
@@ -322,7 +322,9 @@ deterministically.
 **Cedar and Dogwood answer "is this request admissible against the history so
 far?"; ROTN answers "can this policy, under concurrency, ever reach a state
 that violates it?" — by lowering the policy into a bounded model and
-checking *all* reachable states, and by honestly reporting `OUT_OF_SCOPE`
+checking *all* reachable states with **three independent engines (SMT/Z3 +
+TLC + policy-direct), cross-confirmed by Apalache-ITF**, and by honestly
+reporting `OUT_OF_SCOPE`
 when it cannot — and when it *does* find a violating state, it coaches the
 agent back in bounds *with a proof* that the corrected behaviour is safe: the
 layer between "the policy says" and "the agent does" that neither the policy

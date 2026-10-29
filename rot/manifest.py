@@ -80,14 +80,28 @@ class Manifest(object):
     overall:
         Dict ``{"all_proven", "any_violated", "result"}`` where ``result`` is
         one of ``"proven" | "violated" | "unknown"``.
+    advisories:
+        Optional list of loud, non-fatal advisory codes (e.g.
+        ``MASKED_AT_LOW_K`` from :mod:`rot.verdicts`) recording a *bound* that
+        produced the verdict.  They do not change ``overall``; they make the
+        bound visible so a bounded ``PROVEN`` is never a silent
+        false-negative.  Defaults to ``[]``.
     """
 
-    def __init__(self, policy, environment, verdicts, witness, overall):
+    def __init__(self, policy, environment, verdicts, witness, overall,
+                 advisories=None):
         self.policy = policy
         self.environment = environment
         self.verdicts = verdicts
         self.witness = witness
         self.overall = overall
+        # Loud, non-fatal advisory codes (e.g. MASKED_AT_LOW_K).  These record
+        # a *bound* that produced the verdict (e.g. a K too small to express
+        # the minimal overshoot) so a bounded PROVEN is never a *silent*
+        # false-negative.  They do not change ``overall`` -- they make the
+        # bound visible.  Part of the hashable body so the manifest_id covers
+        # them.
+        self.advisories = list(advisories or [])
         # The manifest_id is the SHA-256 over the canonical body (everything
         # EXCEPT the manifest_id itself), so it is self-consistent by
         # construction and independent of serialization order.
@@ -103,6 +117,7 @@ class Manifest(object):
             "verdicts": self.verdicts,
             "witness": self.witness,
             "overall": self.overall,
+            "advisories": self.advisories,
         }
 
     def to_dict(self):
@@ -147,12 +162,17 @@ def _primary_witness(result):
     return None
 
 
-def build_manifest(policy, buggy=False, horizon=12, max_states=200000):
+def build_manifest(policy, buggy=False, horizon=12, max_states=200000,
+                   advisories=None):
     """Run the trifecta audit and wrap the result in a deterministic manifest.
 
     Parameters mirror :func:`rot.trifecta.audit` so the manifest is a pure
-    function of ``(policy, buggy, horizon, max_states)`` -- the same inputs
-    always yield the same manifest (and hence the same ``manifest_id``).
+    function of ``(policy, buggy, horizon, max_states, advisories)`` -- the
+    same inputs always yield the same manifest (and hence the same
+    ``manifest_id``).  ``advisories`` is an optional list of loud, non-fatal
+    advisory codes (e.g. ``MASKED_AT_LOW_K``) recording a bound that produced
+    the verdict; it defaults to ``[]`` (the agent-step audit has no K bound to
+    mask, so no advisory fires there).
     """
     from rot import trifecta
 
@@ -183,7 +203,7 @@ def build_manifest(policy, buggy=False, horizon=12, max_states=200000):
     }
 
     return Manifest(policy_dict, environment, verdicts,
-                    _primary_witness(result), overall)
+                    _primary_witness(result), overall, advisories=advisories)
 
 
 def verify(policy, buggy=False, horizon=12, max_states=200000,
