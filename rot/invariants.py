@@ -54,6 +54,7 @@ import rot.spendcap as spendcap
 import rot.agent_step as agent_step
 import rot.agent_harness as agent_harness
 import rot.approval as approval
+from rot.verdicts import DEADLOCK  # violation code stamped on no_deadlock refutations
 
 
 # ---------------------------------------------------------------------------
@@ -66,9 +67,20 @@ LABEL_EVENTUALLY   = "bounded_eventually"
 
 #: Invariant kinds.  Safety predicates must hold in **every** reachable state
 #: (``SymbolicEngine.check``); liveness predicates must be **reachable**
-#: within a bounded horizon (``SymbolicEngine.reach_within``).
+#: within a bounded horizon (``SymbolicEngine.reach_within``).  A *constraint*
+#: is a state constraint (a ``TypeInvariant``-style well-formedness predicate):
+#: it is not a property to be checked -- it *restricts* the state space, so a
+#: state that violates it is **dropped** from the reachable set (never a
+#: ``VIOLATED`` counterexample).  In the TLA+ spec it is emitted as a state
+#: constraint (``INVARIANT`` in the ``.cfg``), never as a ``PROPERTY``.
 KIND_SAFETY   = "safety"
 KIND_LIVENESS = "liveness"
+KIND_CONSTRAINT = "constraint"
+
+#: The three well-formed property kinds.  ``KIND_CONSTRAINT`` is the
+#: state-constraint kind (well-formedness); the other two are temporal
+#: properties (safety / liveness).
+KINDS = (KIND_SAFETY, KIND_LIVENESS, KIND_CONSTRAINT)
 
 #: The set of labels that are strong enough to block an MR (when also pinned).
 BLOCKING_LABELS = frozenset((LABEL_INDUCTIVE, LABEL_BOUNDED, LABEL_EVENTUALLY))
@@ -127,11 +139,18 @@ class Invariant(object):
         in-flight) must not exceed the cap").  Recorded on counterexample
         trace steps (``Verdict.trace``) so a reported violation can be tied
         back to the clause it breaks.  ``None`` when not set.
+    violation_code : str or None
+        The :data:`rot.verdicts` violation code this invariant's violation
+        carries (e.g. ``DEADLOCK`` for ``no_deadlock``).  When set, the CEGAR
+        layer stamps VIOLATED verdicts with this code instead of the default
+        (``POLICY_DENIAL`` for safety / ``LIVENESS_BOUND_EXCEEDED`` for
+        liveness).  ``None`` when not set (the default applies).
     """
 
     def __init__(self, name, description, expression, kind="safety",
                  label=None, pinned=False, bound=None, n_traces=None,
-                 rung=RUNG_PROTOCOL, policy_clause=None):
+                 rung=RUNG_PROTOCOL, policy_clause=None,
+                 violation_code=None):
         if label is not None and label not in (LABEL_INDUCTIVE,
                                                LABEL_BOUNDED,
                                                LABEL_LIKELY,
@@ -153,6 +172,7 @@ class Invariant(object):
         self.n_traces = int(n_traces) if n_traces is not None else None
         self.rung = int(rung)
         self.policy_clause = policy_clause
+        self.violation_code = violation_code
 
     # -- blocking permission -------------------------------------------------
     def declared_permission(self):
@@ -211,6 +231,88 @@ class Invariant(object):
     def __repr__(self):
         return "<Invariant %s (label=%r, pinned=%r)>" % (
             self.name, self.label, self.pinned)
+
+
+# ---------------------------------------------------------------------------
+# G0: well-formedness (TypeInvariant) -- a state constraint, not a property
+# ---------------------------------------------------------------------------
+def _wf_clause(v):
+    """The well-formedness clause for one state variable, from its domain.
+
+    Returns an :class:`rot.ir.Expr` (or ``None`` for an unhandled domain).
+
+    * ``IntRange`` [lo, hi]  -> ``lo <= v <= hi`` (covers *domains* and the
+      *budget bounds* of a budget/spend variable declared ``[0, cap]``);
+    * ``Bool``               -> ``v \\in {TRUE, FALSE}`` (a *domain* check);
+    * ``Enum`` {v1, ...}     -> ``v \\in {v1, ...}`` (*label membership* when the
+      enum is a label set, *history shape* when its values are the well-formed
+      shapes of a history variable).
+    """
+    d = v.domain
+    if isinstance(d, ir.IntRange):
+        return ir.And(ir.BinOp(">=", ir.V(v.name), ir.C(d.lo)),
+                      ir.BinOp("<=", ir.V(v.name), ir.C(d.hi)))
+    if isinstance(d, ir.Bool):
+        return ir.BinOp("in", ir.V(v.name), ir.C([True, False]))
+    if isinstance(d, ir.Enum):
+        return ir.BinOp("in", ir.V(v.name), ir.C(list(d.values)))
+    return None
+
+
+def type_invariant(model):
+    """``TypeInvariant`` -- the model's well-formedness *state constraint*.
+
+    This is a **state constraint** (``kind == KIND_CONSTRAINT``), *not* a
+    temporal property: it *restricts* the reachable state space to well-formed
+    states rather than being a claim checked over behaviours. A state that
+    violates it is **dropped** from the reachable set (never a ``VIOLATED``
+    counterexample), and in the TLA+ spec it is emitted as a *constraint*
+    (baked into ``Init``/``Next`` and listed as ``INVARIANT``), never as a
+    ``PROPERTY`` (see ``rot.emitter.emit_spec``).
+
+    The predicate is the conjunction, over every declared state variable, of
+    the well-formedness clause for its domain, covering the four
+    well-formedness categories:
+
+    * **domains**         -- an ``IntRange`` variable ``v`` satisfies
+                            ``lo <= v <= hi``; a ``Bool`` variable is a boolean;
+    * **budget bounds**   -- a budget/spend variable declared ``IntRange``
+                            ``[0, cap]`` is non-negative and within the cap;
+    * **label membership** -- an ``Enum`` label variable is a declared member
+                            of its label set (``v \\in {labels}``);
+    * **history shape**   -- a history variable (an ``Enum`` whose values are
+                            the well-formed shapes) holds one of them
+                            (``v \\in {shapes}``).
+
+    Parameters
+    ----------
+    model : rot.ir.ProtocolIR
+        The protocol model whose declared state-variable domains define the
+        well-formedness predicate.
+    """
+    conjs = []
+    for v in model.variables:
+        clause = _wf_clause(v)
+        if clause is not None:
+            conjs.append(clause)
+    expr = ir.And(*conjs) if conjs else ir.T()
+    return Invariant(
+        name="type_invariant",
+        description="TypeInvariant: every state variable is well-formed in its "
+                    "declared domain (domains, budget bounds, label membership, "
+                    "history shape) -- a state constraint, not a property",
+        expression=expr,
+        kind=KIND_CONSTRAINT,
+        # A state *constraint* is not a blocking claim: it restricts the state
+        # space (ill-formed states are dropped), so it is neither pinned nor
+        # labelled as an MR-gate permission (a constraint violation is never a
+        # VIOLATED counterexample).
+        label=None,
+        pinned=False,
+        rung=RUNG_STRUCTURAL,
+        policy_clause="well-formedness: every state variable holds a well-formed "
+                      "value in its declared domain",
+    )
 
 
 def agreement(n=3):
@@ -634,6 +736,7 @@ def no_deadlock(n=1):
         rung=RUNG_E2E,
         policy_clause="orchestration: the agent dependency graph must stay "
                       "acyclic (no circular wait)",
+        violation_code=DEADLOCK,
     )
 
 
@@ -780,13 +883,14 @@ def default(n=3):
 
 __all__ = ["Invariant",
            "LABEL_INDUCTIVE", "LABEL_BOUNDED", "LABEL_LIKELY", "LABEL_EVENTUALLY",
-           "KIND_SAFETY", "KIND_LIVENESS",
+           "KIND_SAFETY", "KIND_LIVENESS", "KIND_CONSTRAINT", "KINDS",
            "BLOCKING_LABELS",
            "PERM_ALERT", "PERM_WARN", "PERM_BLOCK",
            "RUNG_STRUCTURAL", "RUNG_LOCAL", "RUNG_PROTOCOL", "RUNG_E2E",
            "RUNG_ENV",
            "ALL_RUNGS", "RUNG_CEILING", "PERMISSION_NAMES",
-           "agreement", "policy_conformance", "bounded_eventually", "validity", "no_spurious_abort",
+           "type_invariant", "agreement", "policy_conformance",
+           "bounded_eventually", "validity", "no_spurious_abort",
            "zab_no_premature_apply", "zab_apply_persisted",
            "pbft_quorum", "pbft_prepare_before_commit",
            "no_double_charge", "charge_requires_order",

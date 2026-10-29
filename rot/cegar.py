@@ -24,10 +24,11 @@ feasibility check are what make the same code path correct for an
 over-approximating engine.
 
 Phase 6 verdict metadata: every verdict carries ``property_kind`` (taken from
-``prop.kind``) and each VIOLATED verdict carries a ``violation_code`` --
-``POLICY_DENIAL`` on the safety path, ``LIVENESS_BOUND_EXCEEDED`` on the
-liveness path (``DEADLOCK`` is left for the caller to assign when the witness
-shows stagnation).
+``prop.kind``) and each VIOLATED verdict carries a ``violation_code`` -- taken
+from the invariant's declared ``violation_code`` (``POLICY_DENIAL`` by default,
+``LIVENESS_BOUND_EXCEEDED`` for liveness invariants, ``DEADLOCK`` for the
+``no_deadlock`` invariant when the witness shows the circular-wait/stagnation
+state).
 
 Pure stdlib, Python 3.6 compatible.
 """
@@ -74,6 +75,10 @@ def cegar(engine_result, prop, cfg, engine, model=None, recheck=None):
         times to try to converge. Omit for a single-shot check.
     """
     status = engine_result.status
+    # The violation code a VIOLATED verdict carries: the invariant's declared
+    # code (e.g. ``DEADLOCK`` for ``no_deadlock``) if set, else the safety
+    # default (``POLICY_DENIAL``).
+    _code = getattr(prop, "violation_code", None) or POLICY_DENIAL
 
     if status == "proven":
         return Verdict.proven(prop.name, engine,
@@ -90,7 +95,7 @@ def cegar(engine_result, prop, cfg, engine, model=None, recheck=None):
                     prop.name, engine, counterexample=witness,
                     n_states=engine_result.n_states,
                     property_kind=prop.kind,
-                    violation_code=POLICY_DENIAL,
+                    violation_code=_code,
                     note="concrete counterexample confirmed in the IR")
             return Verdict.unsound(
                 prop.name, engine, counterexample=witness,
@@ -105,7 +110,7 @@ def cegar(engine_result, prop, cfg, engine, model=None, recheck=None):
             prop.name, engine, counterexample={},
             n_states=engine_result.n_states,
             property_kind=prop.kind,
-            violation_code=POLICY_DENIAL,
+            violation_code=_code,
             note="engine reported a violation; witness not captured")
 
     if status in ("unknown", "timeout"):
@@ -123,7 +128,7 @@ def cegar(engine_result, prop, cfg, engine, model=None, recheck=None):
                     prop.name, engine, counterexample=cur.witness,
                     cegar_iterations=iters,
                     property_kind=prop.kind,
-                    violation_code=POLICY_DENIAL,
+                    violation_code=_code,
                     note="confirmed by refinement")
             return Verdict.unsound(
                 prop.name, engine, counterexample=cur.witness,

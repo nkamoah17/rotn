@@ -485,5 +485,133 @@ class AssuranceLadderInvariantTests(unittest.TestCase):
         self.assertTrue(d["blocking_permission"])
 
 
+# ---------------------------------------------------------------------------
+# Phase 1: constraint-vs-property
+#   TypeInvariant as a state *constraint* (drops ill-formed states, never a
+#   VIOLATED counterexample); no_deadlock with a DEADLOCK violation code;
+#   task_ends_or_escalates as liveness; and the CEGAR wiring of the DEADLOCK
+#   code on a refuted circular-wait witness.
+# ---------------------------------------------------------------------------
+
+class Phase1ConstraintVsPropertyTests(unittest.TestCase):
+
+    def _int_model(self):
+        import rot.ir as ir
+        return ir.ProtocolIR(
+            name="int-model",
+            variables=[ir.StateVar("counter", ir.IntRange(0, 2))],
+            init={"counter": 0})
+
+    def test_type_invariant_is_a_constraint(self):
+        from rot.invariants import type_invariant, KIND_CONSTRAINT
+        inv = type_invariant(self._int_model())
+        self.assertEqual(inv.name, "type_invariant")
+        self.assertEqual(inv.kind, KIND_CONSTRAINT)
+        # A state constraint restricts the state space; it is not a blocking
+        # MR-gate claim (never a VIOLATED counterexample).
+        self.assertFalse(inv.pinned)
+        self.assertFalse(inv.blocking_permission())
+
+    def test_type_invariant_drops_out_of_domain_states(self):
+        from rot.invariants import type_invariant
+        e = type_invariant(self._int_model()).expression
+        # in-range -> well-formed (kept)
+        self.assertIs(e.eval({"counter": 0}), True)
+        self.assertIs(e.eval({"counter": 1}), True)
+        self.assertIs(e.eval({"counter": 2}), True)
+        # out-of-range -> ill-formed (dropped, not a VIOLATED counterexample)
+        self.assertIs(e.eval({"counter": 3}), False)
+        self.assertIs(e.eval({"counter": -1}), False)
+
+    def test_type_invariant_label_membership(self):
+        import rot.ir as ir
+        from rot.invariants import type_invariant
+        m = ir.ProtocolIR(
+            name="enum-model",
+            variables=[ir.StateVar("state", ir.Enum(["idle", "active", "done"]))],
+            init={"state": "idle"})
+        e = type_invariant(m).expression
+        self.assertIs(e.eval({"state": "idle"}), True)
+        self.assertIs(e.eval({"state": "active"}), True)
+        # a value outside the label set -> ill-formed (dropped)
+        self.assertIs(e.eval({"state": "bogus"}), False)
+
+    def test_type_invariant_budget_bounds_and_history_shape(self):
+        # covers the remaining two well-formedness categories:
+        #   * budget bounds  -- a budget/spend IntRange [0, cap] is in range
+        #   * history shape  -- a history variable holds one of the declared
+        #                        shapes (an Enum)
+        import rot.ir as ir
+        from rot.invariants import type_invariant
+        m = ir.ProtocolIR(
+            name="budget-model",
+            variables=[
+                ir.StateVar("balance", ir.IntRange(0, 100)),
+                ir.StateVar("history", ir.Enum(["open", "settled", "closed"])),
+            ],
+            init={"balance": 0, "history": "open"})
+        e = type_invariant(m).expression
+        # well-formed: balance within [0, cap], history a declared shape
+        self.assertIs(e.eval({"balance": 50, "history": "open"}), True)
+        # budget bounds: over the cap -> ill-formed (dropped)
+        self.assertIs(e.eval({"balance": 150, "history": "open"}), False)
+        # budget bounds: negative -> ill-formed (dropped)
+        self.assertIs(e.eval({"balance": -5, "history": "settled"}), False)
+        # history shape: undeclared shape -> ill-formed (dropped)
+        self.assertIs(e.eval({"balance": 50, "history": "bogus"}), False)
+
+    def test_no_deadlock_safety_with_deadlock_code(self):
+        from rot.invariants import get, KIND_SAFETY
+        from rot.verdicts import DEADLOCK
+        inv = get("no_deadlock", 1)
+        self.assertEqual(inv.kind, KIND_SAFETY)
+        self.assertEqual(inv.violation_code, DEADLOCK)
+
+    def test_task_ends_or_escalates_is_liveness(self):
+        from rot.invariants import get, KIND_LIVENESS
+        inv = get("task_ends_or_escalates", 1)
+        self.assertEqual(inv.kind, KIND_LIVENESS)
+
+    def test_buggy_deadlock_refuted_with_deadlock_code(self):
+        import rot.approval as approval
+        import rot.cegar as cegar
+        from rot.modelfind import ModelFinder
+        from rot.symbolic import EngineResult
+        from rot.config import Config
+        from rot.invariants import get
+        from rot.verdicts import DEADLOCK, VIOLATED
+        prop = get("no_deadlock", 1)
+        model = approval.orchestration_build_ir(buggy=True)
+        # The buggy orchestration reaches the circular-wait state.
+        mf = ModelFinder.from_ir(model)
+        status, witness = mf.exists_reachable(
+            lambda s: (not prop.expression.eval(s)))
+        self.assertEqual(status, "SAT", "buggy orchestration should deadlock")
+        # the circular-wait witness: every agent blocked on another, task open.
+        self.assertTrue(witness["task_pending"])
+        self.assertTrue(witness["a_waiting"])
+        self.assertTrue(witness["b_waiting"])
+        self.assertTrue(witness["approver_waiting"])
+        # and the CEGAR layer stamps the VIOLATED verdict with DEADLOCK
+        # (not the default POLICY_DENIAL).
+        res = EngineResult(status="violated", witness=witness, n_states=1)
+        v = cegar.cegar(res, prop, Config(cegar_max_iter=1, max_states=1000),
+                        "symbolic")
+        self.assertEqual(v.status, VIOLATED)
+        self.assertEqual(v.violation_code, DEADLOCK)
+
+    def test_correct_orchestration_holds_no_deadlock(self):
+        import rot.approval as approval
+        from rot.modelfind import ModelFinder
+        from rot.invariants import get
+        prop = get("no_deadlock", 1)
+        mf = ModelFinder.from_ir(approval.orchestration_build_ir(buggy=False))
+        status, witness = mf.forall_reachable(
+            lambda s: prop.expression.eval(s))
+        self.assertIs(status, True,
+                      "correct orchestration should be deadlock-free: %r"
+                      % (witness,))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
