@@ -77,6 +77,43 @@ PERMISSION_NAMES = {
 
 
 # ---------------------------------------------------------------------------
+# IR contract metadata (Phase 0, docs/joern-primary-ab-plan.md)
+# ---------------------------------------------------------------------------
+#: Every ``ProtocolIR`` -- from any frontend (the ``code`` / ``cpg`` P1
+#: producers, the hand-authored ``targets`` oracle, or the ``java`` 2PC
+#: frontend) -- stamps these keys in ``metadata`` so a fair A/B compares
+#: producers on the same contract:
+#:
+#: * ``protocol``   -- the derived protocol label (e.g. ``"SPENDCAP"`` /
+#:   ``"2PC"``), derived from the control, not asserted by the producer.
+#: * ``provenance`` -- the source-pinned provenance (file / function / line,
+#:   or the oracle module for a hand-authored model).  Producer-specific: the
+#:   A/B parity gate compares IRs with it stripped.
+#: * ``source``     -- the producer frontend (e.g. ``"rot.frontends.cpg"``).
+#:   Producer-specific: stripped by the A/B parity gate.
+#: * ``lossiness``  -- the lossiness manifest: a list of
+#:   :func:`lossiness_entry` dicts recording what the source -> IR lowering
+#:   dropped and why that is acceptable.  Stamped by the shared lowering
+#:   (``rot.lower``), so the ``code`` and ``cpg`` producers of the same
+#:   control agree on it -- the A/B parity gate compares it (it must match).
+PROTOCOL_KEY = "protocol"
+PROVENANCE_KEY = "provenance"
+SOURCE_KEY = "source"
+LOSSINESS_KEY = "lossiness"
+
+
+def lossiness_entry(dropped, reason):
+    """One row of the IR's lossiness manifest (``metadata[LOSSINESS_KEY]``).
+
+    ``dropped`` names what the source -> IR lowering did not carry into the
+    model; ``reason`` records why that is acceptable (out of the pinned
+    property's cone, or captured by a coarser abstraction).  Plain dicts, so
+    the manifest round-trips through ``to_dict`` / ``from_dict`` unchanged.
+    """
+    return {"dropped": dropped, "reason": reason}
+
+
+# ---------------------------------------------------------------------------
 # domains
 # ---------------------------------------------------------------------------
 class Domain(object):

@@ -148,10 +148,14 @@ def _no_control_model():
 def _lowered(candidate):
     """``lower_candidate`` with the per-instance provenance stripped -- the
     A/B comparison is over the *control* (state / actions / guards /
-    params), not the provenance, which is necessarily language-specific
-    (Java method fullNames vs. a Python filename)."""
+    params), not the provenance or the producer tag, which are necessarily
+    producer-specific (Java method fullNames vs. a Python filename;
+    ``rot.frontends.cpg`` vs. ``rot.frontends.code``).  The lossiness
+    manifest is *not* stripped: it is stamped by the shared lowering
+    (``rot.lower``), so both producers must agree on what was dropped."""
     ir_model = lower_candidate(candidate)
     ir_model.metadata.pop("provenance", None)
+    ir_model.metadata.pop("source", None)
     return ir_model
 
 

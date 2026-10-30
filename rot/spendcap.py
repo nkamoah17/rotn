@@ -256,5 +256,24 @@ def build_ir(n=1, buggy=False, max_inflight=MAX_INFLIGHT, amount=AMOUNT, cap=CAP
         source_path="tests/fixtures/aws_dogwood/spendcap",
         metadata={"protocol": "SPENDCAP", "target": "spendcap",
                   "buggy": buggy, "amount": amount, "cap": cap,
-                  "max_inflight": k, "window": w},
+                  "max_inflight": k, "window": w,
+                  # Phase 0 IR contract: the oracle's source is the hand-
+                  # authored module that builds it (source-pinned provenance).
+                  "provenance": {
+                      "module": "rot/spendcap.py",
+                      "function": "build_ir",
+                      "pin": "hand-authored oracle (AWS Dogwood spend-cap spec)"},
+                  "lossiness": [
+                      ir.lossiness_entry(
+                          "the `formerly` window's past-timepoint "
+                          "quantification",
+                          "captured by the settled/in-flight split "
+                          "(completed + inflight * AMOUNT); the window bound "
+                          "W is recorded in metadata"),
+                      ir.lossiness_entry(
+                          "unbounded in-flight concurrency",
+                          "bounded by max_inflight (K) to keep the concrete "
+                          "state space finite; K >= 2 still expresses the "
+                          "parallel-fire race"),
+                  ]},
     )

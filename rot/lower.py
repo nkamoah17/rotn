@@ -1108,7 +1108,23 @@ def _lower_label_flow_candidate(enforced, params, provenance, pinned):
                   "candidate": True, "pattern_class": "P1", "pattern": "label_flow",
                   "enforced": enforced, "buggy": buggy,
                   "label": label, "allowed": allowed,
-                  "provenance": provenance, "source": "rot.frontends.code"},
+                  "provenance": provenance, "source": "rot.frontends.code",
+                  # Phase 0 IR contract: the lossiness manifest of the shared
+                  # lowering (stamped here, so the code and cpg producers of
+                  # the same control agree on what was dropped).
+                  "lossiness": [
+                      ir.lossiness_entry(
+                          "the concrete egress call and its arguments",
+                          "lowered to the P1 label_flow shape: a taint "
+                          "(holding_private) and a guarded (enforced) or "
+                          "unguarded (bypassable) egress (contact_outsider)"),
+                      ir.lossiness_entry(
+                          "code outside the control (other functions, I/O, "
+                          "callers)",
+                          "the IR is scoped to the extracted control (E4 "
+                          "per-instance scope); nothing outside its cone can "
+                          "change the pinned property"),
+                  ]},
     )
 
 
@@ -1153,6 +1169,10 @@ def lower_candidate(candidate, max_inflight=None):
     params = dict(candidate.params or {})
     provenance = dict(candidate.provenance or {})
     pinned = candidate.pinned_property
+    # Phase 0 IR contract: the producer tag rides in the candidate's own
+    # provenance (both frontends self-identify there); the code frontend is
+    # the fallback for older candidates.
+    producer = provenance.get("source") or "rot.frontends.code"
 
     if pattern == "budget":
         amount = params.get("amount", spendcap.AMOUNT)
@@ -1166,7 +1186,22 @@ def lower_candidate(candidate, max_inflight=None):
             "pattern": "budget",
             "enforced": enforced,
             "provenance": provenance,
-            "source": "rot.frontends.code",
+            "source": producer,
+            # Phase 0 IR contract: the lossiness manifest of the shared
+            # lowering (stamped here, so the code and cpg producers of the
+            # same control agree on what was dropped).
+            "lossiness": [
+                ir.lossiness_entry(
+                    "the concrete guard expression of the extracted control",
+                    "lowered to the P1 budget decision rule (in-flight vs "
+                    "settled-only accounting); the pinned property checks "
+                    "the rule's semantics"),
+                ir.lossiness_entry(
+                    "code outside the control (other functions, I/O, callers)",
+                    "the IR is scoped to the extracted control (E4 "
+                    "per-instance scope); nothing outside its cone can "
+                    "change the pinned property"),
+            ],
         })
         if pinned is not None:
             ir_model.pinned_property = pinned
@@ -1174,7 +1209,9 @@ def lower_candidate(candidate, max_inflight=None):
         return ir_model
 
     if pattern == "label_flow":
-        return _lower_label_flow_candidate(enforced, params, provenance,
-                                           pinned)
+        ir_model = _lower_label_flow_candidate(enforced, params, provenance,
+                                                pinned)
+        ir_model.metadata["source"] = producer
+        return ir_model
 
     raise ValueError("unknown P1 pattern: %r" % (pattern,))

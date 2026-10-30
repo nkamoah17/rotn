@@ -319,6 +319,10 @@ def _provenance(func, filename=""):
         "start_line": getattr(func, "lineno", None),
         "end_line": getattr(func, "end_lineno", None),
         "filename": filename,
+        # Phase 0 IR contract: the producer self-identifies in its own
+        # provenance (mirrors rot.frontends.cpg), so lower_candidate can stamp
+        # the IR's "source" metadata with the real producer.
+        "source": "rot.frontends.code",
     }
 
 

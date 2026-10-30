@@ -18,7 +18,7 @@ Pure stdlib, Python 3.6 compatible.
 """
 
 from .ir import (ProtocolIR, StateVar, Enum, Assignment, Action,
-                 And, Or, Not, eq, If, V, C, T)
+                 And, Or, Not, eq, If, V, C, T, lossiness_entry)
 
 PHASES = ["prepare", "decided", "done"]
 VOTE = ["none", "yes", "no"]
@@ -112,9 +112,24 @@ def build_ir(n=3, buggy=False):
         pinned_property=agreement_property(n),
         metadata={"n": n,
                   "buggy": buggy,
+                  "protocol": "2PC",
                   "description": ("Two-phase commit, %d participants, %s" % (
                       n, "BUGGY (participants self-decide)" if buggy
-                      else "correct (participants apply coordinator decision)"))},
+                      else "correct (participants apply coordinator decision)")),
+                  # Phase 0 IR contract: the oracle's source is the hand-
+                  # authored module that builds it (source-pinned provenance).
+                  "provenance": {
+                      "module": "rot/twopc.py",
+                      "function": "build_ir",
+                      "pin": "hand-authored oracle (two-phase commit)"},
+                  "lossiness": [
+                      lossiness_entry(
+                          "message passing and network asynchrony between "
+                          "coordinator and participants",
+                          "collapsed into shared state (phase / decision / "
+                          "vote_i / applied_i); the linearized action order "
+                          "is the sound special case"),
+                  ]},
     )
 
 
