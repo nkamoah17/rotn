@@ -1766,6 +1766,86 @@ def _add_policy_opts(p):
                    help="property kind [default: auto-route by extension]")
 
 
+# ---------------------------------------------------------------------------
+# rot ladder (Phase 3): the robustness ladder R0 -> R1 -> R2
+# ---------------------------------------------------------------------------
+
+def cmd_ladder(args):
+    """Run the Phase 3 robustness ladder (R0 -> R1 -> R2) for a target.
+
+    The *same harness* is discharged at each rung (the environment weakens
+    monotonically: conforming agent -> compromised agent -> + benign harness
+    faults). Reports the per-rung verdicts, the highest rung at which the
+    claim holds (F1), and the named non-claims (F3). Optionally writes the
+    auditable refinement chain (F4).
+
+    Exit code: 0 if the claim holds at the top rung (R2), 1 if it regresses
+    below R2 (or holds nowhere), 3 on error.
+    """
+    import rot.ladder as ladder
+    from rot.emitter import emit_refinement_chain
+
+    target = args.target
+    if target not in ladder.ladder_target_names():
+        print("ERROR: unknown ladder target: %s (choose from: %s)"
+              % (target, ", ".join(ladder.ladder_target_names())),
+              file=sys.stderr)
+        return EXIT_ERROR
+    property_name = args.property or ladder.default_ladder_property(target)
+
+    try:
+        result = ladder.run_ladder(
+            target=target, property_name=property_name, n=args.n,
+            max_states=args.max_states, horizon=args.horizon)
+    except Exception as exc:  # unknown invariant, engine error, ...
+        print("ERROR: ladder run failed: %s" % exc, file=sys.stderr)
+        return EXIT_ERROR
+
+    bar = "-" * 66
+    print(bar)
+    print("ROTN ladder: %-14s claim=%-28s kind=%s"
+          % (target, property_name, result["kind"]))
+    print(bar)
+    for rung in ladder.RUNGS:
+        v = result["verdicts"][rung.name]
+        mark = {"proven": "P", "violated": "V", "unknown": "?",
+                "unsound": "U", "error": "E"}.get(v["status"], "?")
+        print("  %s [%-10s] %s" % (rung.name, rung.label, v["status"]))
+        if v.get("fairness_label"):
+            print("       fairness: %s" % v["fairness_label"])
+    print(bar)
+    print("  highest discharged rung : %s"
+          % (result["highest_discharged_rung"] or "none"))
+    if result["monotonicity_violations"]:
+        print("  MONOTONICITY VIOLATIONS : %s"
+              % result["monotonicity_violations"])
+    print("  non-claims:")
+    for nc in result["non_claims"]:
+        print("    - %s" % nc)
+    print(bar)
+
+    if args.out:
+        out_dir = args.out
+        if not os.path.isdir(out_dir):
+            os.makedirs(out_dir)
+        base = os.path.join(out_dir, "ladder_%s" % target)
+        chain = ladder.refinement_chain(ladder.build_fn_for(target), args.n)
+        text = emit_refinement_chain(
+            chain, implication=ladder.implication_argument(), target=target)
+        with open(base + ".txt", "w", encoding="utf-8") as f:
+            f.write(text)
+        with open(base + ".json", "w", encoding="utf-8") as f:
+            json.dump(result, f, indent=2, sort_keys=False)
+        print("  wrote %s.txt and %s.json" % (base, base))
+
+    if args.json:
+        print(json.dumps(result, indent=2, sort_keys=False))
+
+    if result["highest_discharged_rung"] == "R2":
+        return EXIT_PROVEN
+    return EXIT_VIOLATED
+
+
 def main(argv=None):
     """ROTN CLI entry point. Returns the process exit code."""
     parser = argparse.ArgumentParser(
@@ -2000,6 +2080,27 @@ def main(argv=None):
     p.add_argument("--quiet", action="store_true",
                    help="suppress the human summary")
 
+    p = sub.add_parser(
+        "ladder",
+        help="run the Phase 3 robustness ladder (R0 -> R1 -> R2) for a target")
+    p.add_argument("--target", default="orchestration",
+                   choices=["approval", "delegation", "orchestration",
+                            "budget", "livelock", "deadlock"],
+                   metavar="TARGET",
+                   help="the harness to ladder [default: orchestration]")
+    p.add_argument("--property", default=None, metavar="NAME",
+                   help="claim to discharge [default: the target's thesis rule]")
+    p.add_argument("--n", type=int, default=1, metavar="N",
+                   help="protocol size parameter n [default: 1]")
+    p.add_argument("--max-states", type=int, default=200000, metavar="N",
+                   help="bounded-search budget [default: 200000]")
+    p.add_argument("--horizon", type=int, default=12, metavar="H",
+                   help="bounded liveness horizon [default: 12]")
+    p.add_argument("--out", default=None, metavar="DIR",
+                   help="write the refinement chain + result JSON to DIR")
+    p.add_argument("--json", action="store_true",
+                   help="also print the full structured result as JSON")
+
     args = parser.parse_args(argv)
     if args.command is None:
         parser.print_help()
@@ -2009,7 +2110,8 @@ def main(argv=None):
             "license": cmd_license, "trace": cmd_trace,
             "coach": cmd_coach, "runtime": cmd_runtime,
             "site": cmd_site,
-            "doctor": cmd_doctor}[args.command](args)
+            "doctor": cmd_doctor,
+            "ladder": cmd_ladder}[args.command](args)
 
 
 if __name__ == "__main__":

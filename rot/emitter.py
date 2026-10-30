@@ -727,6 +727,50 @@ def emit_delta(delta_ir, invariant_name, invariant_expr, module_name=None):
     return src, op, em
 
 
-__all__ = ["Emitter", "emit_delta"]
+def emit_refinement_chain(chain, implication=None, target=None):
+    """Emit the robustness-ladder refinement chain as a named-layer spec (F4).
+
+    Each rung (R0/R1/R2) is a *named layer* carrying its environment model
+    (agent posture, harness faults, fairness), and the implication argument
+    (why R2 => R1 => R0) is emitted as a comment block. This is the auditable,
+    end-to-end record of the ladder (spec F4 / T3).
+
+    ``chain`` is the list of per-rung dicts from :func:`rot.ladder.
+    refinement_chain`; ``implication`` is the dict from :func:`rot.ladder.
+    implication_argument` (optional); ``target`` is the harness name (optional).
+
+    Returns the spec text (a string).
+    """
+    lines = ["---- REFINEMENT CHAIN (robustness ladder) ----", ""]
+    if target:
+        lines.append("\\* harness : %s (the same system under test at every rung)" % target)
+    lines.append("\\* principle: %s" % (
+        (implication or {}).get("principle",
+                                "refinement is implication: same harness, weakening environment")))
+    for m in (implication or {}).get("monotone_environment", []):
+        lines.append("\\*   %s" % m)
+    if implication:
+        lines.append("\\*   F1 (safety) : %s" % implication.get("safety_F1", ""))
+        lines.append("\\*   F2 (liveness): %s" % implication.get("liveness_F2", ""))
+        lines.append("\\*   F3 (non-claim): %s" % implication.get("non_claim_F3", ""))
+    lines.append("")
+    for layer in chain:
+        env = layer.get("environment", {})
+        lines.append("LAYER %s  (level %d, %s)" % (
+            layer.get("rung", "?"), layer.get("level", -1), layer.get("label", "?")))
+        lines.append("\\*   agent posture   : buggy=%s" % env.get("buggy"))
+        faults = env.get("harness_faults") or []
+        lines.append("\\*   harness faults  : %s" % (", ".join(faults) if faults else "none"))
+        fair = env.get("fairness_actions") or []
+        lines.append("\\*   fairness        : %s" % (
+            ", ".join("WF(%s)" % a for a in fair) if fair else "none"))
+        if "ir_name" in layer:
+            lines.append("\\*   IR              : %s" % layer["ir_name"])
+        lines.append("\\*   %s" % (env.get("description", "")).strip())
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+__all__ = ["Emitter", "emit_delta", "emit_refinement_chain"]
 
 
