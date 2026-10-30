@@ -20,6 +20,8 @@ Subcommands
                 call; ``serve`` runs the MCP tools/call gateway (HTTP).
   rot doctor    Diagnose the installation (Python, package, engines;
                 --deep runs a real end-to-end self-test).
+  rot ab        Frontend A/B over the bench corpus (Joern-primary, §3):
+                lexicographic winner, offline and deterministic.
 
 Exit codes
 ----------
@@ -1846,6 +1848,47 @@ def cmd_ladder(args):
     return EXIT_VIOLATED
 
 
+def cmd_ab(args):
+    """Frontend A/B over the bench corpus (Joern-primary, §3).
+
+    Compares the Ingest frontends on a shared oracle corpus, measuring the §3
+    quality metrics per (frontend, fixture) cell and emitting a lexicographic
+    winner.  Offline and deterministic: no network, no external tools, no
+    randomness.
+
+    Exit code: 0 (the A/B ran; the winner is in the output), 3 on error.
+    """
+    import rot.ab as ab
+    try:
+        corpus = ab.load_corpus(getattr(args, "corpus", None))
+    except Exception as exc:  # noqa: BLE001
+        print("ab: corpus error: %s: %s" % (type(exc).__name__, exc),
+              file=sys.stderr)
+        return EXIT_ERROR
+    if not corpus:
+        print("ab: no fixtures found in the corpus", file=sys.stderr)
+        return EXIT_ERROR
+    frontends = None
+    if getattr(args, "frontends", None):
+        frontends = [f.strip() for f in args.frontends.split(",") if f.strip()]
+    try:
+        result = ab.run_ab(corpus=corpus, frontends=frontends)
+    except Exception as exc:  # noqa: BLE001
+        print("ab: run error: %s: %s" % (type(exc).__name__, exc),
+              file=sys.stderr)
+        return EXIT_ERROR
+    if getattr(args, "out", None):
+        with open(args.out, "w") as fh:
+            fh.write(ab.to_json(result) + "\n")
+        if not getattr(args, "quiet", False):
+            print("wrote %s" % args.out)
+    if getattr(args, "json", False):
+        print(ab.to_json(result))
+    elif not getattr(args, "quiet", False):
+        print(ab.to_report(result))
+    return EXIT_PROVEN
+
+
 def main(argv=None):
     """ROTN CLI entry point. Returns the process exit code."""
     parser = argparse.ArgumentParser(
@@ -2101,6 +2144,20 @@ def main(argv=None):
     p.add_argument("--json", action="store_true",
                    help="also print the full structured result as JSON")
 
+    p = sub.add_parser(
+        "ab", help="frontend A/B over the bench corpus (Joern-primary, §3)")
+    p.add_argument("--corpus", default=None, metavar="DIR",
+                   help="corpus dir [default: <repo>/bench]")
+    p.add_argument("--frontends", default=None, metavar="LIST",
+                   help="comma-separated frontends "
+                        "[default: each manifest's list]")
+    p.add_argument("--json", action="store_true",
+                   help="emit JSON (default: the human report)")
+    p.add_argument("--out", default=None, metavar="FILE",
+                   help="write the JSON result to FILE")
+    p.add_argument("--quiet", action="store_true",
+                   help="suppress the human report (with --json)")
+
     args = parser.parse_args(argv)
     if args.command is None:
         parser.print_help()
@@ -2111,7 +2168,8 @@ def main(argv=None):
             "coach": cmd_coach, "runtime": cmd_runtime,
             "site": cmd_site,
             "doctor": cmd_doctor,
-            "ladder": cmd_ladder}[args.command](args)
+            "ladder": cmd_ladder,
+            "ab": cmd_ab}[args.command](args)
 
 
 if __name__ == "__main__":

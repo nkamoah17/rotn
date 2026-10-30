@@ -1,0 +1,16 @@
+{
+  "fixture": "labelflow",
+  "property": "no_exfiltration",
+  "property_kind": "safety",
+  "description": "P1 label/flow lighthouse (NoExfiltration). The known-bug variant lets a private (tainted) parameter reach the egress sink unguarded; the known-correct variant guards the egress with a label check.",
+  "ground_truth": {
+    "bypassable": "VIOLATED",
+    "enforced": "PROVEN"
+  },
+  "known_bug_variant": "bypassable",
+  "known_correct_variant": "enforced",
+  "critical_vars": ["holding_private", "exfiltrated"],
+  "decision_action": "agent_take_send_unapproved",
+  "frontends": ["targets", "code", "cpg"],
+  "notes": "The CPG cell is AVAILABLE here: the committed CPG fixture (connector.cpg.json) carries the BYPASSABLE label_flow quadrant, so the CPG producer is measured on the known-bug (it must VIOLATE with the exact private->sink witness)."
+}
