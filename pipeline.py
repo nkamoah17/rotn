@@ -113,6 +113,7 @@ def run(target_name="correct", property_name=None, engine="auto",
         source_dir=None, cpg_path=None,
         apalache_enabled=False, apalache_jar=None, apalache_java=None,
         apalache_timeout=None, apalache_length=None,
+        unbounded_liveness=False, fairness_action=None, fairness_engine="apalache",
         out_dir="out", quiet=False):
     """Run one verification pass; return the final ``rot.verdicts.Verdict``.
 
@@ -191,6 +192,9 @@ def run(target_name="correct", property_name=None, engine="auto",
         apalache_timeout=(apalache_timeout if apalache_timeout is not None
                           else DEFAULT_APALACHE_TIMEOUT),
         apalache_length=apalache_length,
+        unbounded_liveness=unbounded_liveness,
+        fairness_action=fairness_action,
+        fairness_engine=fairness_engine,
     )
     chosen = cfg.select_engine()
 
@@ -212,14 +216,13 @@ def run(target_name="correct", property_name=None, engine="auto",
     #      ``reach_within``, so liveness is dispatched to it (it is the
     #      independent oracle, and the other engines can only refute safety).
     if getattr(prop, "kind", None) == KIND_LIVENESS:
-        from rot.symbolic import SymbolicEngine
+        from rot.liveness import discharge_liveness
         # Only the symbolic engine exposes reach_within, so the liveness check
-        # always runs on symbolic regardless of the auto-resolved ``chosen``.
+        # always runs on symbolic regardless of the auto-resolved ``chosen``;
+        # rot.liveness adds the TLC cross-check + R2/R3/R4 enforcement teeth.
         effective_engine = "symbolic"
-        reach = (SymbolicEngine(linear_model, max_states=cfg.max_states)
-                 .reach_within(prop.expression, cfg.liveness_horizon,
-                               max_states=cfg.max_states))
-        verdict = cegar_liveness(reach, prop, cfg, effective_engine)
+        verdict = discharge_liveness(linear_model, prop.expression, prop, cfg,
+                                     target=target_name)
     else:
         if chosen == "crosscheck":
             # Three-engine cross-check (SMT/Z3 + TLC + policy-direct).  Only
@@ -1257,6 +1260,24 @@ def main(argv=None):
                         type=int, default=None,
                         help="bounded-liveness horizon (max steps) for "
                              "--kind liveness [default: 12]")
+    # -- Phase 2 (liveness) -----------------------------------------------------
+    # Unbounded liveness (<>Goal) under weak fairness on the harness decision
+    # action (opt-in; the default is the bounded reachability form, which is
+    # sound and fairness-free).  When on, the fairness formula is ALWAYS
+    # recorded on the verdict (never silent).  See rot.liveness (spec R2/D1/D2).
+    parser.add_argument("--unbounded-liveness", dest="unbounded_liveness",
+                        action="store_true",
+                        help="discharge liveness as the UNBOUNDED claim <>Goal "
+                             "under weak fairness on the harness decision "
+                             "action (Apalache primary, TLC cross-check); the "
+                             "default is the bounded reachability form "
+                             "(goal reachable within --liveness-horizon)")
+    parser.add_argument("--fairness-action", dest="fairness_action",
+                        default=None,
+                        help="harness action on which weak fairness WF(action) "
+                             "is imposed for --unbounded-liveness "
+                             "[default: Decide; harness actions only, never the "
+                             "agent]")
     # -- Three-facet audit (rot.trifecta) + manifest (rot.manifest) -----------
     parser.add_argument("--trifecta", dest="trifecta", action="store_true",
                         help="run the three-facet policy audit (safety + "
@@ -1367,6 +1388,8 @@ def main(argv=None):
             apalache_java=args.apalache_java,
             apalache_timeout=args.apalache_timeout,
             apalache_length=args.apalache_length,
+            unbounded_liveness=args.unbounded_liveness,
+            fairness_action=args.fairness_action,
             env_bound=args.env_bound,
             llm_enabled=args.llm_baseline,
             llm_model=args.llm_model,

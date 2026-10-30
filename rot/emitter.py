@@ -563,23 +563,38 @@ class Emitter(object):
         property_ops = [self._op_name(n) for (n, _e) in property_pairs]
         return src, constraint_ops, property_ops
 
-    def cfg_spec(self, constraint_ops, property_ops):
+    def cfg_spec(self, constraint_ops, property_ops, assumptions=None):
         """A ``.cfg`` for the constraint-vs-property spec.
 
         State constraints are listed as ``INVARIANT`` (the state-constraint
         mechanism -- they restrict the state space and are never checked as a
         temporal property); temporal properties are listed as ``PROPERTY``.
+
+        ``assumptions`` -- an optional list of fairness assumptions, each a
+        TLA+ action/operator name (e.g. ``"Decide"``). Each is emitted as
+        ``ASSUME WF(<action>)`` (weak fairness on the harness decision action,
+        spec D2 / R2).  This is the *named, explicit* fairness assumption: it is
+        never silently dropped -- when supplied it is always present in the
+        ``.cfg`` the engine reads, so a liveness claim discharged under it is
+        sound and the fairness is recorded, not assumed away.
         """
         lines = ["SPECIFICATION Spec"]
         for op in constraint_ops:
             lines.append("INVARIANT %s" % op)
         for op in property_ops:
             lines.append("PROPERTY %s" % op)
+        for action in (assumptions or []):
+            lines.append("ASSUME WF(%s)" % action)
         return "\n".join(lines) + "\n"
 
-    def write_spec(self, out_dir, constraints, properties, base=None):
+    def write_spec(self, out_dir, constraints, properties, base=None,
+                   assumptions=None):
         """Write ``<base>.tla`` and ``<base>.cfg`` for a constraints+properties
         spec. Returns ``(tla_path, cfg_path, constraint_ops, property_ops)``.
+
+        ``assumptions`` (optional) is a list of fairness action names emitted as
+        ``ASSUME WF(<action>)`` in the ``.cfg`` (spec D2 -- never silently
+        dropped).
         """
         import os
         base = base or self.module_name
@@ -592,7 +607,8 @@ class Emitter(object):
         with open(tla_path, "w") as f:
             f.write(src)
         with open(cfg_path, "w") as f:
-            f.write(self.cfg_spec(constraint_ops, property_ops))
+            f.write(self.cfg_spec(constraint_ops, property_ops,
+                                  assumptions=assumptions))
         return tla_path, cfg_path, constraint_ops, property_ops
 
 

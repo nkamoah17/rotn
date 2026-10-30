@@ -178,7 +178,7 @@ class Verdict(object):
                  counterexample=None, assumptions=None, soundness=None,
                  evidence=None, cegar_iterations=0, n_states=0, note="",
                  property_kind=None, violation_code=None, trace=None,
-                 advisories=None):
+                 advisories=None, discharge=None, fairness_label=None):
         if status not in _STATUSES:
             raise ValueError("bad verdict status %r" % (status,))
         if property_kind is not None and property_kind not in _PROPERTY_KINDS:
@@ -210,6 +210,23 @@ class Verdict(object):
         # the action name, its rendered guard, the invariant's policy clause,
         # and the state change the action caused.
         self.trace = list(trace) if trace is not None else None
+        # Liveness discharge path (Phase 2).  ``discharge`` records *how* a
+        # liveness claim was decided so a verdict can never be read as stronger
+        # than it is:
+        #   * ``"bounded"``  -- the goal is REACHABLE within the horizon,
+        #     discharged by the concrete symbolic engine (spec R2a).  No
+        #     fairness assumed.  Sound when ``horizon_complete``.
+        #   * ``"fairness"`` -- the *unbounded* claim ``<>Goal``, discharged
+        #     under weak fairness on the harness decision action (spec D2).
+        #     ``fairness_label`` is then REQUIRED (never silent).
+        #   * ``None``       -- a safety verdict (no liveness discharge).
+        self.discharge = discharge
+        # The explicit fairness formula for an unbounded-liveness discharge
+        # (e.g. ``"WF(Decide)"``).  Set whenever ``discharge == "fairness"``;
+        # it is recorded on the verdict and emitted as a named assumption so a
+        # liveness claim is never silently strengthened by an unstated fairness
+        # assumption (spec R2).  ``None`` for bounded liveness and safety.
+        self.fairness_label = fairness_label
 
     # -- factories -----------------------------------------------------------
     @classmethod
@@ -263,6 +280,8 @@ class Verdict(object):
             "violation_code": self.violation_code,
             "advisories": self.advisories,
             "trace": self.trace,
+            "discharge": self.discharge,
+            "fairness_label": self.fairness_label,
         }
 
     def to_json(self, indent=2):

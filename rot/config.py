@@ -103,7 +103,10 @@ class Config(object):
                  apalache_jar=None,
                  apalache_java=None,
                  apalache_timeout=120,
-                 apalache_length=None):
+                 apalache_length=None,
+                 unbounded_liveness=False,
+                 fairness_action=None,
+                 fairness_engine=ENGINE_APALACHE):
         self.engine = engine
         self.tlc_jar = tlc_jar
         self.java_cmd = java_cmd
@@ -139,6 +142,26 @@ class Config(object):
         self.apalache_java = apalache_java
         self.apalache_timeout = int(apalache_timeout)
         self.apalache_length = int(apalache_length) if apalache_length else None
+        # Phase 2 (liveness): unbounded liveness (<>Goal) is OPT-IN.  When off
+        # (the default) every liveness claim is the *bounded* reachability form
+        # (the goal is reachable within the horizon), discharged by the concrete
+        # symbolic engine and cross-checked -- never an unconditional liveness
+        # claim.  When on, the claim is the *unbounded* form ``<>Goal`` under
+        # weak fairness on the harness decision action (``fairness_action``),
+        # discharged by ``fairness_engine`` (Apalache by default) and cross-
+        # checked by TLC; the fairness formula is ALWAYS recorded on the verdict
+        # (never silent).  See rot.liveness (the dual-soundness rule, spec R2).
+        self.unbounded_liveness = bool(unbounded_liveness)
+        # The harness action on which weak fairness WF(action) is imposed when
+        # unbounded liveness is on.  ``None`` means "the harness decision
+        # action" (the action the harness uses to make its decision -- e.g.
+        # ``Decide``).  Fairness is stated on harness actions *only*; it is
+        # never imposed on the agent (adversary).
+        self.fairness_action = fairness_action
+        # The engine that discharges unbounded liveness under fairness
+        # (spec D2: Apalache primary, TLC cross-check).  One of
+        # ``ENGINE_APALACHE`` / ``ENGINE_TLC``.
+        self.fairness_engine = fairness_engine
 
     # -- engine selection ----------------------------------------------------
     def tlc_jar_path(self):
@@ -262,6 +285,9 @@ class Config(object):
             "apalache_available": self.apalache_available(),
             "apalache_timeout": self.apalache_timeout,
             "apalache_length": self.apalache_length,
+            "unbounded_liveness": self.unbounded_liveness,
+            "fairness_action": self.fairness_action,
+            "fairness_engine": self.fairness_engine,
             "out_dir": self.out_dir,
             "work_dir": self.work_dir,
             "llm_enabled": self.llm_enabled,
@@ -281,7 +307,8 @@ class Config(object):
                 "work_dir", "verbose", "llm_enabled", "llm_base_url",
                 "llm_api_key_env", "llm_model", "llm_timeout", "llm_max_turns",
                 "apalache_enabled", "apalache_jar", "apalache_java",
-                "apalache_timeout", "apalache_length")
+                "apalache_timeout", "apalache_length",
+                "unbounded_liveness", "fairness_action", "fairness_engine")
         return cls(**{k: d[k] for k in keys if k in d})
 
 
