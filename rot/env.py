@@ -27,6 +27,13 @@ Fragments are composable via :func:`compose` (union of variables + actions,
 conjunction of init and the pinned property) so an application can be verified
 *against* the environment it depends on.
 
+The *distributed view* (GSSM, the general state space): each fragment is a
+self-contained local factor graph, and :func:`distributed_view` builds the
+**product** of those local factor graphs joined by their connection (channel)
+factors -- one unified state vector becomes a product of local factor graphs,
+the "distributed, not unified" half of the lift.  The ``LinearModel`` chain
+remains the sound special case (a single fragment is a chain).
+
 Everything here is authored purely in ``rot.ir`` vocabulary (``StateVar`` /
 ``Action`` / ``Expr``) -- exactly what the frontends emit -- so it flows through
 the same emitters / model finder as real targets.
@@ -41,7 +48,7 @@ from .ir import (
 
 __all__ = [
     "at_least_once_queue", "tcp_channel", "crash_recover_disk",
-    "idempotent_payment", "compose",
+    "idempotent_payment", "compose", "distributed_view",
     "QUEUE_NO_LOSS", "TCP_IN_ORDER", "DISK_DURABILITY", "NO_DOUBLE_CHARGE",
 ]
 
@@ -272,4 +279,66 @@ def compose(base, env, keep_env_property=True):
                       variables=list(vars_by_name.values()),
                       actions=actions, init=init, pinned_property=prop,
                       metadata=dict(base.metadata))
+
+
+def distributed_view(fragments):
+    """The distributed view (GSSM, the general state space) of IR fragments.
+
+    Each fragment is a *local* factor graph -- a self-contained ``ProtocolIR``
+    (this module's model: "each environment is a self-contained ``ProtocolIR``
+    fragment").  The distributed view is the **product** of those local factor
+    graphs joined by their *connection* (channel) factors: the state variables
+    that more than one fragment touches are the channels that connect the
+    components.
+
+    This is the "distributed, not unified" half of the lift (GSSM IV-3b): one
+    unified state vector becomes a product of local factor graphs + connection
+    factors, instead of a single ``LinearModel`` chain.  The chain remains the
+    sound special case -- a single fragment yields one component and
+    ``is_chain`` is True.
+
+    Pure view: it only reads the fragments and builds a
+    :class:`rot.factor_graph.FactorGraph`; it never modifies them.
+    """
+    from .factor_graph import Component, ChannelFactor, FactorGraph
+
+    frags = list(fragments)
+    if not frags:
+        raise ValueError("distributed_view needs at least one IR fragment")
+
+    components = []
+    for i, frag in enumerate(frags):
+        label = getattr(frag, "name", "") or ("fragment_%d" % i)
+        components.append(Component(
+            name=label, owner=label,
+            actions=list(frag.actions),
+            variables=list(frag.variables)))
+
+    # Connection (channel) factors: the variables more than one fragment touches.
+    touched = {}
+    for i, frag in enumerate(frags):
+        label = components[i].name
+        touched_vars = set()
+        for a in frag.actions:
+            for e in a.effects:
+                if e.var != "pc":
+                    touched_vars.add(e.var)
+            touched_vars.update(frag.vars_in(a.guard))
+            for e in a.effects:
+                touched_vars.update(frag.vars_in(e.expr))
+        for n in touched_vars:
+            touched.setdefault(n, set()).add(label)
+
+    channels = []
+    for varname in sorted(touched):
+        labels = sorted(touched[varname])
+        if len(labels) > 1:
+            channels.append(ChannelFactor(
+                name="channel_" + varname,
+                from_component=labels[0],
+                to_component=labels[1],
+                variables=[varname]))
+
+    return FactorGraph(None, components, channels,
+                       is_chain=(len(components) <= 1))
 

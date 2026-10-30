@@ -33,6 +33,25 @@ state).
 Pure stdlib, Python 3.6 compatible.
 """
 
+# The soundness of the factor-graph quotient (GSSM: the Kalman filter cannot
+# pass messages backward because it marginalizes every step).  The property-
+# directed hiding in rot.abstraction IS marginalization, so this module's
+# backward pass -- CEGAR refinement plus the two-layer static<->formal check --
+# runs BEFORE that hiding, while the full factor graph is still available for
+# backward inference.  This is the same theorem as "hiding never
+# under-approximates" (rot.abstraction), now named for the factor-graph view:
+# an existential hiding is a sound over-approximation of the reachable
+# projection on the kept variables, so a proof over the abstract model is a
+# proof over the concrete one and a counterexample is a candidate bug.
+FACTOR_GRAPH_QUOTIENT_SOUNDNESS = (
+    "factor-graph quotient soundness: existential hiding (marginalization) "
+    "never under-approximates the reachable projection on the kept variables; "
+    "the CEGAR backward pass (refinement + the static<->formal check) runs "
+    "before that hiding so the full factor graph is available for backward "
+    "inference; a proof over the abstract model is a proof over the concrete "
+    "one, and a counterexample is a candidate bug (GSSM, marginalization delay)"
+)
+
 from .ir import Expr
 from .verdicts import Verdict, POLICY_DENIAL, LIVENESS_BOUND_EXCEEDED
 
@@ -278,6 +297,11 @@ def verify_candidate(ir, cfg, engine="symbolic", cpg=None):
         rot.verdicts.Verdict: PROVEN / VIOLATED (+ witness) / UNKNOWN /
         OUT_OF_SCOPE (a PROVEN is downgraded to UNKNOWN by the CPG-3
         cross-check when the ground truth threatens the pinned property).
+
+    The CEGAR backward pass here (cegar + the CPG-3 cross-check) runs before
+    any property-directed hiding (marginalization, rot.abstraction), so the
+    full factor graph is available for backward inference -- the soundness of
+    the factor-graph quotient (FACTOR_GRAPH_QUOTIENT_SOUNDNESS).
     """
     from .linearization import linearize
     from .invariants import Invariant
@@ -337,4 +361,5 @@ def verify_candidate(ir, cfg, engine="symbolic", cpg=None):
     return verdict
 
 
-__all__ = ["cegar", "cegar_liveness", "_feasible_in_ir", "verify_candidate"]
+__all__ = ["cegar", "cegar_liveness", "_feasible_in_ir", "verify_candidate",
+           "FACTOR_GRAPH_QUOTIENT_SOUNDNESS"]
