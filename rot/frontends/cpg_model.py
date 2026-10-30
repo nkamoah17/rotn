@@ -226,7 +226,7 @@ class CpgMethod(object):
 
     def __init__(self, name, full_name, owner="", line=0, end_line=0,
                  calls=None, read_fields=None, written_fields=None,
-                 defs=None, args=None):
+                 defs=None, args=None, ret_type=None):
         self.name = name
         self.full_name = full_name
         self.owner = owner
@@ -237,9 +237,14 @@ class CpgMethod(object):
         self.written_fields = list(written_fields or [])
         self.defs = list(defs or [])
         self.args = list(args or [])
+        # CPG-2: the return type ("boolean" / "int" / ...; None when the
+        # artifact predates the field).  Shape recognition needs this (a
+        # *decision* method returns a boolean); a model without it can only
+        # report OUT_OF_SCOPE for the shapes that require it (E2).
+        self.ret_type = ret_type
 
     def to_dict(self):
-        return {
+        d = {
             "name": self.name,
             "fullName": self.full_name,
             "owner": self.owner,
@@ -251,6 +256,9 @@ class CpgMethod(object):
             "defs": list(self.defs),
             "args": list(self.args),
         }
+        if self.ret_type is not None:
+            d["retType"] = self.ret_type
+        return d
 
     @staticmethod
     def from_dict(d):
@@ -265,6 +273,7 @@ class CpgMethod(object):
             written_fields=list(d.get("writtenFields") or []),
             defs=list(d.get("defs") or []),
             args=list(d.get("args") or []),
+            ret_type=d.get("retType"),
         )
 
 # ---------------------------------------------------------------------------

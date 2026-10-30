@@ -105,6 +105,8 @@
     }
 
     // -- methods (call edges + field read/write split + defs/args, CPG-1) ----
+    // CPG-2: + retType (the method's return type -- shape recognition needs
+    // to know a *decision* method returns a boolean).
     val methods = cpg.method.l.map { m =>
       val full   = m.fullName
       val owner  = m.astParentFullName
@@ -128,11 +130,14 @@
           .local.name.l.distinct
         (paramNames, (paramNames ++ localNames ++ writes).distinct.sorted)
       } catch { case _: Throwable => (List.empty[String], List.empty[String]) }
+      // CPG-2: the return type (Method.typeFullName; "" on query failure).
+      val retType = try m.typeFullName catch { case _: Throwable => "" }
       ("{\"name\":" + jstr(m.name) +
        ",\"fullName\":" + jstr(full) +
        ",\"owner\":" + jstr(owner) +
        ",\"lineNumber\":" + ln +
        ",\"endLineNumber\":" + eln +
+       ",\"retType\":" + jstr(retType) +
        ",\"calls\":" + jarr(calls) +
        ",\"readFields\":" + jarr(reads) +
        ",\"writtenFields\":" + jarr(writes) +

@@ -1,316 +1,330 @@
 {
-  "meta": {
-    "source": "tests/fixtures/cpg/connector.java",
-    "generatedBy": "tools/_gen_cpg_fixture.py (one-shot; shape == scrape.sc)"
-  },
-  "types": [
+  "edges": [
     {
-      "name": "Connector",
-      "fullName": "com.acme.guard.Connector",
-      "owner": "com.acme.guard",
-      "lineNumber": 8,
-      "endLineNumber": 38,
-      "inherits": [],
-      "constants": []
+      "from": "com.acme.guard.Connector.<init>#cap",
+      "line": 13,
+      "note": "",
+      "to": "com.acme.guard.Connector.cap",
+      "type": "REACHING_DEF"
     },
     {
-      "name": "AuditLog",
-      "fullName": "com.acme.guard.AuditLog",
-      "owner": "com.acme.guard",
-      "lineNumber": 41,
-      "endLineNumber": 43,
-      "inherits": [],
-      "constants": []
+      "from": "com.acme.guard.Connector.<init>#settled",
+      "line": 14,
+      "note": "",
+      "to": "com.acme.guard.Connector.settled",
+      "type": "REACHING_DEF"
+    },
+    {
+      "from": "com.acme.guard.Connector.<init>#inflight",
+      "line": 15,
+      "note": "",
+      "to": "com.acme.guard.Connector.inflight",
+      "type": "REACHING_DEF"
+    },
+    {
+      "from": "com.acme.guard.Connector.<init>#audit",
+      "line": 16,
+      "note": "",
+      "to": "com.acme.guard.Connector.audit",
+      "type": "REACHING_DEF"
+    },
+    {
+      "from": "com.acme.guard.Connector.canSpend#amount",
+      "line": 24,
+      "note": "",
+      "to": "com.acme.guard.Connector.canSpend#projected",
+      "type": "REACHING_DEF"
+    },
+    {
+      "from": "com.acme.guard.Connector.inflight",
+      "line": 24,
+      "note": "",
+      "to": "com.acme.guard.Connector.canSpend#projected",
+      "type": "REACHING_DEF"
+    },
+    {
+      "from": "com.acme.guard.Connector.settled",
+      "line": 24,
+      "note": "",
+      "to": "com.acme.guard.Connector.canSpend#projected",
+      "type": "REACHING_DEF"
+    },
+    {
+      "from": "com.acme.guard.Connector.report#ssn",
+      "line": 30,
+      "note": "",
+      "to": "com.acme.guard.Connector.mask#ssn",
+      "type": "ARGUMENT"
+    },
+    {
+      "from": "com.acme.guard.Connector.report",
+      "line": 30,
+      "note": "",
+      "to": "com.acme.guard.Connector.mask",
+      "type": "CALL"
+    },
+    {
+      "from": "com.acme.guard.Connector.mask#ssn",
+      "line": 30,
+      "note": "",
+      "to": "com.acme.guard.Connector.report#payload",
+      "type": "REACHING_DEF"
+    },
+    {
+      "from": "com.acme.guard.Connector.report#payload",
+      "line": 30,
+      "note": "",
+      "to": "com.acme.guard.Connector.report#payload",
+      "type": "REACHING_DEF"
+    },
+    {
+      "from": "com.acme.guard.Connector.report#payload",
+      "line": 31,
+      "note": "",
+      "to": "com.acme.guard.AuditLog.send#payload",
+      "type": "ARGUMENT"
+    },
+    {
+      "from": "com.acme.guard.Connector.report",
+      "line": 31,
+      "note": "",
+      "to": "com.acme.guard.AuditLog.send",
+      "type": "CALL"
     }
   ],
   "fields": [
     {
-      "name": "cap",
       "fullName": "com.acme.guard.Connector.cap",
-      "type": "int",
-      "owner": "com.acme.guard.Connector"
+      "name": "cap",
+      "owner": "com.acme.guard.Connector",
+      "type": "int"
     },
     {
-      "name": "settled",
       "fullName": "com.acme.guard.Connector.settled",
-      "type": "int",
-      "owner": "com.acme.guard.Connector"
+      "name": "settled",
+      "owner": "com.acme.guard.Connector",
+      "type": "int"
     },
     {
-      "name": "inflight",
       "fullName": "com.acme.guard.Connector.inflight",
-      "type": "int",
-      "owner": "com.acme.guard.Connector"
+      "name": "inflight",
+      "owner": "com.acme.guard.Connector",
+      "type": "int"
     },
     {
-      "name": "audit",
       "fullName": "com.acme.guard.Connector.audit",
-      "type": "com.acme.guard.AuditLog",
-      "owner": "com.acme.guard.Connector"
+      "name": "audit",
+      "owner": "com.acme.guard.Connector",
+      "type": "com.acme.guard.AuditLog"
     }
   ],
+  "meta": {
+    "generatedBy": "tools/_gen_cpg_fixture.py (one-shot; shape == scrape.sc; CPG-2: retType + faithful canSpend)",
+    "source": "tests/fixtures/cpg/connector.java"
+  },
   "methods": [
     {
-      "name": "<init>",
-      "fullName": "com.acme.guard.Connector.<init>",
-      "owner": "com.acme.guard.Connector",
-      "lineNumber": 12,
-      "endLineNumber": 17,
+      "args": [
+        "audit",
+        "cap",
+        "inflight",
+        "settled"
+      ],
       "calls": [],
+      "defs": [
+        "audit",
+        "cap",
+        "inflight",
+        "settled"
+      ],
+      "endLineNumber": 17,
+      "fullName": "com.acme.guard.Connector.<init>",
+      "lineNumber": 12,
+      "name": "<init>",
+      "owner": "com.acme.guard.Connector",
       "readFields": [],
+      "retType": "void",
       "writtenFields": [
         "audit",
         "cap",
         "inflight",
         "settled"
-      ],
-      "defs": [
-        "audit",
-        "cap",
-        "inflight",
-        "settled"
-      ],
-      "args": [
-        "audit",
-        "cap",
-        "inflight",
-        "settled"
       ]
     },
     {
-      "name": "canSpend",
-      "fullName": "com.acme.guard.Connector.canSpend",
-      "owner": "com.acme.guard.Connector",
-      "lineNumber": 21,
-      "endLineNumber": 23,
-      "calls": [],
-      "readFields": [
-        "cap"
+      "args": [
+        "amount"
       ],
-      "writtenFields": [],
+      "calls": [],
       "defs": [
         "amount",
         "projected"
       ],
-      "args": [
-        "amount"
-      ]
+      "endLineNumber": 23,
+      "fullName": "com.acme.guard.Connector.canSpend",
+      "lineNumber": 21,
+      "name": "canSpend",
+      "owner": "com.acme.guard.Connector",
+      "readFields": [
+        "cap",
+        "inflight",
+        "settled"
+      ],
+      "retType": "boolean",
+      "writtenFields": []
     },
     {
-      "name": "report",
-      "fullName": "com.acme.guard.Connector.report",
-      "owner": "com.acme.guard.Connector",
-      "lineNumber": 29,
-      "endLineNumber": 32,
+      "args": [
+        "ssn"
+      ],
       "calls": [
         "mask",
         "com.acme.guard.AuditLog.send"
       ],
-      "readFields": [
-        "audit"
-      ],
-      "writtenFields": [],
       "defs": [
         "payload",
         "ssn"
       ],
-      "args": [
-        "ssn"
-      ]
-    },
-    {
-      "name": "mask",
-      "fullName": "com.acme.guard.Connector.mask",
+      "endLineNumber": 32,
+      "fullName": "com.acme.guard.Connector.report",
+      "lineNumber": 29,
+      "name": "report",
       "owner": "com.acme.guard.Connector",
-      "lineNumber": 35,
+      "readFields": [
+        "audit"
+      ],
+      "retType": "void",
+      "writtenFields": []
+    },
+    {
+      "args": [
+        "ssn"
+      ],
+      "calls": [],
+      "defs": [
+        "ssn"
+      ],
       "endLineNumber": 37,
-      "calls": [],
+      "fullName": "com.acme.guard.Connector.mask",
+      "lineNumber": 35,
+      "name": "mask",
+      "owner": "com.acme.guard.Connector",
       "readFields": [],
-      "writtenFields": [],
-      "defs": [
-        "ssn"
-      ],
-      "args": [
-        "ssn"
-      ]
+      "retType": "String",
+      "writtenFields": []
     },
     {
-      "name": "send",
-      "fullName": "com.acme.guard.AuditLog.send",
-      "owner": "com.acme.guard.AuditLog",
-      "lineNumber": 42,
+      "args": [
+        "payload"
+      ],
+      "calls": [],
+      "defs": [
+        "payload"
+      ],
       "endLineNumber": 42,
-      "calls": [],
+      "fullName": "com.acme.guard.AuditLog.send",
+      "lineNumber": 42,
+      "name": "send",
+      "owner": "com.acme.guard.AuditLog",
       "readFields": [],
-      "writtenFields": [],
-      "defs": [
-        "payload"
-      ],
-      "args": [
-        "payload"
-      ]
-    }
-  ],
-  "edges": [
-    {
-      "type": "REACHING_DEF",
-      "from": "com.acme.guard.Connector.<init>#cap",
-      "to": "com.acme.guard.Connector.cap",
-      "line": 13,
-      "note": ""
-    },
-    {
-      "type": "REACHING_DEF",
-      "from": "com.acme.guard.Connector.<init>#settled",
-      "to": "com.acme.guard.Connector.settled",
-      "line": 14,
-      "note": ""
-    },
-    {
-      "type": "REACHING_DEF",
-      "from": "com.acme.guard.Connector.<init>#inflight",
-      "to": "com.acme.guard.Connector.inflight",
-      "line": 15,
-      "note": ""
-    },
-    {
-      "type": "REACHING_DEF",
-      "from": "com.acme.guard.Connector.<init>#audit",
-      "to": "com.acme.guard.Connector.audit",
-      "line": 16,
-      "note": ""
-    },
-    {
-      "type": "REACHING_DEF",
-      "from": "com.acme.guard.Connector.canSpend#projected",
-      "to": "com.acme.guard.Connector.canSpend#projected",
-      "line": 22,
-      "note": ""
-    },
-    {
-      "type": "REACHING_DEF",
-      "from": "com.acme.guard.Connector.cap",
-      "to": "com.acme.guard.Connector.canSpend#projected",
-      "line": 22,
-      "note": ""
-    },
-    {
-      "type": "REACHING_DEF",
-      "from": "com.acme.guard.Connector.report#payload",
-      "to": "com.acme.guard.Connector.report#payload",
-      "line": 30,
-      "note": ""
-    },
-    {
-      "type": "ARGUMENT",
-      "from": "com.acme.guard.Connector.report#ssn",
-      "to": "com.acme.guard.Connector.mask#ssn",
-      "line": 30,
-      "note": ""
-    },
-    {
-      "type": "REACHING_DEF",
-      "from": "com.acme.guard.Connector.mask#ssn",
-      "to": "com.acme.guard.Connector.report#payload",
-      "line": 30,
-      "note": ""
-    },
-    {
-      "type": "ARGUMENT",
-      "from": "com.acme.guard.Connector.report#payload",
-      "to": "com.acme.guard.AuditLog.send#payload",
-      "line": 31,
-      "note": ""
-    },
-    {
-      "type": "CALL",
-      "from": "com.acme.guard.Connector.report",
-      "to": "com.acme.guard.Connector.mask",
-      "line": 30,
-      "note": ""
-    },
-    {
-      "type": "CALL",
-      "from": "com.acme.guard.Connector.report",
-      "to": "com.acme.guard.AuditLog.send",
-      "line": 31,
-      "note": ""
-    }
-  ],
-  "taint_sources": [
-    {
-      "id": "com.acme.guard.Connector.<init>#cap",
-      "kind": "parameter",
-      "name": "cap",
-      "owner": "com.acme.guard.Connector.<init>",
-      "reason": "parameter",
-      "line": 12
-    },
-    {
-      "id": "com.acme.guard.Connector.<init>#settled",
-      "kind": "parameter",
-      "name": "settled",
-      "owner": "com.acme.guard.Connector.<init>",
-      "reason": "parameter",
-      "line": 12
-    },
-    {
-      "id": "com.acme.guard.Connector.<init>#inflight",
-      "kind": "parameter",
-      "name": "inflight",
-      "owner": "com.acme.guard.Connector.<init>",
-      "reason": "parameter",
-      "line": 12
-    },
-    {
-      "id": "com.acme.guard.Connector.<init>#audit",
-      "kind": "parameter",
-      "name": "audit",
-      "owner": "com.acme.guard.Connector.<init>",
-      "reason": "parameter",
-      "line": 12
-    },
-    {
-      "id": "com.acme.guard.Connector.canSpend#amount",
-      "kind": "parameter",
-      "name": "amount",
-      "owner": "com.acme.guard.Connector.canSpend",
-      "reason": "parameter",
-      "line": 21
-    },
-    {
-      "id": "com.acme.guard.Connector.report#ssn",
-      "kind": "parameter",
-      "name": "ssn",
-      "owner": "com.acme.guard.Connector.report",
-      "reason": "private-name:ssn",
-      "line": 29
-    },
-    {
-      "id": "com.acme.guard.Connector.mask#ssn",
-      "kind": "parameter",
-      "name": "ssn",
-      "owner": "com.acme.guard.Connector.mask",
-      "reason": "private-name:ssn",
-      "line": 35
-    },
-    {
-      "id": "com.acme.guard.AuditLog.send#payload",
-      "kind": "parameter",
-      "name": "payload",
-      "owner": "com.acme.guard.AuditLog.send",
-      "reason": "private-name:payload",
-      "line": 42
+      "retType": "void",
+      "writtenFields": []
     }
   ],
   "taint_sinks": [
     {
       "id": "com.acme.guard.AuditLog.send",
       "kind": "call",
+      "line": 31,
       "name": "send",
       "owner": "com.acme.guard.Connector.report",
-      "reason": "egress-name:send",
-      "line": 31
+      "reason": "egress-name:send"
+    }
+  ],
+  "taint_sources": [
+    {
+      "id": "com.acme.guard.Connector.<init>#cap",
+      "kind": "parameter",
+      "line": 12,
+      "name": "cap",
+      "owner": "com.acme.guard.Connector.<init>",
+      "reason": "parameter"
+    },
+    {
+      "id": "com.acme.guard.Connector.<init>#settled",
+      "kind": "parameter",
+      "line": 12,
+      "name": "settled",
+      "owner": "com.acme.guard.Connector.<init>",
+      "reason": "parameter"
+    },
+    {
+      "id": "com.acme.guard.Connector.<init>#inflight",
+      "kind": "parameter",
+      "line": 12,
+      "name": "inflight",
+      "owner": "com.acme.guard.Connector.<init>",
+      "reason": "parameter"
+    },
+    {
+      "id": "com.acme.guard.Connector.<init>#audit",
+      "kind": "parameter",
+      "line": 12,
+      "name": "audit",
+      "owner": "com.acme.guard.Connector.<init>",
+      "reason": "parameter"
+    },
+    {
+      "id": "com.acme.guard.Connector.canSpend#amount",
+      "kind": "parameter",
+      "line": 21,
+      "name": "amount",
+      "owner": "com.acme.guard.Connector.canSpend",
+      "reason": "parameter"
+    },
+    {
+      "id": "com.acme.guard.Connector.report#ssn",
+      "kind": "parameter",
+      "line": 29,
+      "name": "ssn",
+      "owner": "com.acme.guard.Connector.report",
+      "reason": "private-name:ssn"
+    },
+    {
+      "id": "com.acme.guard.Connector.mask#ssn",
+      "kind": "parameter",
+      "line": 35,
+      "name": "ssn",
+      "owner": "com.acme.guard.Connector.mask",
+      "reason": "private-name:ssn"
+    },
+    {
+      "id": "com.acme.guard.AuditLog.send#payload",
+      "kind": "parameter",
+      "line": 42,
+      "name": "payload",
+      "owner": "com.acme.guard.AuditLog.send",
+      "reason": "private-name:payload"
+    }
+  ],
+  "types": [
+    {
+      "constants": [],
+      "endLineNumber": 38,
+      "fullName": "com.acme.guard.Connector",
+      "inherits": [],
+      "lineNumber": 8,
+      "name": "Connector",
+      "owner": "com.acme.guard"
+    },
+    {
+      "constants": [],
+      "endLineNumber": 43,
+      "fullName": "com.acme.guard.AuditLog",
+      "inherits": [],
+      "lineNumber": 41,
+      "name": "AuditLog",
+      "owner": "com.acme.guard"
     }
   ]
 }

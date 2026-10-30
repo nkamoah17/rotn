@@ -1,7 +1,7 @@
 # ROTN — CPG + TLA+ Integration Plan
 
-> **Status: CPG-1 DONE (2026-07-10, gate passed offline); CPG-2 → CPG-4
-> planned.** This is the durable record of the CPG + TLA+ integration. It **builds on** the committed Phase 1–4 work
+> **Status: CPG-1 + CPG-2 DONE (CPG-2 gate passed 2026-10-30, offline); CPG-3 →
+> CPG-4 planned.** This is the durable record of the CPG + TLA+ integration. It **builds on** the committed Phase 1–4 work
 > (constraint emission, liveness R1–R4, the R0→R1→R2 ladder, and the P1
 > code extractor) and **converges with** the pending emblematic Phases 5–6
 > (claim packet + artifacts). It is the "good mix" of `emblematic.txt`
@@ -236,6 +236,38 @@ private→sink edge; offline (no Joern) the whole chain still imports and runs.
   the committed test path (Joern optional, like TLC).
 
 ### CPG-2 — The generic CPG→Candidate producer (the unifying front-end)  · *Effort M · Risk Med*
+
+**✅ Done — CPG-2 gate passed (2026-10-30, offline).** `rot/frontends/cpg/`
+subpackage: `extract_cpg(model, shape=None, method=None)` emits the *same*
+`Candidate` contract (imported from `rot.frontends.code` — one contract,
+one class). Both P1 shapes are recognized from **CPG structure**, not names:
+* **budget** — a *decision method* (boolean return, no writes, no calls)
+  combining ≥ 2 inputs (REACHING_DEF/ARGUMENT) against exactly one
+  non-flowing candidate (the cap); the enforced/bypassable split is read
+  from *which fields the sum is over* (in-flight in the sum → enforced;
+  settled-only → bypassable) — the `detect_apply_mode` idea generalized;
+* **label_flow** — classified private source → `taint_path` → classified
+  egress sink; enforced iff the egress caller reads a **boolean-typed field
+  some other method writes** (a type-based mutable-gate test; the egress
+  receiver is excluded structurally), else bypassable.
+
+**A/B gate:** `tests/test_cpg_extraction.py` — for the *same* control, the
+CPG producer and the code producer classify identically and lower to a
+`to_dict()`-identical `ProtocolIR` (provenance excluded — necessarily
+language-specific); both flow through the same gate: enforced → PROVEN,
+bypassable → VIOLATED + exact witness, E2 → OUT_OF_SCOPE (never a silent
+UNKNOWN). Ground truth: the committed Java/Joern scrape
+`tests/fixtures/cpg/connector.cpg.json` (budget ENFORCED + label_flow
+BYPASSABLE) plus in-memory models with *new* names covering the other two
+quadrants — proof the recognition is structural, not fixture-memorized.
+Honesty boundaries: no literals in a scrape → the lighthouse defaults
+(100/200), exactly as the code side falls back; out-of-pattern → E2.
+
+*Also fixed (found by the gate):* `rot/frontends/cone.py` seeded the cone
+roots into `depth` but not `in_cone` — with two call-connected roots the BFS
+re-queued them forever (infinite loop) and the cone silently excluded its
+own roots. Roots now seed both; the liveness bug is regression-covered by
+`test_label_flow_enforced_from_structure`.
 
 **Objective:** a narrow-waist front-end that recognizes the **P1 shapes from
 CPG structure** (dataflow + calls + field read/write) — not name heuristics —
