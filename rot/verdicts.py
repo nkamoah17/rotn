@@ -74,7 +74,26 @@ _VIOLATION_CODES = (POLICY_DENIAL, LIVENESS_BOUND_EXCEEDED, DEADLOCK)
 #                      race -- re-check at K >= the minimal overshoot count
 #                      (the K=1 trap).
 MASKED_AT_LOW_K = "MASKED_AT_LOW_K"
-_ADVISORY_CODES = (MASKED_AT_LOW_K,)
+# CPG-3 (the static <-> formal soundness cross-check, condition (S)):
+#   unsound_abstraction -- the ground-truth CPG carries a taint-critical
+#                          path that threatens the pinned property
+#                          (taintPath(G, P)) yet the abstract model proved P:
+#                          the abstraction A dropped a taint-critical
+#                          dataflow edge.  The PROVEN verdict is downgraded
+#                          to UNKNOWN (fail-closed, never a silent false
+#                          negative) and this advisory names why; the dropped
+#                          edge is named on the verdict (note / soundness /
+#                          evidence["abstraction_soundness"].dropped_edge).
+#   concurrency_only -- the model checker found a VIOLATION the static
+#                       single-path analysis does not see (e.g. a parallel-
+#                       fire spend-cap bypass): a concurrency-only witness.
+#                       The VIOLATED verdict stands; the tag records that the
+#                       static producer could not see it (the model checker's
+#                       value-add: "Joern is the smell test; ROTN is the
+#                       proof").
+UNSOUND_ABSTRACTION = "unsound_abstraction"
+CONCURRENCY_ONLY = "concurrency_only"
+_ADVISORY_CODES = (MASKED_AT_LOW_K, UNSOUND_ABSTRACTION, CONCURRENCY_ONLY)
 
 
 def _strip(d, *keys):

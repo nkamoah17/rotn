@@ -1,7 +1,8 @@
 # ROTN — CPG + TLA+ Integration Plan
 
-> **Status: CPG-1 + CPG-2 DONE (CPG-2 gate passed 2026-10-30, offline); CPG-3 →
-> CPG-4 planned.** This is the durable record of the CPG + TLA+ integration. It **builds on** the committed Phase 1–4 work
+> **Status: CPG-1 + CPG-2 + CPG-3 DONE (CPG-2 gate passed 2026-10-30, offline;
+> CPG-3 cross-check gate passed 2026-10-30, offline — 28/28); CPG-4 planned.**
+> This is the durable record of the CPG + TLA+ integration. It **builds on** the committed Phase 1–4 work
 > (constraint emission, liveness R1–R4, the R0→R1→R2 ladder, and the P1
 > code extractor) and **converges with** the pending emblematic Phases 5–6
 > (claim packet + artifacts). It is the "good mix" of `emblematic.txt`
@@ -286,7 +287,7 @@ and emits the *same `Candidate`* as the AST extractor.
 producers, identical lowered IR); out-of-pattern → `OUT_OF_SCOPE`; the new
 module is narrow-waist clean.
 
-### CPG-3 — The static↔formal soundness cross-check (the integrity win)  · *Effort S–M · Risk Med*
+### CPG-3 — The static↔formal soundness cross-check (the integrity win) · *DONE*
 
 **Objective:** make §3's condition **(S)** a first-class, checkable,
 fail-closed property that runs on every CPG-derived verdict.
@@ -298,10 +299,48 @@ fail-closed property that runs on every CPG-derived verdict.
 | `VIOLATED ∧ ¬ taintPath` → tag `concurrency_only` (the model checker's value-add) | same |
 | Agreement (the common case) → clean verdict, cross-check recorded in evidence | same |
 | Wire into `verify_candidate` so every CPG-derived verdict carries the result in `evidence` | `rot/cegar.py` |
-| Tests: all three branches (agreement clean / PROVEN+path→UNKNOWN+flag / VIOLATED+no-path→concurrency_only) | `tests/test_cpg_crosscheck.py` |
+| Tests: all branches (agreement clean / PROVEN+path→UNKNOWN+flag / VIOLATED+no-path→concurrency_only / not-applicable) | `tests/test_cpg_crosscheck.py` |
 
-**Gate (stop/go):** all three branches green; the downgrade is fail-closed
-(never a silent PROVEN); the flag names the dropped edge.
+**Gate (stop/go):** all branches green; the downgrade is fail-closed
+(never a silent PROVEN); the flag names the dropped edge. **PASSED
+2026-10-30 (offline, 28/28; full suite 1332/1332).**
+
+**Implementation record (what actually shipped):**
+
+- **The (S) cells are a 2×2, not three branches.** `check_abstraction_soundness`
+  returns one of four `SoundnessResult.status` values, keyed by
+  *(threat present? × verdict)*:
+
+  | | **PROVEN** | **VIOLATED** |
+  |---|---|---|
+  | **taintPath(G, P)** | `UNSOUND` (downgrade) | `AGREEMENT` |
+  | **¬ taintPath(G, P)** | `AGREEMENT` | `CONCURRENCY_ONLY` (tag) |
+
+  Undecided verdicts (`UNKNOWN`) and a CPG with no P1 control both return
+  `NOT_APPLICABLE` — recorded, never a verdict change.
+- **The threat query is shape-specific and cheap** (a per-path query over the
+  committed def-use / flow edges — no engine): for **budget** it asks whether
+  a taint-critical summand (the in-flight / parallel-fire term the cap must
+  bound) reaches the spend decision; for **label/flow** it asks whether the
+  private source reaches the egress sink. The **dropped edge is named** on the
+  `UNSOUND` result (and stamped on
+  `evidence["abstraction_soundness"].dropped_edge`) so a downgrade is always
+  *explainable*, never a bare flag.
+- **Fail-closed application.** `apply_soundness` turns a `UNSOUND` on a `PROVEN`
+  into a fresh `UNKNOWN` verdict (advisory `unsound_abstraction`, no
+  counterexample, the dropped edge on the note + soundness notes); it tags a
+  `CONCURRENCY_ONLY` on a `VIOLATED` (advisory `concurrency_only`, the witness
+  preserved — the tag never hides the violation). `AGREEMENT` /
+  `NOT_APPLICABLE` return the verdict untouched. It never mutates in place.
+- **Wiring.** `verify_candidate(ir, cfg, engine, cpg=None)` runs the cross-check
+  on every CPG-derived verdict (the caller passes the ground-truth scrape) and
+  records the result on `evidence["abstraction_soundness"]`. Without `cpg`
+  the behaviour is byte-identical to before (the cross-check is opt-in, so the
+  engine-vs-engine `rot/crosscheck.py` path is untouched).
+- **Distinct from `rot/crosscheck.py`.** That module is the *engine-vs-engine*
+  oracle (SMT + TLC + policy-direct, `join_status`). This one is the
+  *static-vs-formal* oracle (CPG ground truth vs. the model) — a different pair
+  of oracles, the same fail-closed shape, a separate module to avoid conflation.
 
 ### CPG-4 — Product 1 + Product 2 + the CPG-aware claim packet  · *Effort M · Risk Med*
 

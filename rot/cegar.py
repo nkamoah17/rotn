@@ -226,7 +226,7 @@ def cegar_liveness(reach_result, prop, cfg, engine):
 # Code-to-TLA+ verification (spec §7, D3) -- discharge a lowered candidate.
 # ---------------------------------------------------------------------------
 
-def verify_candidate(ir, cfg, engine="symbolic"):
+def verify_candidate(ir, cfg, engine="symbolic", cpg=None):
     """Discharge a lowered P1 candidate (spec §7, D3) into a :class:`Verdict`.
 
     This is the Verify-plane glue (E3): it takes the ``ProtocolIR`` that
@@ -247,16 +247,37 @@ def verify_candidate(ir, cfg, engine="symbolic"):
     If the candidate was ``out_of_scope`` (E2), the verdict is
     :func:`Verdict.out_of_scope` -- the engine never runs.
 
+    **CPG-3 cross-check.**  When the caller passes the ground-truth scrape
+    (``cpg``, a :class:`rot.frontends.cpg_model.CpgModel`), the static<->formal
+    soundness cross-check (condition (S)) runs on the verdict and is fail-
+    closed (see :mod:`rot.cpg_crosscheck`):
+
+    * ``PROVEN`` while the ground truth carries a taint-critical threat for
+      the pinned property  -> the abstraction dropped a taint-critical edge;
+      the verdict is **downgraded to UNKNOWN** with the advisory
+      ``unsound_abstraction`` and the dropped edge named (never a silent
+      false negative).
+    * ``VIOLATED`` where the static analysis sees no such threat  -> tagged
+      with the advisory ``concurrency_only`` (a witness the single-path
+      analysis cannot see -- the model checker's value-add; the VIOLATED
+      verdict stands).
+
+    The result is always recorded on ``verdict.evidence["abstraction_soundness"]``.
+
     Args:
         ir: a :class:`rot.ir.ProtocolIR` produced by
             :func:`rot.lower.lower_candidate` (carries the candidate scope in
             its metadata).
         cfg: a :class:`rot.config.Config` (state budget, etc.).
         engine: the engine tag recorded on the verdict (default ``"symbolic"``).
+        cpg: an optional ground-truth :class:`rot.frontends.cpg_model.CpgModel`
+            scrape the candidate was extracted from.  When given, the CPG-3
+            soundness cross-check runs on the verdict (fail-closed).
 
     Returns:
         rot.verdicts.Verdict: PROVEN / VIOLATED (+ witness) / UNKNOWN /
-        OUT_OF_SCOPE.
+        OUT_OF_SCOPE (a PROVEN is downgraded to UNKNOWN by the CPG-3
+        cross-check when the ground truth threatens the pinned property).
     """
     from .linearization import linearize
     from .invariants import Invariant
@@ -285,6 +306,18 @@ def verify_candidate(ir, cfg, engine="symbolic"):
     engine_result = eng.check(prop.expression, cfg.max_states)
     verdict = cegar(engine_result, prop, cfg, engine)
 
+    # CPG-3 (S): the static <-> formal soundness cross-check.  Runs on every
+    # CPG-derived verdict (the caller passes the ground-truth scrape); fail
+    # closed -- a PROVEN the ground truth threatens is downgraded to UNKNOWN
+    # with the dropped edge named, never a silent false negative.
+    soundness = None
+    if cpg is not None:
+        from .cpg_crosscheck import (apply_soundness,
+                                     check_abstraction_soundness)
+        soundness = check_abstraction_soundness(cpg, ir, verdict,
+                                                shape=pattern)
+        verdict = apply_soundness(verdict, soundness)
+
     # Stamp the candidate scope (E1 / E4 / E5) onto the verdict evidence so
     # the claim is never read as an unconditional statement about the codebase.
     evidence = dict(verdict.evidence)
@@ -298,6 +331,8 @@ def verify_candidate(ir, cfg, engine="symbolic"):
         "to the extracted shape + instantiation bounds, not the whole system")
     evidence["scope"] = ("per-instance (E4): this verdict is scoped to the "
                          "extracted control and its instantiation bounds")
+    if soundness is not None:
+        evidence["abstraction_soundness"] = soundness.to_dict()
     verdict.evidence = evidence
     return verdict
 
