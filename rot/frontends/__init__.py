@@ -17,6 +17,9 @@ Sub-packages / modules:
   * ``rot.frontends.cpg_model`` -- language-agnostic CPG data model.
   * ``rot.frontends.cone``      -- cone-of-influence over a CPG.
   * ``rot.frontends.cedar``     -- Cedar policy front-end (``parse_cedar``).
+  * ``rot.frontends.code``      -- Code-to-TLA+ extraction (spec §7, D3):
+                                    legacy source -> P1 ``ProtocolIR``
+                                    candidates (``extract``).
 
 Pure stdlib, Python 3.6 compatible.
 """

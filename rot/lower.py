@@ -45,7 +45,7 @@ Python 3.6 compatible (no f-strings, no walrus, no dataclasses).
 import rot.ir as ir
 import rot.spendcap as spendcap
 
-__all__ = ["lower_policy"]
+__all__ = ["lower_policy", "lower_candidate"]
 
 
 def _find_event_kind(node):
@@ -1044,3 +1044,137 @@ def lower_policy(node, amount=None, cap=None, max_inflight=None, window=None):
     # Fallback: the basic spend-cap shape (``Sum <op> cap``).
     return _lower_spendcap(node, amt, cp, k,
                            window=w, dw_window=dw_window)
+
+
+# ---------------------------------------------------------------------------
+# Code-to-TLA+ lowering (spec §7, D3) -- materialize a front-end candidate.
+# ---------------------------------------------------------------------------
+
+def _lower_label_flow_candidate(enforced, params, provenance, pinned):
+    """Materialize a **label/flow** candidate (lighthouse ``NoExfiltration``).
+
+    Same state / actions as the taint-egress shape; the egress is guarded when
+    the control is *enforced* (labeled data may reach only the allowed
+    channels) and unguarded when *bypassable* (an exfiltration is reachable).
+    """
+    label = params.get("label", "holding_private")
+    allowed = params.get("allowed", "allowed")
+    if enforced:
+        egress_guard = ir.Not(ir.V("holding_private"))
+        deny_guard = ir.V("holding_private")
+        buggy = False
+    else:
+        egress_guard = ir.T()
+        deny_guard = ir.F()
+        buggy = True
+    variables = [
+        ir.StateVar("holding_private", ir.Bool(), ir.MODE_PRECISE, "service",
+                    "the agent holds labeled (private) data"),
+        ir.StateVar("exfiltrated", ir.Bool(), ir.MODE_PRECISE, "service",
+                    "labeled data has been sent to an unapproved channel"),
+    ]
+    actions = [
+        ir.Action(name="init", owner="service", guard=ir.T(),
+                  effects=[ir.Assignment("holding_private", ir.C(False)),
+                           ir.Assignment("exfiltrated", ir.C(False))],
+                  is_initial=True, source="lower.py:init"),
+        ir.Action(name="touch_confidential", owner="service", guard=ir.T(),
+                  effects=[ir.Assignment("holding_private", ir.C(True))],
+                  linearization="send(touch_confidential)",
+                  source="lower.py:touch_confidential"),
+        ir.Action(name="contact_outsider", owner="service", guard=egress_guard,
+                  effects=[ir.Assignment("exfiltrated",
+                                         ir.Or(ir.V("exfiltrated"),
+                                               ir.V("holding_private")))],
+                  linearization="send(contact_outsider)",
+                  source="lower.py:contact_outsider"),
+        ir.Action(name="contact_deny", owner="service", guard=deny_guard,
+                  effects=[], source="lower.py:contact_deny"),
+        ir.Action(name="redact", owner="service", guard=ir.T(),
+                  effects=[ir.Assignment("holding_private", ir.C(False))],
+                  linearization="send(redact)", source="lower.py:redact"),
+    ]
+    if pinned is None:
+        pinned = ir.Not(ir.V("exfiltrated"))
+    return ir.ProtocolIR(
+        name="noexfil-%s" % ("enforced" if enforced else "bypassable"),
+        variables=variables,
+        channels=[],
+        actions=actions,
+        init=ir.T(),
+        pinned_property=pinned,
+        source_path="tests/fixtures/code",
+        metadata={"protocol": "LABEL_FLOW", "target": "label_flow",
+                  "candidate": True, "pattern_class": "P1", "pattern": "label_flow",
+                  "enforced": enforced, "buggy": buggy,
+                  "label": label, "allowed": allowed,
+                  "provenance": provenance, "source": "rot.frontends.code"},
+    )
+
+
+def lower_candidate(candidate, max_inflight=None):
+    """Materialize a front-end *candidate* (spec §7, D3) into a ``ProtocolIR``.
+
+    This is the "reuse lowering" step: the narrow-waist front-end
+    (``rot.frontends.code``) emits a lightweight candidate -- the P1 control
+    the code *enforces* (E1, not intent); this function turns that candidate
+    into a full ``ProtocolIR`` by reusing the existing shape-lowering:
+
+    * **budget**  -> :func:`rot.spendcap.build_ir` (the lighthouse SpendCap
+      shape), with the buggy (settled-only) vs. correct (in-flight) decision
+      selected by ``candidate.enforced``.
+    * **label_flow** -> the lighthouse NoExfiltration shape (same state/actions
+      as the taint-egress shape), egress guarded (enforced) or unguarded
+      (bypassable) by ``candidate.enforced``.
+
+    The IR metadata is stamped with the E1 ``candidate`` tag, the P1
+    pattern-class tag, and the per-instance provenance (E4).
+
+    Args:
+        candidate: an object exposing ``pattern``, ``enforced``, ``params``,
+            ``provenance``, ``pinned_property`` (the front-end ``Candidate``).
+        max_inflight: the in-flight bound K for the budget shape; defaults to
+            :data:`rot.spendcap.MAX_INFLIGHT` (>= 2 so the race is expressible).
+
+    Returns:
+        rot.ir.ProtocolIR: the materialized model.
+
+    Raises:
+        ValueError: if the candidate is out-of-scope (no P1 control) or its
+            pattern is unknown.
+    """
+    if getattr(candidate, "out_of_scope", False) or not getattr(
+            candidate, "is_control", False):
+        raise ValueError(
+            "candidate is out of scope (no P1 control); nothing to lower -- "
+            "report OUT_OF_SCOPE")
+    pattern = candidate.pattern
+    enforced = candidate.enforced
+    params = dict(candidate.params or {})
+    provenance = dict(candidate.provenance or {})
+    pinned = candidate.pinned_property
+
+    if pattern == "budget":
+        amount = params.get("amount", spendcap.AMOUNT)
+        cap = params.get("cap", spendcap.CAP)
+        k = spendcap.MAX_INFLIGHT if max_inflight is None else max_inflight
+        ir_model = spendcap.build_ir(
+            buggy=not enforced, amount=amount, cap=cap, max_inflight=k)
+        ir_model.metadata.update({
+            "candidate": True,
+            "pattern_class": "P1",
+            "pattern": "budget",
+            "enforced": enforced,
+            "provenance": provenance,
+            "source": "rot.frontends.code",
+        })
+        if pinned is not None:
+            ir_model.pinned_property = pinned
+        ir_model.name = "spendcap-%s" % ("correct" if enforced else "buggy")
+        return ir_model
+
+    if pattern == "label_flow":
+        return _lower_label_flow_candidate(enforced, params, provenance,
+                                           pinned)
+
+    raise ValueError("unknown P1 pattern: %r" % (pattern,))

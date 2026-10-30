@@ -222,4 +222,84 @@ def cegar_liveness(reach_result, prop, cfg, engine):
     raise ValueError("unknown liveness status %r" % (status,))
 
 
-__all__ = ["cegar", "cegar_liveness", "_feasible_in_ir"]
+# ---------------------------------------------------------------------------
+# Code-to-TLA+ verification (spec §7, D3) -- discharge a lowered candidate.
+# ---------------------------------------------------------------------------
+
+def verify_candidate(ir, cfg, engine="symbolic"):
+    """Discharge a lowered P1 candidate (spec §7, D3) into a :class:`Verdict`.
+
+    This is the Verify-plane glue (E3): it takes the ``ProtocolIR`` that
+    :func:`rot.lower.lower_candidate` materialized from the narrow-waist
+    front-end's candidate and runs it through the *existing* safety pipeline
+    (``linearize`` -> ``Invariant`` -> ``SymbolicEngine.check`` ->
+    :func:`cegar`), so a P1 claim is discharged exactly like any other pinned
+    property:
+
+    * **PROVEN**    -- the extracted control holds (the code is safe for this
+      control), and the verdict evidence states it is *candidate* (E1) and
+      *per-instance* (E4).
+    * **VIOLATED**  -- the bypass is reachable; the verdict carries the exact
+      witness (the bypass), not a prose description.
+    * **UNKNOWN**   -- the state budget was exhausted: an honest "not
+      decided", never a proof of either direction (E3).
+
+    If the candidate was ``out_of_scope`` (E2), the verdict is
+    :func:`Verdict.out_of_scope` -- the engine never runs.
+
+    Args:
+        ir: a :class:`rot.ir.ProtocolIR` produced by
+            :func:`rot.lower.lower_candidate` (carries the candidate scope in
+            its metadata).
+        cfg: a :class:`rot.config.Config` (state budget, etc.).
+        engine: the engine tag recorded on the verdict (default ``"symbolic"``).
+
+    Returns:
+        rot.verdicts.Verdict: PROVEN / VIOLATED (+ witness) / UNKNOWN /
+        OUT_OF_SCOPE.
+    """
+    from .linearization import linearize
+    from .invariants import Invariant
+    from .symbolic import SymbolicEngine
+    from .verdicts import Verdict, KIND_SAFETY, OUT_OF_SCOPE
+
+    meta = dict(getattr(ir, "metadata", {}) or {})
+
+    # E2: an out-of-scope candidate never runs the engine.
+    if meta.get("out_of_scope"):
+        return Verdict.out_of_scope(
+            ir.name or "control", engine,
+            reason=meta.get("out_of_scope_reason")
+            or "outside the declared pattern class (P1)")
+
+    pattern = meta.get("pattern") or "control"
+    prop = Invariant(
+        name=ir.name or pattern,
+        description=("Extracted P1 %s control -- a *candidate* the code "
+                     "enforces, not intent (E1/E4)." % pattern),
+        expression=ir.pinned_property,
+        kind=KIND_SAFETY,
+    )
+    linear_model = linearize(ir)
+    eng = SymbolicEngine(linear_model, max_states=cfg.max_states)
+    engine_result = eng.check(prop.expression, cfg.max_states)
+    verdict = cegar(engine_result, prop, cfg, engine)
+
+    # Stamp the candidate scope (E1 / E4 / E5) onto the verdict evidence so
+    # the claim is never read as an unconditional statement about the codebase.
+    evidence = dict(verdict.evidence)
+    evidence["candidate"] = bool(meta.get("candidate", True))
+    evidence["pattern_class"] = meta.get("pattern_class", "P1")
+    evidence["pattern"] = pattern
+    evidence["enforced"] = meta.get("enforced")
+    evidence["provenance"] = meta.get("provenance", {})
+    evidence["agent_replacement"] = (
+        "the agent stands in for the extracted control; the claim is scoped "
+        "to the extracted shape + instantiation bounds, not the whole system")
+    evidence["scope"] = ("per-instance (E4): this verdict is scoped to the "
+                         "extracted control and its instantiation bounds")
+    verdict.evidence = evidence
+    return verdict
+
+
+__all__ = ["cegar", "cegar_liveness", "_feasible_in_ir", "verify_candidate"]

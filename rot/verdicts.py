@@ -42,8 +42,14 @@ VIOLATED = "violated"
 UNKNOWN = "unknown"
 UNSOUND = "unsound"
 ERROR = "error"
+# E2 (spec §7): a code-extraction claim that falls OUTSIDE the declared pattern
+# class (P1: budget + label/flow) is reported OUT_OF_SCOPE -- an honest "this is
+# not the kind of control I extract", never a silent UNKNOWN and never claimed.
+# It is distinct from UNKNOWN: UNKNOWN means "I could not decide"; OUT_OF_SCOPE
+# means "this is outside the scope I claim at all".
+OUT_OF_SCOPE = "out_of_scope"
 
-_STATUSES = (PROVEN, VIOLATED, UNKNOWN, UNSOUND, ERROR)
+_STATUSES = (PROVEN, VIOLATED, UNKNOWN, UNSOUND, ERROR, OUT_OF_SCOPE)
 
 # Property kinds (mirror rot.invariants.KIND_SAFETY / KIND_LIVENESS).
 KIND_SAFETY = "safety"
@@ -256,12 +262,25 @@ class Verdict(object):
         return cls(ERROR, property_name, engine,
                    note=kw.get("note", "engine error"), **_strip(kw, "note"))
 
+    @classmethod
+    def out_of_scope(cls, property_name, engine, reason="", **kw):
+        """E2: an honest out-of-scope result for a claim outside the declared
+        pattern class.  Never read as proven, and never silently unknown: the
+        ``reason`` states which pattern class was in scope and why this code is
+        outside it."""
+        return cls(OUT_OF_SCOPE, property_name, engine,
+                   note=kw.get("note", reason or "outside the declared pattern class"),
+                   **_strip(kw, "note"))
+
     # -- predicates ----------------------------------------------------------
     def is_proven(self):
         return self.status == PROVEN
 
     def is_violated(self):
         return self.status == VIOLATED
+
+    def is_out_of_scope(self):
+        return self.status == OUT_OF_SCOPE
 
     # -- serialization -------------------------------------------------------
     def to_dict(self):
@@ -434,7 +453,7 @@ class VerdictReport(object):
         return base + ".json"
 
 
-__all__ = ["PROVEN", "VIOLATED", "UNKNOWN", "UNSOUND", "ERROR",
+__all__ = ["PROVEN", "VIOLATED", "UNKNOWN", "UNSOUND", "ERROR", "OUT_OF_SCOPE",
            "KIND_SAFETY", "KIND_LIVENESS",
            "POLICY_DENIAL", "LIVENESS_BOUND_EXCEEDED", "DEADLOCK",
            "MASKED_AT_LOW_K",
