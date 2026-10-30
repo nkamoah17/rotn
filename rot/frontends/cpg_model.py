@@ -42,7 +42,7 @@ class CpgType(object):
     """A declared type (class / interface / enum)."""
 
     def __init__(self, name, full_name, owner="", line=0, end_line=0,
-                 inherits=None, constants=None):
+                 inherits=None, constants=None, constant=None):
         self.name = name
         self.full_name = full_name
         self.owner = owner
@@ -50,9 +50,14 @@ class CpgType(object):
         self.end_line = end_line
         self.inherits = list(inherits or [])
         self.constants = list(constants or [])
+        # The valueMap ``constant`` key (§2.4, D.3): the node's constant value
+        # when the type itself is a constant holder (null otherwise).  The
+        # ``constants`` list above is the *member* list (the enum values --
+        # the state-space domain Q); ``constant`` is this node's own value.
+        self.constant = constant
 
     def to_dict(self):
-        return {
+        d = {
             "name": self.name,
             "fullName": self.full_name,
             "owner": self.owner,
@@ -61,6 +66,9 @@ class CpgType(object):
             "inherits": list(self.inherits),
             "constants": list(self.constants),
         }
+        if self.constant is not None:
+            d["constant"] = self.constant
+        return d
 
     @staticmethod
     def from_dict(d):
@@ -72,6 +80,7 @@ class CpgType(object):
             end_line=int(d.get("endLineNumber") or 0),
             inherits=list(d.get("inherits") or []),
             constants=list(d.get("constants") or []),
+            constant=d.get("constant"),
         )
 
     def __repr__(self):
@@ -79,21 +88,30 @@ class CpgType(object):
 
 
 class CpgField(object):
-    """A declared field with its declared type and owning type."""
+    """A declared field with its declared type and owning type.
 
-    def __init__(self, name, full_name, type_name="", owner=""):
+    ``constant`` (the valueMap ``constant`` key, §2.4 D.3): the field's
+    constant value when it is never reassigned (a constant node in the
+    general state space, §2.6); ``None`` for a mutable field.
+    """
+
+    def __init__(self, name, full_name, type_name="", owner="", constant=None):
         self.name = name
         self.full_name = full_name
         self.type_name = type_name
         self.owner = owner
+        self.constant = constant
 
     def to_dict(self):
-        return {
+        d = {
             "name": self.name,
             "fullName": self.full_name,
             "type": self.type_name,
             "owner": self.owner,
         }
+        if self.constant is not None:
+            d["constant"] = self.constant
+        return d
 
     @staticmethod
     def from_dict(d):
@@ -102,6 +120,7 @@ class CpgField(object):
             full_name=d.get("fullName", ""),
             type_name=d.get("type", ""),
             owner=d.get("owner", ""),
+            constant=d.get("constant"),
         )
 
     def __repr__(self):
@@ -115,11 +134,25 @@ class CpgField(object):
 # edges (def-use and argument passing); FLOW is the generic alias the plan
 # uses for any other dataflow edge; CALL is control flow (kept out of the
 # default taint_path search; available via include_calls=True).
+#
+# The control half (joern-primary-ab-plan §2.4, D) -- the edges FSM extraction
+# needs beyond dataflow (taint_path keeps searching only the dataflow kinds):
+#   * CDG:       control dependence (the CPG's CDG pass): src controls dst --
+#                a branch block -> the value node it gates (the write in its
+#                body).  The transition detector's control half (Q4).
+#   * DOMINATE:  dominance (CfgDominator): src dominates dst -- the loop
+#                header -> its body.  Used for the loop's exit condition.
+#   * CONTAINS:  structural containment: container -> contained -- method ->
+#                loop -> branch.  "Inside the loop" is a CONTAINS chain.
 EDGE_REACHING_DEF = "REACHING_DEF"
 EDGE_ARGUMENT = "ARGUMENT"
 EDGE_FLOW = "FLOW"
 EDGE_CALL = "CALL"
-EDGE_KINDS = (EDGE_REACHING_DEF, EDGE_ARGUMENT, EDGE_FLOW, EDGE_CALL)
+EDGE_CDG = "CDG"
+EDGE_DOMINATE = "DOMINATE"
+EDGE_CONTAINS = "CONTAINS"
+EDGE_KINDS = (EDGE_REACHING_DEF, EDGE_ARGUMENT, EDGE_FLOW, EDGE_CALL,
+              EDGE_CDG, EDGE_DOMINATE, EDGE_CONTAINS)
 
 # The kinds taint_path searches by default: dataflow only (the plan's
 # "REACHING_DEF/FLOW path from a private source to an unapproved sink").
@@ -133,6 +166,10 @@ class CpgEdge(object):
       * a method:      its fullName            (com.acme.Connector.report)
       * a slot:        fullName + "#" + name   (a parameter or a local def)
       * a field:       the field's fullName    (com.acme.Connector.cap)
+      * a block:       owner + "#" + tag       (a branch / a loop, §2.4 B)
+    REACHING_DEF / ARGUMENT / FLOW are the dataflow half (CPG-1); CDG /
+    DOMINATE / CONTAINS are the control half (joern-primary-ab-plan §2.4 D)
+    the FSM extractor consumes.
     """
 
     def __init__(self, edge_type, src, dst, line=0, note=""):
@@ -210,6 +247,338 @@ class CpgTaintNode(object):
         return "CpgTaintNode(%s %s)" % (self.kind, self.node_id)
 
 
+# ---------------------------------------------------------------------------
+# control records (the control half -- joern-primary-ab-plan §2.4)
+# ---------------------------------------------------------------------------
+# These carry the CPG structure the dataflow half (CPG-1) does not: the
+# filesystem + namespace provenance (FILE / NAMESPACE_BLOCK), the method
+# parameters (METHOD_PARAMETER_IN/OUT -- the input alphabet Σ, Q3), the locals
+# (LOCAL -- the FSM state-variable candidates, Q2), and the blocks
+# (BLOCK / CONTROL_STRUCTURE -- the loop, Q1, and the branches that gate the
+# state writes, Q4).  rot/fsmextract.py consumes them; old artifacts simply
+# carry empty lists for all of them (the records are additive).
+class CpgFile(object):
+    """A FILE node (spec §2.4, B): the filesystem half (provenance).
+
+    ``name`` is the base name (``Coordinator.java``); ``full_name`` the
+    scrape-relative path; ``namespace`` the enclosing NAMESPACE_BLOCK name.
+    """
+
+    def __init__(self, name, full_name="", namespace="", owner="",
+                 line=0, end_line=0):
+        self.name = name
+        self.full_name = full_name
+        self.namespace = namespace or ""
+        self.owner = owner or ""
+        self.line = int(line or 0)
+        self.end_line = int(end_line or 0)
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "fullName": self.full_name,
+            "namespace": self.namespace,
+            "owner": self.owner,
+            "lineNumber": self.line,
+            "endLineNumber": self.end_line,
+        }
+
+    @staticmethod
+    def from_dict(d):
+        return CpgFile(
+            name=d.get("name", ""),
+            full_name=d.get("fullName", ""),
+            namespace=d.get("namespace", ""),
+            owner=d.get("owner", ""),
+            line=int(d.get("lineNumber") or 0),
+            end_line=int(d.get("endLineNumber") or 0),
+        )
+
+    def __repr__(self):
+        return "CpgFile(%s)" % (self.full_name or self.name)
+
+
+class CpgNamespace(object):
+    """A NAMESPACE_BLOCK node (spec §2.4, B).
+
+    One namespace is one module = one factor-graph component (the GSSM
+    "distributed" half, §2.6): the product of the local factor graphs of the
+    types it contains, joined by the channel factors.
+    """
+
+    def __init__(self, name, full_name, owner="", line=0, end_line=0):
+        self.name = name
+        self.full_name = full_name
+        self.owner = owner or ""
+        self.line = int(line or 0)
+        self.end_line = int(end_line or 0)
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "fullName": self.full_name,
+            "owner": self.owner,
+            "lineNumber": self.line,
+            "endLineNumber": self.end_line,
+        }
+
+    @staticmethod
+    def from_dict(d):
+        return CpgNamespace(
+            name=d.get("name", ""),
+            full_name=d.get("fullName", ""),
+            owner=d.get("owner", ""),
+            line=int(d.get("lineNumber") or 0),
+            end_line=int(d.get("endLineNumber") or 0),
+        )
+
+    def __repr__(self):
+        return "CpgNamespace(%s)" % self.full_name
+
+
+class CpgParam(object):
+    """A METHOD_PARAMETER_IN / METHOD_PARAMETER_OUT node (spec §2.4, A).
+
+    The *input alphabet Σ* candidates (Q3): the direction-IN parameters of the
+    FSM's owning method are the alphabet's members, and the ones a branch's
+    condition reads (a REACHING_DEF into the branch block) are the channels
+    the transition guards on.  ``constant`` is the valueMap ``constant`` key
+    (a literal default); ``is_external`` / ``is_implicit`` feed the
+    false-positive guard (Q-FP).
+    """
+
+    DIRECTION_IN = "IN"
+    DIRECTION_OUT = "OUT"
+
+    def __init__(self, name, full_name, type_name="", owner="",
+                 argument_index=0, direction="IN", line=0, end_line=0,
+                 is_external=False, is_implicit=False, constant=None,
+                 code=""):
+        self.name = name
+        self.full_name = full_name
+        self.type_name = type_name
+        self.owner = owner or ""
+        self.argument_index = int(argument_index or 0)
+        self.direction = (direction or self.DIRECTION_IN).upper()
+        self.line = int(line or 0)
+        self.end_line = int(end_line or 0)
+        self.is_external = bool(is_external)
+        self.is_implicit = bool(is_implicit)
+        self.constant = constant
+        self.code = code or ""
+
+    @property
+    def is_input(self):
+        """True iff this is a METHOD_PARAMETER_IN (an alphabet member)."""
+        return self.direction == self.DIRECTION_IN
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "fullName": self.full_name,
+            "type": self.type_name,
+            "owner": self.owner,
+            "argumentIndex": self.argument_index,
+            "direction": self.direction,
+            "lineNumber": self.line,
+            "endLineNumber": self.end_line,
+            "isExternal": self.is_external,
+            "isImplicit": self.is_implicit,
+            "constant": self.constant,
+            "code": self.code,
+        }
+
+    @staticmethod
+    def from_dict(d):
+        return CpgParam(
+            name=d.get("name", ""),
+            full_name=d.get("fullName", ""),
+            type_name=d.get("type", ""),
+            owner=d.get("owner", ""),
+            argument_index=int(d.get("argumentIndex") or 0),
+            direction=d.get("direction", "IN"),
+            line=int(d.get("lineNumber") or 0),
+            end_line=int(d.get("endLineNumber") or 0),
+            is_external=bool(d.get("isExternal", False)),
+            is_implicit=bool(d.get("isImplicit", False)),
+            constant=d.get("constant"),
+            code=d.get("code", ""),
+        )
+
+    def __repr__(self):
+        return "CpgParam(%s %s)" % (self.direction, self.full_name)
+
+
+class CpgLocal(object):
+    """A LOCAL node (spec §2.4, B) -- an FSM state-variable candidate (Q2).
+
+    ``full_name`` is the slot id (``Method#name``) the dataflow edges use;
+    ``type_name`` resolves against the declared types for the bounded
+    discrete domain (the Q2a test); ``constant`` is the valueMap
+    ``constant`` key (a literal initializer / never-reassigned value).
+    """
+
+    def __init__(self, name, full_name, type_name="", owner="", line=0,
+                 end_line=0, constant=None, code=""):
+        self.name = name
+        self.full_name = full_name
+        self.type_name = type_name
+        self.owner = owner or ""
+        self.line = int(line or 0)
+        self.end_line = int(end_line or 0)
+        self.constant = constant
+        self.code = code or ""
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "fullName": self.full_name,
+            "type": self.type_name,
+            "owner": self.owner,
+            "lineNumber": self.line,
+            "endLineNumber": self.end_line,
+            "constant": self.constant,
+            "code": self.code,
+        }
+
+    @staticmethod
+    def from_dict(d):
+        return CpgLocal(
+            name=d.get("name", ""),
+            full_name=d.get("fullName", ""),
+            type_name=d.get("type", ""),
+            owner=d.get("owner", ""),
+            line=int(d.get("lineNumber") or 0),
+            end_line=int(d.get("endLineNumber") or 0),
+            constant=d.get("constant"),
+            code=d.get("code", ""),
+        )
+
+    def __repr__(self):
+        return "CpgLocal(%s)" % self.full_name
+
+
+class CpgBlock(object):
+    """A BLOCK / CONTROL_STRUCTURE node (spec §2.4, B).
+
+    The control structure the FSM extractor needs: the *loop* (a
+    CONTROL_STRUCTURE whose ``cs_type`` is a loop kind -- the Q1 trip-count
+    filter's target) and the *branches* (IF nodes) that guard the state
+    writes (the Q4 transition sites).  ``full_name`` is the block id the
+    CDG / DOMINATE / CONTAINS edges use; ``code`` is the valueMap ``code``
+    snippet (the construct's source text -- it is what lets the extractor
+    tell ``while (s != c)`` from ``while (s == c)`` when deriving F).
+    """
+
+    KIND_BLOCK = "BLOCK"
+    KIND_CONTROL_STRUCTURE = "CONTROL_STRUCTURE"
+    #: The control-structure types that denote a loop (the trip-count
+    #: filter's candidates).
+    LOOP_TYPES = ("WHILE", "DO", "FOR", "LOOP")
+
+    def __init__(self, kind, name="", full_name="", owner="", line=0,
+                 end_line=0, cs_type="", code=""):
+        self.kind = (kind or self.KIND_BLOCK).upper()
+        self.name = name or ""
+        self.full_name = full_name
+        self.owner = owner or ""
+        self.line = int(line or 0)
+        self.end_line = int(end_line or 0)
+        self.cs_type = (cs_type or "").upper()
+        self.code = code or ""
+
+    @property
+    def is_loop(self):
+        """True iff this is a CONTROL_STRUCTURE loop (WHILE / DO / FOR)."""
+        return (self.kind == self.KIND_CONTROL_STRUCTURE
+                and self.cs_type in self.LOOP_TYPES)
+
+    @property
+    def is_branch(self):
+        """True iff this is an IF branch (a transition-site candidate)."""
+        return (self.kind == self.KIND_CONTROL_STRUCTURE
+                and self.cs_type == "IF")
+
+    def to_dict(self):
+        d = {
+            "kind": self.kind,
+            "name": self.name,
+            "fullName": self.full_name,
+            "owner": self.owner,
+            "lineNumber": self.line,
+            "endLineNumber": self.end_line,
+        }
+        if self.cs_type:
+            d["csType"] = self.cs_type
+        if self.code:
+            d["code"] = self.code
+        return d
+
+    @staticmethod
+    def from_dict(d):
+        return CpgBlock(
+            kind=d.get("kind", "BLOCK"),
+            name=d.get("name", ""),
+            full_name=d.get("fullName", ""),
+            owner=d.get("owner", ""),
+            line=int(d.get("lineNumber") or 0),
+            end_line=int(d.get("endLineNumber") or 0),
+            cs_type=d.get("csType", ""),
+            code=d.get("code", ""),
+        )
+
+    def __repr__(self):
+        return "CpgBlock(%s %s)" % (self.kind, self.full_name)
+
+
+class CpgCall(object):
+    """A CALL node (spec §2.4, B): a call site with its dispatch metadata.
+
+    ``callee`` is the called method's fullName; ``src`` the caller (the
+    method fullName, as in the CALL edges).  ``dispatch_type`` (the valueMap
+    ``dispatchType``) and ``is_external`` are the false-positive guard's
+    inputs (Q-FP): a "state variable" written only by an external / virtual-
+    dispatch call is a function pointer, not a state (one of the paper's two
+    FPs).
+    """
+
+    def __init__(self, callee, src="", line=0, dispatch_type="",
+                 is_external=False, is_implicit=False, code=""):
+        self.callee = callee
+        self.src = src or ""
+        self.line = int(line or 0)
+        self.dispatch_type = dispatch_type or ""
+        self.is_external = bool(is_external)
+        self.is_implicit = bool(is_implicit)
+        self.code = code or ""
+
+    def to_dict(self):
+        return {
+            "callee": self.callee,
+            "src": self.src,
+            "lineNumber": self.line,
+            "dispatchType": self.dispatch_type,
+            "isExternal": self.is_external,
+            "isImplicit": self.is_implicit,
+            "code": self.code,
+        }
+
+    @staticmethod
+    def from_dict(d):
+        return CpgCall(
+            callee=d.get("callee", ""),
+            src=d.get("src", ""),
+            line=int(d.get("lineNumber") or 0),
+            dispatch_type=d.get("dispatchType", ""),
+            is_external=bool(d.get("isExternal", False)),
+            is_implicit=bool(d.get("isImplicit", False)),
+            code=d.get("code", ""),
+        )
+
+    def __repr__(self):
+        return "CpgCall(%s -> %s)" % (self.src, self.callee)
+
+
 class CpgMethod(object):
     """A method with call edges, field read/write edges, and its dataflow
     half (CPG-1).
@@ -226,7 +595,8 @@ class CpgMethod(object):
 
     def __init__(self, name, full_name, owner="", line=0, end_line=0,
                  calls=None, read_fields=None, written_fields=None,
-                 defs=None, args=None, ret_type=None):
+                 defs=None, args=None, ret_type=None, is_external=False,
+                 is_implicit=False):
         self.name = name
         self.full_name = full_name
         self.owner = owner
@@ -242,6 +612,11 @@ class CpgMethod(object):
         # *decision* method returns a boolean); a model without it can only
         # report OUT_OF_SCOPE for the shapes that require it (E2).
         self.ret_type = ret_type
+        # The false-positive guard's inputs (§2.4 A / §2.5 Q-FP): a method
+        # marked a stub (isExternal / isImplicit) cannot own a real FSM state
+        # variable -- the paper's two FPs are excluded via these flags.
+        self.is_external = bool(is_external)
+        self.is_implicit = bool(is_implicit)
 
     def to_dict(self):
         d = {
@@ -258,6 +633,10 @@ class CpgMethod(object):
         }
         if self.ret_type is not None:
             d["retType"] = self.ret_type
+        if self.is_external:
+            d["isExternal"] = True
+        if self.is_implicit:
+            d["isImplicit"] = True
         return d
 
     @staticmethod
@@ -274,6 +653,8 @@ class CpgMethod(object):
             defs=list(d.get("defs") or []),
             args=list(d.get("args") or []),
             ret_type=d.get("retType"),
+            is_external=bool(d.get("isExternal", False)),
+            is_implicit=bool(d.get("isImplicit", False)),
         )
 
 # ---------------------------------------------------------------------------
@@ -282,10 +663,22 @@ class CpgMethod(object):
 class CpgModel(object):
     """A complete CPG scrape: meta + types + fields + methods + the
     dataflow half (CPG-1): typed ``edges`` and the conservative
-    ``taint_sources`` / ``taint_sinks`` sets."""
+    ``taint_sources`` / ``taint_sinks`` sets.
+
+    Plus the *control half* (joern-primary-ab-plan §2.4, additive -- old
+    artifacts carry empty lists for all of these): ``files`` /
+    ``namespaces`` (filesystem + namespace provenance), ``params``
+    (METHOD_PARAMETER_IN/OUT -- the input alphabet Sigma), ``locals_``
+    (LOCAL -- the FSM state-variable candidates), ``blocks``
+    (BLOCK / CONTROL_STRUCTURE -- the loop + the branches), ``calls``
+    (CALL -- the dispatch metadata), and the CDG / DOMINATE / CONTAINS
+    edges inside ``edges``.
+    """
 
     def __init__(self, meta=None, types=None, fields=None, methods=None,
-                 edges=None, taint_sources=None, taint_sinks=None):
+                 edges=None, taint_sources=None, taint_sinks=None,
+                 files=None, namespaces=None, params=None, locals_=None,
+                 blocks=None, calls=None):
         self.meta = dict(meta or {})
         self.types = list(types or [])
         self.fields = list(fields or [])
@@ -293,6 +686,14 @@ class CpgModel(object):
         self.edges = list(edges or [])
         self.taint_sources = list(taint_sources or [])
         self.taint_sinks = list(taint_sinks or [])
+        # The control half (§2.4): additive collections, empty by default so
+        # every pre-§2.4 artifact (old fixtures) stays valid.
+        self.files = list(files or [])
+        self.namespaces = list(namespaces or [])
+        self.params = list(params or [])
+        self.locals_ = list(locals_ or [])
+        self.blocks = list(blocks or [])
+        self.calls = list(calls or [])
 
     # -- serialization ------------------------------------------------------
     def to_dict(self):
@@ -304,6 +705,13 @@ class CpgModel(object):
             "edges": [e.to_dict() for e in self.edges],
             "taint_sources": [t.to_dict() for t in self.taint_sources],
             "taint_sinks": [t.to_dict() for t in self.taint_sinks],
+            # the control half (§2.4): always present (empty on old artifacts)
+            "files": [f.to_dict() for f in self.files],
+            "namespaces": [n.to_dict() for n in self.namespaces],
+            "params": [p.to_dict() for p in self.params],
+            "locals": [l.to_dict() for l in self.locals_],
+            "blocks": [b.to_dict() for b in self.blocks],
+            "calls": [c.to_dict() for c in self.calls],
         }
 
     @staticmethod
@@ -318,6 +726,13 @@ class CpgModel(object):
                            for t in d.get("taint_sources") or []],
             taint_sinks=[CpgTaintNode.from_dict(t)
                          for t in d.get("taint_sinks") or []],
+            files=[CpgFile.from_dict(f) for f in d.get("files") or []],
+            namespaces=[CpgNamespace.from_dict(n)
+                        for n in d.get("namespaces") or []],
+            params=[CpgParam.from_dict(p) for p in d.get("params") or []],
+            locals_=[CpgLocal.from_dict(l) for l in d.get("locals") or []],
+            blocks=[CpgBlock.from_dict(b) for b in d.get("blocks") or []],
+            calls=[CpgCall.from_dict(c) for c in d.get("calls") or []],
         )
 
     def to_json(self):
@@ -371,6 +786,25 @@ class CpgModel(object):
         for t in list(self.taint_sources) + list(self.taint_sinks):
             if not t.node_id:
                 errors.append("taint node with empty id (kind=%r)" % (t.kind,))
+        # the control half (§2.4): light well-formedness, additive
+        for f in self.files:
+            if not f.name:
+                errors.append("file with empty name")
+        for n in self.namespaces:
+            if not n.full_name:
+                errors.append("namespace with empty fullName: %s" % n.name)
+        for p in self.params:
+            if not p.full_name:
+                errors.append("param with empty fullName: %s" % p.name)
+        for l in self.locals_:
+            if not l.full_name:
+                errors.append("local with empty fullName: %s" % l.name)
+        for b in self.blocks:
+            if not b.full_name:
+                errors.append("block with empty fullName: %s" % b.name)
+        for c in self.calls:
+            if not c.callee:
+                errors.append("call with empty callee (src=%r)" % c.src)
         return errors
 
     # -- queries ------------------------------------------------------------
@@ -449,6 +883,110 @@ class CpgModel(object):
     def dataflow_edges(self):
         """The dataflow edges (REACHING_DEF / ARGUMENT / FLOW)."""
         return [e for e in self.edges if e.edge_type in DATAFLOW_EDGE_KINDS]
+
+    # -- control half (joern-primary-ab-plan §2.4) ---------------------------
+    def params_of(self, owner):
+        """All METHOD_PARAMETER nodes of ``owner`` (IN and OUT)."""
+        return [p for p in self.params if p.owner == owner]
+
+    def input_params(self, owner):
+        """The direction-IN parameters of ``owner`` (the alphabet Σ)."""
+        return [p for p in self.params_of(owner) if p.is_input]
+
+    def param(self, full_name):
+        for p in self.params:
+            if p.full_name == full_name:
+                return p
+        return None
+
+    def locals_of(self, owner):
+        """The LOCAL nodes of ``owner`` (the state-variable candidates)."""
+        return [l for l in self.locals_ if l.owner == owner]
+
+    def local(self, full_name):
+        for l in self.locals_:
+            if l.full_name == full_name:
+                return l
+        return None
+
+    def blocks_of(self, owner):
+        """The BLOCK / CONTROL_STRUCTURE nodes of ``owner``."""
+        return [b for b in self.blocks if b.owner == owner]
+
+    def loop_blocks(self, owner=None):
+        """The loop CONTROL_STRUCTUREs (optionally scoped to ``owner``)."""
+        out = [b for b in self.blocks if b.is_loop]
+        if owner is not None:
+            out = [b for b in out if b.owner == owner]
+        return out
+
+    def branch_blocks(self, owner=None):
+        """The IF branch CONTROL_STRUCTUREs (optionally scoped)."""
+        out = [b for b in self.blocks if b.is_branch]
+        if owner is not None:
+            out = [b for b in out if b.owner == owner]
+        return out
+
+    def block(self, full_name):
+        for b in self.blocks:
+            if b.full_name == full_name:
+                return b
+        return None
+
+    def calls_of(self, src):
+        """CALL nodes whose caller is ``src`` (a method fullName)."""
+        return [c for c in self.calls if c.src == src]
+
+    def calls_to(self, callee):
+        """CALL nodes whose callee is ``callee`` (a method fullName)."""
+        return [c for c in self.calls if c.callee == callee]
+
+    def reads_of(self, node_id):
+        """Dataflow edges flowing INTO ``node_id`` (REACHING_DEF/ARGUMENT/FLOW).
+
+        ``src`` is the def the node reads: the branch's condition inputs
+        (constants / state variable / input channels) and the loop's exit
+        test inputs are exactly these edges.
+        """
+        return [e for e in self.dataflow_edges() if e.dst == node_id]
+
+    def writes_of(self, node_id):
+        """Dataflow edges flowing OUT of ``node_id`` (its defs' uses)."""
+        return [e for e in self.dataflow_edges() if e.src == node_id]
+
+    def cdg_dependents(self, node_id):
+        """The value nodes control-dependent on ``node_id`` (CDG out-edges).
+
+        For a branch block, this is the set of writes its body performs --
+        the control half of the transition detector (Q4).
+        """
+        return [e for e in self.edges if e.edge_type == EDGE_CDG
+                and e.src == node_id]
+
+    def contained_in(self, node_id, container_id):
+        """True iff ``node_id`` is structurally inside ``container_id``.
+
+        A transitive CONTAINS chain: method -> loop -> branch (or the same
+        node).  This is the "inside the loop" test the trip-count filter
+        (Q1) and the s0/F separation (Q5) rely on.
+        """
+        if node_id == container_id:
+            return True
+        adj = {}
+        for e in self.edges:
+            if e.edge_type == EDGE_CONTAINS:
+                adj.setdefault(e.src, set()).add(e.dst)
+        seen = set()
+        queue = [container_id]
+        while queue:
+            cur = queue.pop()
+            for nxt in adj.get(cur, ()):
+                if nxt == node_id:
+                    return True
+                if nxt not in seen:
+                    seen.add(nxt)
+                    queue.append(nxt)
+        return False
 
     def taint_source_ids(self):
         """Sorted node ids of the classified taint sources."""
@@ -555,6 +1093,9 @@ class CpgModel(object):
 
 __all__ = [
     "CpgType", "CpgField", "CpgMethod", "CpgEdge", "CpgTaintNode", "CpgModel",
+    # the control half (joern-primary-ab-plan §2.4)
+    "CpgFile", "CpgNamespace", "CpgParam", "CpgLocal", "CpgBlock", "CpgCall",
     "EDGE_REACHING_DEF", "EDGE_ARGUMENT", "EDGE_FLOW", "EDGE_CALL",
+    "EDGE_CDG", "EDGE_DOMINATE", "EDGE_CONTAINS",
     "EDGE_KINDS", "DATAFLOW_EDGE_KINDS",
 ]

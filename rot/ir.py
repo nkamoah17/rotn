@@ -683,7 +683,7 @@ class ProtocolIR(object):
     def __init__(self, name, variables=None, channels=None, actions=None,
                  init=None, pinned_property=None, assumptions=None,
                  abstraction_manifest=None, source_path="", metadata=None,
-                 policy=None):
+                 policy=None, alphabet=None, final_states=None):
         self.name = name
         self.variables = list(variables or [])
         self.channels = list(channels or [])
@@ -697,6 +697,16 @@ class ProtocolIR(object):
         # Optional adversarial agent policy (the AgentStep family). ``None`` for
         # every existing target -- the narrow waist stays backward compatible.
         self.policy = policy
+        # The FSM 5-tuple's remaining components (the FSM-extraction lift,
+        # joern-primary-ab-plan Phase 1 / ``rot/fsmextract.py``): ``alphabet``
+        # is Sigma -- the inputs the FSM's transitions consume -- and
+        # ``final_states`` is F -- the states the protocol must reach.  Both
+        # default to the empty list: an IR without them is exactly the
+        # dataflow/abstraction model it was before (backward compatible),
+        # and a fixture may carry a partial 5-tuple (e.g. F present, Sigma
+        # not) without the missing component being an error.
+        self.alphabet = list(alphabet or [])
+        self.final_states = list(final_states or [])
 
     # -- structural equality -------------------------------------------------
     # ``metadata`` is provenance (which ``.dw`` file produced the model, or a
@@ -788,6 +798,9 @@ class ProtocolIR(object):
             "policy": self.policy.to_dict() if self.policy is not None else None,
             "source_path": self.source_path,
             "metadata": dict(self.metadata),
+            # The FSM 5-tuple's Sigma and F (empty on pre-FSM-extraction IRs).
+            "alphabet": list(self.alphabet),
+            "final_states": list(self.final_states),
         }
 
     @classmethod
@@ -804,6 +817,8 @@ class ProtocolIR(object):
             policy=AdversarialPolicy.from_dict(d["policy"]) if d.get("policy") is not None else None,
             source_path=d.get("source_path", ""),
             metadata=dict(d.get("metadata", {})),
+            alphabet=list(d.get("alphabet", [])),
+            final_states=list(d.get("final_states", [])),
         )
 
     # -- validation ----------------------------------------------------------
