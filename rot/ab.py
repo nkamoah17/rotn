@@ -52,6 +52,9 @@ __all__ = [
     "load_corpus",
     "run_ab",
     "lexicographic_winner",
+    "default_frontend",
+    "reset_default_frontend_cache",
+    "resolve_frontend",
     "to_json",
     "to_report",
 ]
@@ -396,6 +399,75 @@ def lexicographic_winner(result):
     ``None`` if no frontend passed the hard gate)."""
     return result.winner
 
+
+
+# ---------------------------------------------------------------------------
+# Phase 4: the default Ingest frontend (Joern-primary §3) + CPG-first routing.
+# ---------------------------------------------------------------------------
+
+_DEFAULT_FRONTEND_CACHE = {"key": None, "value": None}
+
+
+def default_frontend(corpus_dir=None, corpus=None):
+    """The default (primary) Ingest frontend: the A/B lexicographic winner.
+
+    Joern-primary §3 (Phase 4): the A/B winner drives the default Ingest
+    frontend.  Deterministic and offline (the A/B is pure stdlib); falls back
+    to ``targets`` (the always-available oracle registry) if the A/B cannot be
+    run or no frontend passes the hard gate.  Memoized (the bench corpus is
+    static), so repeated calls do not re-run the A/B.
+
+    Returns a frontend name (the A/B winner on the bench corpus -- the
+    reproducible, citable decision; ``targets`` if none passes the hard gate).
+    """
+    key = (corpus_dir or "<corpus>", "given" if corpus is not None
+           else "loaded")
+    if (_DEFAULT_FRONTEND_CACHE["key"] == key
+            and _DEFAULT_FRONTEND_CACHE["value"] is not None):
+        return _DEFAULT_FRONTEND_CACHE["value"]
+    winner = "targets"
+    try:
+        result = run_ab(corpus=corpus if corpus is not None
+                        else load_corpus(corpus_dir))
+        w = lexicographic_winner(result)
+        if w:
+            winner = w
+    except Exception:
+        winner = "targets"
+    _DEFAULT_FRONTEND_CACHE["key"] = key
+    _DEFAULT_FRONTEND_CACHE["value"] = winner
+    return winner
+
+
+def reset_default_frontend_cache():
+    """Clear the :func:`default_frontend` memo (test hook)."""
+    _DEFAULT_FRONTEND_CACHE["key"] = None
+    _DEFAULT_FRONTEND_CACHE["value"] = None
+
+
+def resolve_frontend(requested, cpg_present=False, source_dir=None):
+    """Resolve the Ingest frontend for a run (Phase 4: CPG-first / Joern).
+
+    * ``requested`` explicit (``cpg`` / ``java`` / ``code`` / ``targets``) ->
+      that frontend (an explicit choice always wins).
+    * ``requested`` ``None`` / ``"auto"`` -> CPG-first (Joern-primary §3): a
+      CPG artifact is present -> ``cpg`` (the structure-based, language-
+      agnostic production path); else ``java`` if a ``source_dir`` is given;
+      else ``targets`` (the always-available oracle registry).
+
+    The A/B lexicographic winner (:func:`default_frontend`) is the
+    reproducible, citable confirmation that the CPG frontend is sound (it
+    passes the hard gate) and competitive; the other frontends stay available
+    behind an explicit choice (the offline/stdlib guarantee is preserved).
+    Pure (no I/O) -- unit-testable.
+    """
+    if requested and requested != "auto":
+        return requested
+    if cpg_present:
+        return "cpg"
+    if source_dir:
+        return "java"
+    return "targets"
 
 
 # ---------------------------------------------------------------------------

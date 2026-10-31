@@ -105,12 +105,114 @@ def _load_cpg_model(cpg_path, source_dir, quiet=False):
     return None
 
 
+def _apply_two_layer(cpg_model, ir, verdict, quiet=False):
+    """Layer B (static<->formal) of the two-layer agreement, fail-closed.
+
+    When a CPG ground truth (``cpg_model``) is available and the IR is a P1
+    shape (``budget`` / ``label_flow``), compute the ``rot.cpg_crosscheck``
+    soundness record and compose it with the formal (Layer A) verdict via
+    :func:`rot.crosscheck.apply_two_layer` -- the Phase 4 default cross-check:
+    ``PROVEN`` only if (formal == PROVEN) and (no ``cpg_crosscheck`` taint
+    path); ``VIOLATED`` if the formal layer refutes; else ``UNKNOWN`` with the
+    named disagreement.
+
+    Returns the (possibly refined) verdict with the two-layer record stamped
+    on ``evidence["two_layer"]`` and the soundness on
+    ``evidence["abstraction_soundness"]`` (auditable in the report).
+
+    Never raises: a non-P1 IR, a missing control, or any cross-check error
+    leaves the formal verdict unchanged (Layer B = not_applicable).
+    """
+    from rot.crosscheck import apply_two_layer
+    if cpg_model is None:
+        return verdict
+    try:
+        from rot.cpg_crosscheck import check_abstraction_soundness
+        soundness = check_abstraction_soundness(cpg_model, ir, verdict)
+    except Exception as exc:  # non-P1 shape, no control in G, ...
+        if not quiet:
+            print("note: cpg cross-check not applicable (%s)" % exc)
+        return verdict
+    result = apply_two_layer(verdict, verdict.status, soundness.to_dict())
+    ev = dict(result.evidence or {})
+    ev["abstraction_soundness"] = soundness.to_dict()
+    result.evidence = ev
+    if not quiet and soundness.status != "not_applicable":
+        print("  two-layer : %s (%s)" % (result.status.upper(),
+                                        soundness.status))
+    return result
+
+
+def _cpg_artifact_in(source_dir):
+    """True if a ``*.cpg.json`` artifact exists under ``source_dir``."""
+    if not source_dir or not os.path.isdir(source_dir):
+        return False
+    import glob
+    return bool(glob.glob(os.path.join(os.path.abspath(source_dir),
+                                      "**", "*.cpg.json"), recursive=True))
+
+
+def _run_cpg_frontend(cpg_path, source_dir, out_dir, quiet=False):
+    """The CPG (Joern-primary) frontend: extract -> lower -> verify.
+
+    The Phase 4 default Ingest path when a CPG artifact is present.  Reuses
+    the tested narrow-waist path (``rot.frontends.cpg.extractor.extract_cpg``
+    -> ``rot.lower.lower_candidate`` -> ``rot.cegar.verify_candidate``) and
+    composes the Phase 4 two-layer agreement (Layer A formal + Layer B
+    static<->formal soundness).  Returns the final ``Verdict``.
+
+    Raises:
+        ValueError: if no CPG artifact is available (the CPG frontend needs
+            its ground-truth scrape).
+    """
+    from rot.config import Config
+    from rot.cegar import verify_candidate
+    from rot.frontends.cpg.extractor import extract_cpg
+    from rot.lower import lower_candidate
+    from rot.verdicts import VerdictReport
+    model = _load_cpg_model(cpg_path, source_dir, quiet)
+    if model is None:
+        raise ValueError(
+            "the cpg frontend requires a CPG artifact (cpg_path or a "
+            "*.cpg.json under source_dir)")
+    candidate = extract_cpg(model)
+    ir = lower_candidate(candidate)
+    cfg = Config(max_states=200000)
+    verdict = verify_candidate(ir, cfg)              # Layer A (formal)
+    verdict = _apply_two_layer(model, ir, verdict, quiet)  # two-layer
+    name = ir.name or candidate.pattern or "cpg-control"
+    report = VerdictReport(
+        target=name,
+        property_name=name,
+        engine="symbolic",
+        config_dict=cfg.to_dict(),
+        abstraction_dict={},
+        verdict=verdict,
+        invariant_dict={
+            "label": "P1 %s control" % candidate.pattern,
+            "pinned": True,
+            "blocking_permission": not candidate.enforced,
+            "pattern": candidate.pattern,
+            "enforced": candidate.enforced,
+            "reason": candidate.reason,
+        },
+    )
+    if out_dir and not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
+    json_path = report.write(out_dir, name.replace(" ", "_"))
+    if not quiet:
+        print("  frontend  : cpg (Joern-primary) -- %s" % candidate.reason)
+        print("  verdict   : %s" % verdict.status.upper())
+        print("  report    : %s" % json_path)
+    return verdict
+
+
 def run(target_name="correct", property_name=None, engine="auto",
         n=None, max_states=None, cegar_max_iter=None,
         tlc_jar=None, work_dir=None, tlc_timeout=None, itf_trace=None,
         participant_bound=None, env_bound=None,
         llm_enabled=False, llm_model=None, llm_base_url=None,
-        source_dir=None, cpg_path=None,
+        source_dir=None, cpg_path=None, frontend=None,
         apalache_enabled=False, apalache_jar=None, apalache_java=None,
         apalache_timeout=None, apalache_length=None,
         unbounded_liveness=False, fairness_action=None, fairness_engine="apalache",
@@ -128,6 +230,16 @@ def run(target_name="correct", property_name=None, engine="auto",
     (``CpgModel`` JSON) the frontend consults as evidence; without it, any
     ``*.cpg.json`` under ``source_dir`` is used opportunistically.
 
+    ``frontend`` selects the Ingest frontend explicitly (``"cpg"`` /
+    ``"java"`` / ``"code"`` / ``"targets"``).  Default (``None`` / ``"auto"``)
+    is CPG-first (Joern-primary §3): a CPG artifact present -> the CPG
+    frontend (extract -> lower -> verify + the Phase 4 two-layer agreement);
+    else the source frontend if ``source_dir`` is given; else the oracle
+    registry.  The A/B lexicographic winner (``rot.ab.default_frontend``) is
+    the reproducible, citable confirmation that the CPG frontend is sound and
+    competitive; the other frontends remain available behind an explicit
+    choice (the offline/stdlib guarantee is preserved).
+
     ``engine="apalache"`` + ``itf_trace`` evaluates the pinned invariant over
     a concrete Apalache ITF counterexample (a ``.itf.json`` file): a definite
     refutation is reported as a violation, and the engine can never report
@@ -140,6 +252,21 @@ def run(target_name="correct", property_name=None, engine="auto",
     from rot.cegar import cegar, cegar_liveness
     from rot.invariants import KIND_LIVENESS
     from rot.verdicts import VerdictReport
+
+    # CPG ground truth (Layer B of the two-layer agreement), if available.
+    cpg_model = None
+
+    # Phase 4: resolve the Ingest frontend (CPG-first / Joern-primary §3).
+    # A CPG artifact makes the CPG frontend the default production path; an
+    # explicit ``frontend`` always wins.  The CPG branch is self-contained
+    # (extract -> lower -> verify + two-layer agreement), so it returns here;
+    # the other frontends fall through to the source / oracle path below.
+    from rot.ab import resolve_frontend
+    cpg_present = (cpg_path is not None) or _cpg_artifact_in(source_dir)
+    fe = resolve_frontend(frontend, cpg_present=cpg_present,
+                          source_dir=source_dir)
+    if fe == "cpg":
+        return _run_cpg_frontend(cpg_path, source_dir, out_dir, quiet=quiet)
 
     # 1. resolve the target and the pinned property.
     if source_dir is not None:
@@ -160,6 +287,7 @@ def run(target_name="correct", property_name=None, engine="auto",
         n_eff = int(n) if n is not None else 3
         prop = invariants.get(property_name, n_eff)
         model = _load_cpg_model(cpg_path, source_dir, quiet)
+        cpg_model = model
         ir = java_fe.build_ir(source_dir, n=n_eff, model=model)
         base = os.path.basename(os.path.abspath(source_dir).rstrip("/\\"))
         target_name = "java-" + (base or "src")
@@ -241,6 +369,16 @@ def run(target_name="correct", property_name=None, engine="auto",
             verdict = cegar(_run_engine(cfg, chosen, linear_model, prop, target_name),
                             prop, cfg, chosen,
                             model=linear_model, recheck=_recheck)
+
+    # 5b. two-layer agreement (Phase 4 default cross-check): compose the
+    #     formal (Layer A) safety verdict with the static<->formal soundness
+    #     (Layer B) when a CPG ground truth is available.  Fail-closed: it
+    #     never changes a VIOLATED, never upgrades a verdict, and only
+    #     refines a PROVEN a layer refutes (down to UNKNOWN, named).  Safety
+    #     only -- the static layer grounds safety + deadlock, not liveness.
+    if (cpg_model is not None
+            and getattr(prop, "kind", None) != KIND_LIVENESS):
+        verdict = _apply_two_layer(cpg_model, ir, verdict, quiet)
 
     # 6. auditable report (JSON + Markdown).
     report = VerdictReport(
@@ -1187,6 +1325,14 @@ def main(argv=None):
                         help="CPG artifact (CpgModel JSON) the --source "
                              "frontend consults as evidence [default: "
                              "auto-discovered *.cpg.json under --source]")
+    parser.add_argument("--frontend", dest="frontend", default=None,
+                        metavar="FRONTEND",
+                        choices=["auto", "cpg", "java", "code", "targets"],
+                        help="Ingest frontend (Phase 4: CPG-first / "
+                             "Joern-primary). Default 'auto' routes CPG "
+                             "when a CPG artifact is present, else the "
+                             "source frontend (--source), else the oracle "
+                             "registry; an explicit choice always wins")
     # -- Policy-driven verification (rot.frontends.policy) --------------------
     parser.add_argument("--policy", dest="policy", default=None,
                         metavar="POLICY_FILE",

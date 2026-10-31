@@ -54,7 +54,9 @@ from . import verdicts as v
 __all__ = ["CrossChecker", "join_status", "join_status3",
            "witness_match", "witness_match3", "REPORT_VERSION",
            "build_crosscheck_report", "add_witness",
-           "format_side_by_side", "main"]
+           "format_side_by_side", "main",
+           "TwoLayerResult", "two_layer_agreement", "apply_two_layer",
+           "TWO_LAYER_RULE"]
 
 #: Schema version of the curated crosscheck report.
 REPORT_VERSION = 1
@@ -106,6 +108,196 @@ def join_status3(smt_status, tlc_status, policy_direct_status):
     if s == v.VIOLATED and t == v.VIOLATED and p == v.VIOLATED:
         return v.VIOLATED
     return v.UNKNOWN
+
+
+# ---------------------------------------------------------------------------
+# Two-layer agreement (Joern-primary, §2.1, Phase 4): Layer A ∘ Layer B.
+# ---------------------------------------------------------------------------
+
+#: The two-layer rule, stated once (the default cross-check, Phase 4)::
+#:
+#:     PROVEN   iff  (Layer A == PROVEN) and (Layer B has no refuting path)
+#:     VIOLATED iff  (Layer A == VIOLATED)   [the formal layer refutes, with a
+#:                                             concrete witness]
+#:     UNKNOWN   otherwise, with the NAMED disagreement.
+#:
+#: The static layer (B) is a *smell test*: a taint path in the ground truth
+#: **blocks a proof** (fail-closed -> UNKNOWN) but does not, by itself, mint a
+#: VIOLATED (there is no concrete witness).  The formal layer (A) is what
+#: mints a VIOLATED.  This satisfies the Phase 4 gate: the rule **never emits
+#: PROVEN when a layer refutes**.
+TWO_LAYER_RULE = (
+    "PROVEN iff (3-engine crosscheck == PROVEN) and (no cpg_crosscheck "
+    "taint path); VIOLATED if the formal layer refutes (with a witness); "
+    "else UNKNOWN + the named disagreement.  The static layer blocks proofs "
+    "(fail-closed) but never mints a VIOLATED alone.")
+
+#: Layer B (static<->formal) status that REFUTES a proof: the ground-truth
+#: CPG carries a taint-critical path threatening the pinned property while the
+#: model proved it (a dropped edge).  Matches ``rot.cpg_crosscheck.UNSOUND``.
+_LAYER_B_REFUTES = "unsound"
+
+
+class TwoLayerResult(object):
+    """The outcome of the two-layer agreement -- a pure, serializable record.
+
+    * ``status``        -- the final verdict status (``PROVEN`` / ``VIOLATED``
+                           / ``UNKNOWN``).
+    * ``disagreement``  -- the NAMED disagreement (``""`` when the layers
+                           agree on the outcome).
+    * ``layer_a``       -- the 3-engine (formal) join status (Layer A).
+    * ``layer_b``       -- the static<->formal soundness record (dict or
+                           ``None`` when there is no CPG ground truth).
+    """
+
+    def __init__(self, status, disagreement, layer_a, layer_b):
+        self.status = status
+        self.disagreement = disagreement
+        self.layer_a = layer_a
+        self.layer_b = layer_b
+
+    def to_dict(self):
+        return {
+            "status": self.status,
+            "disagreement": self.disagreement,
+            "layer_a": self.layer_a,
+            "layer_b": self.layer_b,
+        }
+
+    def __eq__(self, other):
+        return (isinstance(other, TwoLayerResult)
+                and self.to_dict() == other.to_dict())
+
+    def __repr__(self):
+        return ("TwoLayerResult(status=%r, disagreement=%r, "
+                "layer_a=%r)" % (self.status, self.disagreement, self.layer_a))
+
+
+def _layer_b_refutes(soundness):
+    """True iff the static (Layer B) record refutes a proof: it is the
+    ``unsound`` cell (a taint-critical threat in the ground truth the model
+    failed to model).  ``None`` / a non-dict / any other cell does not refute
+    (``agreement`` / ``concurrency_only`` / ``not_applicable`` all leave a
+    VIOLATED verdict standing and do not block a PROVEN on their own)."""
+    if not isinstance(soundness, dict):
+        return False
+    return soundness.get("status") == _LAYER_B_REFUTES
+
+
+def two_layer_agreement(formal_status, soundness=None):
+    """Compose the two cross-check layers into the final verdict (Phase 4).
+
+    * **Layer A** (``formal_status``) -- the 3-engine crosscheck join
+      (:func:`join_status3`): ``PROVEN`` (all three agree the property holds),
+      ``VIOLATED`` (all three agree it fails), or ``UNKNOWN`` (disagreement /
+      indecidable).
+    * **Layer B** (``soundness``) -- the static<->formal soundness record
+      (``rot.cpg_crosscheck.SoundnessResult.to_dict()``): ``agreement`` /
+      ``unsound`` / ``concurrency_only`` / ``not_applicable``.  ``None`` when
+      there is no CPG ground truth (the static layer does not apply).
+
+    Returns a :class:`TwoLayerResult` (``status`` + the NAMED ``disagreement``
+    + both layers) per :data:`TWO_LAYER_RULE`.
+
+    A **pure function** of its inputs (no engine, no I/O) -- unit-testable
+    without any tool installed.  The Phase 4 gate holds by construction: the
+    result is ``PROVEN`` only when Layer A is ``PROVEN`` **and** Layer B does
+    not refute -- i.e. it is never ``PROVEN`` when a layer refutes.
+    """
+    layer_a = _norm(formal_status)  # PROVEN / VIOLATED / UNKNOWN
+    layer_b = soundness if isinstance(soundness, dict) else None
+    static_refutes = _layer_b_refutes(soundness)
+
+    if layer_a == v.VIOLATED:
+        # The formal layer refutes the property with a concrete witness.
+        # VIOLATED stands (Layer B is ``agreement`` -- both see the threat --
+        # or ``concurrency_only`` -- the witness the static single-path
+        # analysis cannot see; both are consistent with a confirmed violation).
+        return TwoLayerResult(v.VIOLATED, "", layer_a, layer_b)
+
+    if static_refutes:
+        # A layer (the static one) refutes -- the ground-truth CPG carries a
+        # taint-critical path threatening the pinned property -- yet the
+        # formal layer has no concrete witness.  Fail closed to UNKNOWN and
+        # NAME the disagreement (never a silent PROVEN, and never a minted
+        # VIOLATED: "Joern is the smell test; ROTN is the proof").
+        dropped = (layer_b or {}).get("dropped_edge")
+        return TwoLayerResult(
+            v.UNKNOWN,
+            "static<->formal disagreement (unsound_abstraction): the "
+            "ground-truth CPG carries a taint-critical path threatening the "
+            "pinned property yet the model proved it -- the abstraction "
+            "dropped a taint-critical dataflow edge%s"
+            % (" (dropped edge: %s)" % dropped if dropped else ""),
+            layer_a, layer_b)
+
+    if layer_a == v.PROVEN:
+        # 3-engine agree the property holds AND the static layer sees no
+        # refuting taint path -> PROVEN (the common, sound case).
+        return TwoLayerResult(v.PROVEN, "", layer_a, layer_b)
+
+    # Layer A is UNKNOWN (the 3 engines disagree, or one is UNKNOWN / ERROR).
+    return TwoLayerResult(
+        v.UNKNOWN,
+        "3-engine crosscheck indecidable (Layer A = UNKNOWN: SMT/TLC/"
+        "policy-direct disagree or at least one is UNKNOWN)",
+        layer_a, layer_b)
+
+
+def apply_two_layer(verdict, formal_status, soundness=None):
+    """Apply the two-layer agreement to a verdict (fail-closed).
+
+    ``verdict`` is the formal (Layer A) ``rot.verdicts.Verdict``;
+    ``formal_status`` is its status; ``soundness`` is the Layer B record (a
+    ``SoundnessResult.to_dict()`` dict, or ``None`` when there is no CPG
+    ground truth).
+
+    Returns the verdict, with the two-layer record stamped on
+    ``evidence["two_layer"]`` and (only when the layers refine it) its status
+    replaced by the two-layer result.  The refinement is always **fail-closed**:
+    the only status change is a ``PROVEN -> UNKNOWN`` downgrade (the
+    ``unsound`` cell); a ``VIOLATED`` is always preserved (with its witness)
+    and ``UNKNOWN`` is already the floor -- the two-layer rule never *upgrades*
+    a verdict and never mints a VIOLATED from the static layer alone.
+
+    Never raises on valid input; the input verdict is not mutated (a fresh
+    object is returned when the status changes).
+    """
+    tl = two_layer_agreement(formal_status, soundness)
+
+    evidence = dict(verdict.evidence or {})
+    evidence["two_layer"] = tl.to_dict()
+
+    if tl.status == verdict.status:
+        # The layers agree with the formal verdict; just stamp the record.
+        verdict.evidence = evidence
+        return verdict
+
+    # The only possible refinement is PROVEN -> UNKNOWN (a layer refutes a
+    # proof).  Downgrade fail-closed: clear the (now untrusted)
+    # counterexample/trace, name the disagreement, and attach the advisory so
+    # the bound that produced the verdict is loud, not silent.
+    note = ("two-layer agreement: %s" % tl.disagreement
+            if tl.disagreement else "two-layer agreement: downgraded to UNKNOWN")
+    return v.Verdict(
+        status=tl.status,
+        property_name=verdict.property_name,
+        engine=verdict.engine,
+        counterexample=None,
+        trace=None,
+        violation_code=None,
+        assumptions=list(verdict.assumptions),
+        soundness=list(verdict.soundness)
+        + ["two-layer agreement: a layer refutes the proof (fail-closed)"],
+        evidence=evidence,
+        cegar_iterations=verdict.cegar_iterations,
+        n_states=verdict.n_states,
+        note=note,
+        property_kind=verdict.property_kind,
+        advisories=list(verdict.advisories) + [v.UNSOUND_ABSTRACTION],
+        discharge=verdict.discharge,
+        fairness_label=verdict.fairness_label,
+    )
 
 
 def _witness_fingerprint(witness):
