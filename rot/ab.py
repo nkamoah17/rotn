@@ -55,6 +55,9 @@ __all__ = [
     "default_frontend",
     "reset_default_frontend_cache",
     "resolve_frontend",
+    "AB_TABLE_SCHEMA",
+    "winner_table",
+    "reset_winner_table_cache",
     "to_json",
     "to_report",
 ]
@@ -443,6 +446,75 @@ def reset_default_frontend_cache():
     """Clear the :func:`default_frontend` memo (test hook)."""
     _DEFAULT_FRONTEND_CACHE["key"] = None
     _DEFAULT_FRONTEND_CACHE["value"] = None
+
+
+# ---------------------------------------------------------------------------
+# Phase 7: the compact A/B winner table (the citable decision).
+# ---------------------------------------------------------------------------
+
+#: Schema tag for the compact A/B winner table (bump on body-shape change).
+AB_TABLE_SCHEMA = "rotn.ab/v1"
+
+_WINNER_TABLE_CACHE = {"key": None, "value": None}
+
+
+def winner_table(corpus_dir=None):
+    """The compact A/B **winner table** (Phase 7: the A/B evidence the claim
+    packet and the ``VerdictReport`` carry).
+
+    Runs the A/B over the bench corpus (``bench/``) and returns a compact,
+    deterministic dict -- the *decision* (winner + hard gate + aggregate
+    ranking), the citable part of ``to_dict()``::
+
+        {
+          "schema": "rotn.ab/v1",
+          "winner": "cpg",
+          "corpus": ["labelflow", "spendcap", "twopc"],
+          "per_frontend": {
+            "cpg": {"hard_gate_pass": true, "cells": 1, "unavailable": 2,
+                     "ranking": [...]},
+            ...
+          }
+        }
+
+    The full per-cell table stays in :meth:`ABResult.to_dict` / :func:`to_json`;
+    this table is what an underwriter (or a reviewer) reads: *which* frontend
+    is the default and *why* (no false-PROVEN; best lexicographic tuple).
+    ``None`` when the corpus cannot be loaded (honest UNAVAILABLE, never a
+    loss).  Memoized (the bench corpus is static), so repeated calls do not
+    re-run the A/B.
+    """
+    key = corpus_dir or "<default>"
+    if (_WINNER_TABLE_CACHE["key"] == key
+            and _WINNER_TABLE_CACHE["value"] is not None):
+        return _WINNER_TABLE_CACHE["value"]
+    try:
+        result = run_ab(corpus=load_corpus(corpus_dir))
+    except Exception:
+        return None  # no corpus (e.g. stripped checkout): honest, not a loss.
+    table = {
+        "schema": AB_TABLE_SCHEMA,
+        "winner": result.winner,
+        "corpus": [c["fixture"] for c in result.corpus],
+        "per_frontend": {
+            k: {
+                "hard_gate_pass": v["hard_gate_pass"],
+                "cells": v["cells"],
+                "unavailable": v["unavailable"],
+                "ranking": [round(float(x), 4) for x in v["ranking"]],
+            }
+            for k, v in sorted(result.per_frontend.items())
+        },
+    }
+    _WINNER_TABLE_CACHE["key"] = key
+    _WINNER_TABLE_CACHE["value"] = table
+    return table
+
+
+def reset_winner_table_cache():
+    """Clear the :func:`winner_table` memo (test hook)."""
+    _WINNER_TABLE_CACHE["key"] = None
+    _WINNER_TABLE_CACHE["value"] = None
 
 
 def resolve_frontend(requested, cpg_present=False, source_dir=None):

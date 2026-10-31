@@ -210,7 +210,48 @@ def _run_cpg_frontend(cpg_path, source_dir, out_dir, quiet=False):
     cfg = Config(max_states=200000)
     verdict = verify_candidate(ir, cfg)              # Layer A (formal)
     verdict = _apply_two_layer(model, ir, verdict, quiet)  # two-layer
+    # Phase 5 (lossiness): property-directed retention + the hard rule
+    # (a PROVEN with a dropped edge of unknown relevance fails closed to
+    # UNKNOWN + unsound_abstraction).  Mirrors the cpg branch of
+    # ``verify_candidate`` (soundness first, then Phase 5), so the report's
+    # ``retention`` section agrees with the claim packet's (``rot.cpg4``).
+    from rot.retention import apply_phase5
+    verdict, retention_manifest, retention_refinement = apply_phase5(
+        model, candidate.pattern or "control", ir, verdict, cfg)
+    if retention_manifest is not None:
+        ev = dict(verdict.evidence or {})
+        ev["retention"] = retention_manifest.to_dict()
+        if retention_refinement is not None:
+            ev["retention_refinement"] = retention_refinement
+        verdict.evidence = ev
     name = ir.name or candidate.pattern or "cpg-control"
+    # Phase 7 (evidence): the three sections the VerdictReport carries --
+    # the two-layer agreement (static<->formal, fail-closed), the A/B
+    # winner table (the default frontend, chosen by measurement, not
+    # assertion), and the lossiness manifest (retention: kept vs. dropped
+    # dataflow edges, each drop classified).
+    from rot.crosscheck import TWO_LAYER_RULE, two_layer_agreement
+    xc = (verdict.evidence or {}).get("abstraction_soundness")
+    if not isinstance(xc, dict):
+        xc = None
+    _tl = two_layer_agreement(verdict.status, xc)
+    two_layer = {
+        "formal": verdict.status,
+        "static": (xc or {}).get("status"),
+        "status": _tl.status,
+        "agreement": (_tl.disagreement == ""),
+        "disagreement": _tl.disagreement,
+        "rule": TWO_LAYER_RULE,
+    }
+    ab = None
+    try:
+        from rot.ab import winner_table
+        ab = winner_table()
+    except Exception:
+        ab = None  # the bench corpus is unavailable: honest, not a loss.
+    retention = (verdict.evidence or {}).get("retention")
+    if not isinstance(retention, dict):
+        retention = None
     report = VerdictReport(
         target=name,
         property_name=name,
@@ -226,6 +267,9 @@ def _run_cpg_frontend(cpg_path, source_dir, out_dir, quiet=False):
             "enforced": candidate.enforced,
             "reason": candidate.reason,
         },
+        two_layer=two_layer,
+        ab=ab,
+        retention=retention,
     )
     if out_dir and not os.path.isdir(out_dir):
         os.makedirs(out_dir)

@@ -571,6 +571,34 @@ exactly which state variables/actions were kept for the pinned property (the
 property-directed closure) and which were dropped, so a reviewer can confirm
 the abstraction is *property-relevant* (no spurious behaviour introduced).
 
+### The evidence layers (Phase 7)
+
+When a run goes through the **CPG frontend** (Joern artifact present), the
+report and the claim packet (`rot/cpg4.py`) carry three **evidence layers**
+on top of the verdict:
+
+- **`two_layer`** — the *static↔formal agreement* per shape: Layer A (the
+  formal engine verdict) ∘ Layer B (the CPG static ground truth,
+  `abstraction_soundness`), joined fail-closed.
+- **`ab`** — the *A/B winner table* (`rot/ab.py`): which of the four source
+  frontends is the default, chosen by measurement (no-false-PROVEN hard gate
+  first, then the lexicographic tuple), not by assertion.
+- **`retention`** — the *lossiness manifest*: which CPG facts were kept,
+  which were dropped, which were unknown (unknown → `UNKNOWN`, never silent).
+
+> **The static↔formal agreement invariant** (named property, thesis-quotable):
+> a verdict is **PROVEN** only when the formal layer proves it **and** the
+> static ground truth carries no taint-critical threat to the pinned
+> property; a static threat to a PROVEN blocks the proof
+> (`UNKNOWN` + the named disagreement); a **VIOLATED** is never upgraded or
+> mended by the other layer. In short: *the two layers can only disagree
+> loudly — they can never silently agree to a false PROVEN.*
+> (`rot/crosscheck.py` `TWO_LAYER_RULE`; the claim-packet `wedge` assembles
+> the A/B winner frontend + the two-layer verdicts + the source-pinned
+> counterexample into the open-source wedge's proof.)
+
+Full design + honest boundaries: [`docs/joern-primary-ab-plan.md`](docs/joern-primary-ab-plan.md).
+
 ---
 
 </details>

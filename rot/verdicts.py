@@ -422,11 +422,54 @@ class Verdict(object):
         return "\n".join(lines)
 
 
+def _two_layer_rows(two_layer):
+    """The (name, section) rows of a two-layer section, in a stable order.
+
+    Accepts either a single two-layer section dict (with a ``"status"`` key)
+    or a ``{shape: section}`` mapping (the claim-packet form).
+    """
+    if not two_layer:
+        return []
+    if isinstance(two_layer, dict) and "status" in two_layer:
+        return [("-", two_layer)]
+    if isinstance(two_layer, dict):
+        return [(k, two_layer[k]) for k in sorted(two_layer)
+                if isinstance(two_layer[k], dict)]
+    return []
+
+
+def _retention_rows(retention):
+    """The (name, manifest) rows of a retention section, in a stable order.
+
+    Accepts either a single manifest dict (with a ``"shape"`` key) or a
+    ``{shape: manifest}`` mapping (the claim-packet form).
+    """
+    if not retention:
+        return []
+    if isinstance(retention, dict) and "kept" in retention:
+        return [(retention.get("shape", "-"), retention)]
+    if isinstance(retention, dict):
+        return [(k, retention[k]) for k in sorted(retention)
+                if isinstance(retention[k], dict)]
+    return []
+
+
 class VerdictReport(object):
-    """A full verification run: config + abstraction + invariant + verdict."""
+    """A full verification run: config + abstraction + invariant + verdict.
+
+    Phase 7 (evidence): the report may also carry the three evidence layers
+    the claim packet (``rot.cpg4``) carries -- the **two-layer agreement**
+    (static<->formal composed with the engine verdict; fail-closed), the
+    **A/B winner table** (the default frontend, chosen by measurement, not
+    assertion), and the **lossiness manifest** (the retention manifest:
+    kept vs. dropped dataflow edges, each drop classified).  All three are
+    optional (``None`` / empty) -- the existing positional signature is
+    unchanged.
+    """
 
     def __init__(self, target, property_name, engine, config_dict,
-                 abstraction_dict, verdict, invariant_dict=None):
+                 abstraction_dict, verdict, invariant_dict=None,
+                 two_layer=None, ab=None, retention=None):
         self.target = target
         self.property_name = property_name
         self.engine = engine
@@ -434,6 +477,10 @@ class VerdictReport(object):
         self.abstraction = abstraction_dict or {}
         self.invariant = invariant_dict or {}
         self.verdict = verdict
+        # Phase 7 evidence layers (optional; empty when the run has none).
+        self.two_layer = two_layer or {}
+        self.ab = ab or {}
+        self.retention = retention or {}
 
     def to_dict(self):
         d = {
@@ -446,6 +493,12 @@ class VerdictReport(object):
         }
         if self.invariant:
             d["invariant"] = self.invariant
+        if self.two_layer:
+            d["two_layer"] = self.two_layer
+        if self.ab:
+            d["ab"] = self.ab
+        if self.retention:
+            d["retention"] = self.retention
         return d
 
     def to_json(self, indent=2):
@@ -470,6 +523,58 @@ class VerdictReport(object):
         out.append("- Keep: %s" % ", ".join(self.abstraction.get("keep", [])))
         out.append("- Hide: %s" % ", ".join(self.abstraction.get("hide", [])))
         out.append("")
+        # Phase 7 evidence layers (each rendered only when present).
+        if self.two_layer:
+            out.append("## Two-layer agreement (static<->formal)")
+            out.append("")
+            out.append("PROVEN requires **both** layers: the formal engine "
+                       "verdict AND the static ground truth carrying no "
+                       "taint-critical threat to the pinned property.  A "
+                       "static threat to a PROVEN fails closed to UNKNOWN "
+                       "(never a silent false negative); a VIOLATED is never "
+                       "upgraded.")
+            out.append("")
+            for name, tl in _two_layer_rows(self.two_layer):
+                out.append("- **%s** -- formal: `%s` | static: `%s` | "
+                           "two-layer: `%s` | agreement: %s"
+                           % (name, tl.get("formal"), tl.get("static"),
+                              tl.get("status"), tl.get("agreement")))
+            out.append("")
+        if self.ab:
+            out.append("## A/B winner (the default frontend)")
+            out.append("")
+            out.append("Winner: **%s** (lexicographic over the corpus: %s; "
+                       "hard gate: no false-PROVEN)"
+                       % (self.ab.get("winner"),
+                          ", ".join(self.ab.get("corpus", []))))
+            out.append("")
+            out.append("| frontend | hard gate | cells | unavailable | ranking |")
+            out.append("|---|---|---|---|---|")
+            for f, agg in sorted(self.ab.get("per_frontend", {}).items()):
+                gate = ("PASS" if agg.get("hard_gate_pass")
+                        else "FAIL (false-PROVEN)")
+                out.append("| %s | %s | %s | %s | %s |"
+                           % (f, gate, agg.get("cells"),
+                              agg.get("unavailable"), agg.get("ranking")))
+            out.append("")
+        if self.retention:
+            out.append("## Retention manifest (lossiness)")
+            out.append("")
+            out.append("Every deliberately-dropped CPG dataflow edge is named: "
+                       "kept vs. dropped, each drop classified "
+                       "irrelevant / unknown / taint-critical.  A dropped edge "
+                       "of unknown relevance forces UNKNOWN + "
+                       "`unsound_abstraction` (the fail-closed hard rule).")
+            out.append("")
+            for name, rt in _retention_rows(self.retention):
+                out.append("- **%s** -- kept: %d (taint-critical) | "
+                           "dropped: %d (irrelevant: %d, unknown: %d)"
+                           % (name,
+                              len(rt.get("kept", [])),
+                              len(rt.get("dropped", [])),
+                              len(rt.get("irrelevant", [])),
+                              len(rt.get("unknown", []))))
+            out.append("")
         out.append(self.verdict.to_markdown())
         return "\n".join(out)
 

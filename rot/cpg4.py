@@ -8,6 +8,12 @@ control) and **Product 2** (the coach: a computed ``to_proceed`` that cites
 the guard's *source line*), and it produces the **claim packet** -- the
 CPG->IR mapping as an auditable, deterministic, hashable artifact.
 
+Phase 7 (evidence): the claim packet also carries the three evidence
+layers -- ``two_layer`` (the static<->formal agreement, fail-closed),
+``ab`` (the A/B winner table: the default frontend chosen by measurement,
+not assertion), and ``wedge`` (Product 1's proof: the A/B winner
+frontend + the two-layer verdict + the source-pinned counterexample).
+
 The single-Candidate contract (one extraction, two sinks) is the
 verifier/coach divergence mitigation (spec §7 risk table): the CPG is
 extracted ONCE, lowered ONCE, and both the verifier and the coach consume the
@@ -49,6 +55,8 @@ from rot.lower import lower_candidate
 from rot.cegar import verify_candidate
 from rot.to_proceed import compute_to_proceed
 from rot.verdicts import Verdict, VIOLATED
+from rot.crosscheck import two_layer_agreement, TWO_LAYER_RULE
+from rot.design_view import expr_to_str
 
 __all__ = [
     "SCHEMA",
@@ -64,6 +72,7 @@ __all__ = [
     "allowed_channels",
     "coach_vertical",
     "abstraction_entries",
+    "two_layer_section",
     "build_claim_packet",
     "claim_packet_for_cpg",
 ]
@@ -79,6 +88,16 @@ P1_SHAPES = ("budget", "label_flow")
 _BLOCKED_ACTION = {
     "budget": "spend_ok",
     "label_flow": "contact_outsider",
+}
+
+#: The deny branch per shape (the *other* branch of the same policy decision):
+#: enabled exactly where the allow-guard rejects.  Product 2 (P2): the coach
+#: reads both branches from the one extraction -- ``to_proceed`` /
+#: ``allowed_now`` off the allow-guard, ``contact_deny`` / ``spend_deny`` the
+#: named deny action (one extraction, two sinks).
+_DENY_ACTION = {
+    "budget": "spend_deny",
+    "label_flow": "contact_deny",
 }
 
 #: The honest boundaries (spec §6), stated verbatim in every claim packet's
@@ -306,6 +325,11 @@ def coach_vertical(model, shape, cfg, cpg=None):
           "action":           the blocked (decision) action name,
           "verdict":          the vertical's verdict status,
           "to_proceed":       compute_to_proceed(...) + {"source": <pin>},
+          "allowed_now":      not to_proceed["blocked"] (the same guard read
+                              now: the two readings never disagree),
+          "deny_branch":      {"action": "contact_deny" | "spend_deny",
+                               "guard": ...}  (the other branch of the same
+                              decision, from the same IR),
           "why":              a plain-English refusal citing the source line,
           "source":           the guard's source line (citable),
           "allowed_channels": [ ... ]   # label_flow only (derived label flow)
@@ -356,9 +380,27 @@ def coach_vertical(model, shape, cfg, cpg=None):
         "action": action,
         "verdict": verdict.status,
         "to_proceed": tp,
+        # Product 2 (P2): ``allowed_now`` is the complement of the computed
+        # ``blocked`` reading of the SAME guard -- the two readings of one
+        # extraction never disagree (blocked XOR allowed_now).
+        "allowed_now": (not tp.get("blocked", False)),
         "why": why,
         "source": pin,
     }
+    # Product 2 (P2): the deny branch -- the *other* branch of the same
+    # policy decision (``contact_deny`` / ``spend_deny``), read from the
+    # SAME IR (one extraction, two sinks): the allow-guard's enabling
+    # condition (to_proceed) and the named deny action are two readings of
+    # the one extracted control.
+    deny_name = _DENY_ACTION.get(shape)
+    if ir_model is not None and deny_name is not None:
+        for a in ir_model.actions:
+            if a.name == deny_name:
+                out["deny_branch"] = {
+                    "action": a.name,
+                    "guard": expr_to_str(a.guard),
+                }
+                break
     if shape == "label_flow":
         out["allowed_channels"] = allowed_channels(candidate)
     return out
@@ -437,7 +479,47 @@ def abstraction_entries(candidate):
     return entries
 
 
-def build_claim_packet(model, verticals_dict, coach_dict, shapes=None):
+def two_layer_section(verticals_dict):
+    """The **two-layer agreement** per shape (Phase 7, Product 1).
+
+    Layer A (formal): the engine verdict.  Layer B (static<->formal): the
+    CPG-3 soundness record (``evidence["abstraction_soundness"]``; ``None``
+    when the vertical has no CPG ground truth -- the static layer does not
+    apply).  The join (``rot.crosscheck.two_layer_agreement``) is
+    fail-closed (``TWO_LAYER_RULE``): PROVEN requires **both** layers -- the
+    formal layer proves AND the static ground truth carries no
+    taint-critical threat to the pinned property; a static threat to a
+    PROVEN blocks the proof (UNKNOWN + the NAMED disagreement); a VIOLATED
+    stands (never upgraded, never mended by the static layer).
+
+    A **pure function** of the verticals' verdicts (no mutation, no I/O) --
+    deterministic, so it is safe inside the claim-packet body.  Returns
+    ``{shape: {formal, static, status, agreement, disagreement, rule}}``.
+    """
+    out = {}
+    for shape in sorted(verticals_dict):
+        v = verticals_dict.get(shape)
+        if not isinstance(v, dict):
+            continue
+        verdict = v.get("verdict")
+        if verdict is None or not hasattr(verdict, "status"):
+            continue
+        static = (verdict.evidence or {}).get("abstraction_soundness")
+        if not isinstance(static, dict):
+            static = None
+        tl = two_layer_agreement(verdict.status, static)
+        out[shape] = {
+            "formal": verdict.status,
+            "static": (static or {}).get("status"),
+            "status": tl.status,
+            "agreement": (tl.disagreement == ""),
+            "disagreement": tl.disagreement,
+            "rule": TWO_LAYER_RULE,
+        }
+    return out
+
+
+def build_claim_packet(model, verticals_dict, coach_dict, shapes=None, ab=None):
     """Assemble the CPG-4 claim packet (the CPG->IR mapping as an auditable,
     deterministic, hashable artifact).
 
@@ -451,6 +533,10 @@ def build_claim_packet(model, verticals_dict, coach_dict, shapes=None):
         ``{shape: coach record}`` from :func:`coach_vertical`.
     shapes : list, optional
         The vertical order; defaults to the sorted keys of ``verticals_dict``.
+    ab : dict, optional
+        The A/B winner table (``rot.ab.winner_table``; the default frontend,
+        chosen by measurement).  Included in the body when given (the
+        ``ab`` section + the ``wedge`` frontend pointer).
 
     Returns
     -------
@@ -458,10 +544,15 @@ def build_claim_packet(model, verticals_dict, coach_dict, shapes=None):
         A JSON-serialisable, deterministic claim packet with: ``schema``,
         ``source``, ``shapes``, ``verticals`` (candidate + verdict + citable
         source + witness-lines), ``abstraction_manifest`` (the
-        ``AbstractionEntry`` rows), ``non_claims`` (the spec §6 honest
-        boundaries), ``coach`` (the source-pinned ``to_proceed``), ``ledger``
-        (the ordered derivation trail), and ``manifest_id`` (SHA-256 over the
-        canonical body -- the manifest reproduces).
+        ``AbstractionEntry`` rows), ``retention`` (the lossiness manifest),
+        ``two_layer`` (the two-layer agreement per shape, fail-closed),
+        ``ab`` (the A/B winner table, when given), ``wedge`` (Product 1: the
+        A/B winner frontend + the two-layer verdict + the source-pinned
+        counterexample -- the open-source wedge's proof), ``non_claims`` (the
+        spec §6 honest boundaries), ``coach`` (the source-pinned
+        ``to_proceed``), ``ledger`` (the ordered derivation trail), and
+        ``manifest_id`` (SHA-256 over the canonical body -- the manifest
+        reproduces).
     """
     _as_model(model)
     if shapes is None:
@@ -469,6 +560,8 @@ def build_claim_packet(model, verticals_dict, coach_dict, shapes=None):
     meta = dict(getattr(model, "meta", None) or {})
     verticals_out = {}
     retention_out = {}
+    counterexample_out = {}
+    two_layer_out = two_layer_section(verticals_dict)
     ledger = []
     abstraction = []
 
@@ -535,18 +628,41 @@ def build_claim_packet(model, verticals_dict, coach_dict, shapes=None):
             })
 
         # -- the vertical (candidate + verdict + citable source) ---------
+        wl = witness_lines(candidate, verdict.counterexample)
         verticals_out[shape] = {
             "candidate": candidate.to_dict(),
             "ir": ir_model.name if ir_model is not None else None,
             "verdict": verdict.to_dict(),
             "source": pin,
-            "witness_lines": witness_lines(candidate, verdict.counterexample),
+            "witness_lines": wl,
+        }
+        # Product 1 (Phase 7): the source-pinned counterexample -- the
+        # witness tied to the decision method's source line (a VIOLATED
+        # names the line; a PROVEN carries no witness).
+        counterexample_out[shape] = {
+            "status": verdict.status,
+            "witness": verdict.counterexample,
+            "source": pin,
+            "witness_lines": wl,
         }
 
         # -- the abstraction manifest (the CPG->IR mapping) --------------
         if candidate.is_control:
             abstraction.extend(abstraction_entries(candidate))
 
+    # Product 1 (Phase 7): the wedge -- the open-source wedge's proof,
+    # assembled from the packet's own sections (the A/B winner frontend +
+    # the two-layer verdict + the source-pinned counterexample).
+    wedge_out = {
+        "product": "Product 1 (verifier)",
+        "statement": ("A/B winner frontend + the two-layer verdict "
+                      "(static<->formal, fail-closed) + the source-pinned "
+                      "counterexample = the open-source wedge's proof"),
+        "frontend": (ab.get("winner") if isinstance(ab, dict) else None),
+        "two_layer": dict((s, two_layer_out[s]["status"])
+                          for s in sorted(two_layer_out)),
+        "counterexample": counterexample_out,
+    }
     body = {
         "schema": SCHEMA,
         "source": {
@@ -557,16 +673,20 @@ def build_claim_packet(model, verticals_dict, coach_dict, shapes=None):
         "verticals": verticals_out,
         "abstraction_manifest": abstraction,
         "retention": retention_out,
+        "two_layer": two_layer_out,
+        "wedge": wedge_out,
         "non_claims": list(NON_CLAIMS),
         "coach": dict((k, coach_dict[k]) for k in sorted(coach_dict)),
         "ledger": ledger,
     }
+    if isinstance(ab, dict):
+        body["ab"] = ab
     out = dict(body)
     out["manifest_id"] = manifest_id(body)
     return out
 
 
-def claim_packet_for_cpg(model, cfg, shapes=None, cpg=None):
+def claim_packet_for_cpg(model, cfg, shapes=None, cpg=None, ab=None):
     """End-to-end CPG-4: one CPG -> N verticals -> the claim packet.
 
     Extracts, lowers, verifies (with the CPG-3 cross-check), coaches
@@ -574,9 +694,22 @@ def claim_packet_for_cpg(model, cfg, shapes=None, cpg=None):
     scrape (no re-derivation).  Returns the claim-packet dict (see
     :func:`build_claim_packet`).  The manifest reproduces: the same
     ``model`` + ``cfg`` yield the same ``manifest_id``.
+
+    Phase 7 (evidence): the packet carries the three evidence layers --
+    ``two_layer`` (the two-layer agreement, fail-closed), ``ab`` (the A/B
+    winner table: the default frontend chosen by measurement, not
+    assertion), and ``retention`` (the lossiness manifest).  ``ab``
+    defaults to :func:`rot.ab.winner_table` (``None`` when the bench corpus
+    is unavailable -- honest, never a loss).
     """
     _as_model(model)
     shapes = list(shapes) if shapes is not None else list(P1_SHAPES)
+    if ab is None:
+        from rot.ab import winner_table
+        try:
+            ab = winner_table()
+        except Exception:
+            ab = None  # the bench corpus is unavailable: honest, not a loss.
     vdict = verticals(model, cfg, shapes=shapes)
     cdict = dict((s, coach_vertical(model, s, cfg, cpg=cpg)) for s in shapes)
-    return build_claim_packet(model, vdict, cdict, shapes=shapes)
+    return build_claim_packet(model, vdict, cdict, shapes=shapes, ab=ab)

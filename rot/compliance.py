@@ -65,6 +65,8 @@ __all__ = [
     "compliance_section",
     "COACHING_CONTROL",
     "coaching_compliance",
+    "SHAPE_CONTROLS",
+    "claim_packet_compliance",
 ]
 
 #: The compliance profile schema tag (bump on breaking changes to the mapping).
@@ -330,5 +332,148 @@ def coaching_compliance(coaching):
                 "hash": coaching.get("hash"),
             },
             "discharge": (coaching.get("close") or {}).get("discharge"),
+        },
+    }
+
+
+#: The SOC 2 / AIUC-1 control family each P1 shape (``rot.cpg4``) touches
+#: (the shape-level view of the mapping; ``AIUC-1`` applies to **every**
+#: shape: any condition in which the agent can act beyond its policy is an
+#: autonomy concern).
+SHAPE_CONTROLS = {
+    "budget": (SOC2_CC61, AIUC_1),
+    "label_flow": (SOC2_CC63, AIUC_1),
+}
+
+
+def _ab_winner_view(ab):
+    """The A/B winner table read for the underwriter (winner + hard gate)."""
+    if not isinstance(ab, dict) or not ab:
+        return None
+    return {
+        "winner": ab.get("winner"),
+        "hard_gate": dict(
+            (k, bool((v or {}).get("hard_gate_pass")))
+            for k, v in sorted((ab.get("per_frontend") or {}).items())),
+    }
+
+
+def _lossiness_view(retention):
+    """The retention (lossiness) manifest read for the underwriter: per
+    shape, kept / dropped / dropped-of-unknown-relevance (the threat set)."""
+    if not isinstance(retention, dict) or not retention:
+        return None
+    return dict(
+        (shape, {
+            "kept": len((m or {}).get("kept", [])),
+            "dropped": len((m or {}).get("dropped", [])),
+            "dropped_unknown": len((m or {}).get("unknown", [])),
+        })
+        for shape, m in sorted(retention.items()))
+
+
+def _coach_view(coach):
+    """The coach read for the underwriter: per shape, the blocked action,
+    the ``allowed_now`` reading of the same guard, and the source line."""
+    if not isinstance(coach, dict) or not coach:
+        return None
+    return dict(
+        (shape, {
+            "action": (c or {}).get("action"),
+            "allowed_now": (c or {}).get("allowed_now"),
+            "source_line": ((c or {}).get("source") or {}).get("start_line"),
+        })
+        for shape, c in sorted(coach.items()))
+
+
+def _claim_discharge(result):
+    """The plain-English discharge sentence (SOC 2 / AIUC-1) per result."""
+    if result == "proven":
+        return (
+            "The two-layer agreement (static<->formal, fail-closed) confirms "
+            "every extracted control; the agent's actions are within policy "
+            "(AIUC-1).")
+    if result == "violated":
+        return (
+            "The two-layer agreement (static<->formal, fail-closed) names a "
+            "control the agent can act beyond policy (AIUC-1); the "
+            "source-pinned witness is in the claim packet.")
+    return (
+        "The two-layer agreement is not discharged: at least one shape is "
+        "UNKNOWN (fail-closed). NOT proven.")
+
+
+def claim_packet_compliance(packet):
+    """Product 3 (Phase 7): the claim packet as an underwriter-readable
+    evidence section (SOC 2 + AIUC-1).
+
+    Maps the CPG-4 claim packet (``rot.cpg4``) -- the **two-layer
+    agreement** (static<->formal, fail-closed) + the **A/B winner table** +
+    the **lossiness manifest** + the source-pinned **coach** -- to the
+    compliance section an underwriter reads (the same house shape as
+    :func:`compliance_section` / :func:`coaching_compliance`):
+
+    * ``result`` -- ``"proven"`` only when **every** shape's two-layer
+      verdict is PROVEN; ``"violated"`` when **any** shape's two-layer
+      verdict is VIOLATED (the agent can act beyond policy -- AIUC-1 is
+      touched); else ``"unknown"`` (NOT discharged -- fail-closed: UNKNOWN
+      is never read as proven).
+    * ``controls_touched`` / ``controls`` -- the SOC 2 / AIUC-1 control
+      family per shape (CC6.1 spend-cap / CC6.3 tenant isolation / AIUC-1
+      agent action).
+    * ``evidence`` -- the packet's own sections (claim-packet summary,
+      two-layer verdicts, A/B winner + hard gate, lossiness manifest,
+      coach) + a plain-English ``discharge`` sentence (SOC 2 / AIUC-1).
+
+    A **pure function** of the packet dict (no I/O, no engine, and -- like
+    the rest of this module -- no import from ``rot.cpg4``) --
+    deterministic; ``None`` in -> ``None`` out.
+    """
+    if not isinstance(packet, dict):
+        return None
+    tl = packet.get("two_layer")
+    if not isinstance(tl, dict) or not tl:
+        # No two-layer section (a pre-Phase-7 packet): read the verticals'
+        # verdicts directly -- the fail-closed reading is the same.
+        verticals = packet.get("verticals") or {}
+        tl = dict((shape, {"status": ((v or {}).get("verdict") or {})
+                           .get("status")})
+                  for shape, v in verticals.items()
+                  if isinstance(v, dict))
+        if not tl:
+            return None
+    statuses = [(s or {}).get("status") for s in tl.values()]
+    if any(s == "violated" for s in statuses):
+        result = "violated"
+    elif all(s == "proven" for s in statuses):
+        result = "proven"
+    else:
+        result = "unknown"
+
+    touched = []
+    for shape in sorted(tl):
+        for c in SHAPE_CONTROLS.get(shape, (AIUC_1,)):
+            if c not in touched:
+                touched.append(c)
+    touched = sorted(touched)
+    return {
+        "profile": COMPLIANCE_PROFILE,
+        "frameworks": list(FRAMEWORKS),
+        "result": result,
+        "controls_touched": touched,
+        "controls": dict((c, CONTROL_LABELS[c]) for c in touched),
+        "evidence": {
+            "claim_packet": {
+                "schema": packet.get("schema"),
+                "manifest_id": packet.get("manifest_id"),
+                "source": packet.get("source"),
+                "shapes": list(packet.get("shapes") or []),
+            },
+            "two_layer": dict((shape, (s or {}).get("status"))
+                              for shape, s in sorted(tl.items())),
+            "ab_winner": _ab_winner_view(packet.get("ab")),
+            "lossiness": _lossiness_view(packet.get("retention")),
+            "coach": _coach_view(packet.get("coach")),
+            "discharge": _claim_discharge(result),
         },
     }
