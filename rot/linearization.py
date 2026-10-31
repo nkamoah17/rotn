@@ -28,7 +28,8 @@ class LinearModel(object):
     """A deterministic, ordered transition system derived from a ProtocolIR."""
 
     def __init__(self, name, variables, init_action, actions, pc_values,
-                 init_state, provenance):
+                 init_state, provenance, assumes=None,
+                 stuttering_assumption=None):
         self.name = name
         self.variables = list(variables)      # StateVar list (ordered)
         self.init_action = init_action        # Action (the is_initial action)
@@ -36,6 +37,15 @@ class LinearModel(object):
         self.pc_values = list(pc_values)      # ordered control points (str)
         self.init_state = dict(init_state)    # var -> value
         self.provenance = provenance or {}    # dict (functions/calls/messages)
+        # Phase 6.2: state constraints (TLA+ ASSUME clauses) carried over from
+        # the IR; the concrete engines prune states that do not definitely
+        # satisfy them (sound pruning).  Empty by default.
+        self.assumes = list(assumes or [])
+        # Phase 6.1: the stated stuttering assumption (stated, never silent).
+        from .ir import STUTTERING_ASSUMPTION
+        self.stuttering_assumption = (
+            STUTTERING_ASSUMPTION if stuttering_assumption is None
+            else stuttering_assumption)
         # Constant-node reduction (GSSM §2.6, the general state space): a state
         # variable that no transition action ever writes is a *constant node* --
         # it can only ever hold its initial value, so it contributes a single
@@ -238,6 +248,8 @@ def linearize(ir):
         pc_values=[a.name for a in transitions],
         init_state=init_state,
         provenance=provenance,
+        assumes=getattr(ir, "assumes", None),
+        stuttering_assumption=getattr(ir, "stuttering_assumption", None),
     )
 
 

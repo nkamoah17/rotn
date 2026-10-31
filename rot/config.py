@@ -106,7 +106,9 @@ class Config(object):
                  apalache_length=None,
                  unbounded_liveness=False,
                  fairness_action=None,
-                 fairness_engine=ENGINE_APALACHE):
+                 fairness_engine=ENGINE_APALACHE,
+                 strong_fairness_actions=None,
+                 weak_fairness_actions=None):
         self.engine = engine
         self.tlc_jar = tlc_jar
         self.java_cmd = java_cmd
@@ -162,6 +164,16 @@ class Config(object):
         # (spec D2: Apalache primary, TLC cross-check).  One of
         # ``ENGINE_APALACHE`` / ``ENGINE_TLC``.
         self.fairness_engine = fairness_engine
+        # Phase 6.3: fairness beyond single-action weak.
+        # ``strong_fairness_actions`` -- strong fairness SF(a) on the named
+        # harness action(s); ``weak_fairness_actions`` -- multi-action weak
+        # fairness WF(a1) / WF(a2) / ...  Both are stated on *harness*
+        # actions only (never imposed on the agent), and the resolved
+        # formula is ALWAYS recorded on the verdict (never silent; spec
+        # R2 / D2).  ``fairness_action`` (single-action WF) remains the
+        # pre-Phase-6 default.
+        self.strong_fairness_actions = list(strong_fairness_actions or [])
+        self.weak_fairness_actions = list(weak_fairness_actions or [])
 
     # -- engine selection ----------------------------------------------------
     def tlc_jar_path(self):
@@ -288,6 +300,8 @@ class Config(object):
             "unbounded_liveness": self.unbounded_liveness,
             "fairness_action": self.fairness_action,
             "fairness_engine": self.fairness_engine,
+            "strong_fairness_actions": list(self.strong_fairness_actions),
+            "weak_fairness_actions": list(self.weak_fairness_actions),
             "out_dir": self.out_dir,
             "work_dir": self.work_dir,
             "llm_enabled": self.llm_enabled,
@@ -308,7 +322,8 @@ class Config(object):
                 "llm_api_key_env", "llm_model", "llm_timeout", "llm_max_turns",
                 "apalache_enabled", "apalache_jar", "apalache_java",
                 "apalache_timeout", "apalache_length",
-                "unbounded_liveness", "fairness_action", "fairness_engine")
+                "unbounded_liveness", "fairness_action", "fairness_engine",
+                "strong_fairness_actions", "weak_fairness_actions")
         return cls(**{k: d[k] for k in keys if k in d})
 
 

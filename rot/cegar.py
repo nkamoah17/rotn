@@ -52,7 +52,7 @@ FACTOR_GRAPH_QUOTIENT_SOUNDNESS = (
     "one, and a counterexample is a candidate bug (GSSM, marginalization delay)"
 )
 
-from .ir import Expr
+from .ir import Expr, STUTTERING_ASSUMPTION
 from .verdicts import Verdict, POLICY_DENIAL, LIVENESS_BOUND_EXCEEDED
 
 
@@ -72,6 +72,18 @@ def _feasible_in_ir(witness, prop):
     if r is Expr.UNDEF:
         return False, r
     return (r is False), r
+
+
+def _attach_stuttering(verdict, model):
+    """Phase 6.1: attach the model's stated stuttering assumption to the
+    verdict (safety-safe / liveness-honest -- stated, never silent).  A
+    verdict that already carries an explicit statement is left unchanged.
+    """
+    if model is not None:
+        s = getattr(model, "stuttering_assumption", None)
+        if s and verdict.stuttering_assumption is None:
+            verdict.stuttering_assumption = s
+    return verdict
 
 
 def cegar(engine_result, prop, cfg, engine, model=None, recheck=None):
@@ -100,37 +112,45 @@ def cegar(engine_result, prop, cfg, engine, model=None, recheck=None):
     _code = getattr(prop, "violation_code", None) or POLICY_DENIAL
 
     if status == "proven":
-        return Verdict.proven(prop.name, engine,
-                              n_states=engine_result.n_states,
-                              property_kind=prop.kind,
-                              note=engine_result.note or "invariant holds")
+        return _attach_stuttering(
+            Verdict.proven(prop.name, engine,
+                           n_states=engine_result.n_states,
+                           property_kind=prop.kind,
+                           note=engine_result.note or "invariant holds"),
+            model)
 
     if status == "violated":
         witness = engine_result.witness
         if isinstance(witness, dict) and witness:
             feasible, _ = _feasible_in_ir(witness, prop)
             if feasible:
-                return Verdict.violated(
+                return _attach_stuttering(
+                    Verdict.violated(
+                        prop.name, engine, counterexample=witness,
+                        n_states=engine_result.n_states,
+                        property_kind=prop.kind,
+                        violation_code=_code,
+                        note="concrete counterexample confirmed in the IR"),
+                    model)
+            return _attach_stuttering(
+                Verdict.unsound(
                     prop.name, engine, counterexample=witness,
                     n_states=engine_result.n_states,
                     property_kind=prop.kind,
-                    violation_code=_code,
-                    note="concrete counterexample confirmed in the IR")
-            return Verdict.unsound(
-                prop.name, engine, counterexample=witness,
-                n_states=engine_result.n_states,
-                property_kind=prop.kind,
-                note="counterexample not confirmed concrete in the IR "
-                     "(over-approximation artefact)")
+                    note="counterexample not confirmed concrete in the IR "
+                         "(over-approximation artefact)"),
+                model)
         # The engine is authoritative (it refuted the invariant) but we could
         # not capture/parse a concrete witness. Report a violation with that
         # caveat rather than silently downgrading to unknown.
-        return Verdict.violated(
-            prop.name, engine, counterexample={},
-            n_states=engine_result.n_states,
-            property_kind=prop.kind,
-            violation_code=_code,
-            note="engine reported a violation; witness not captured")
+        return _attach_stuttering(
+            Verdict.violated(
+                prop.name, engine, counterexample={},
+                n_states=engine_result.n_states,
+                property_kind=prop.kind,
+                violation_code=_code,
+                note="engine reported a violation; witness not captured"),
+            model)
 
     if status in ("unknown", "timeout"):
         iters = 0
@@ -143,32 +163,42 @@ def cegar(engine_result, prop, cfg, engine, model=None, recheck=None):
         if cur.status == "violated":
             feasible, _ = _feasible_in_ir(cur.witness, prop)
             if feasible:
-                return Verdict.violated(
+                return _attach_stuttering(
+                    Verdict.violated(
+                        prop.name, engine, counterexample=cur.witness,
+                        cegar_iterations=iters,
+                        property_kind=prop.kind,
+                        violation_code=_code,
+                        note="confirmed by refinement"),
+                    model)
+            return _attach_stuttering(
+                Verdict.unsound(
                     prop.name, engine, counterexample=cur.witness,
                     cegar_iterations=iters,
                     property_kind=prop.kind,
-                    violation_code=_code,
-                    note="confirmed by refinement")
-            return Verdict.unsound(
-                prop.name, engine, counterexample=cur.witness,
-                cegar_iterations=iters,
-                property_kind=prop.kind,
-                note="refined counterexample not confirmed concrete")
+                    note="refined counterexample not confirmed concrete"),
+                model)
         if cur.status == "proven":
-            return Verdict.proven(
+            return _attach_stuttering(
+                Verdict.proven(
+                    prop.name, engine, cegar_iterations=iters,
+                    property_kind=prop.kind,
+                    note="confirmed by refinement"),
+                model)
+        return _attach_stuttering(
+            Verdict.unknown(
                 prop.name, engine, cegar_iterations=iters,
                 property_kind=prop.kind,
-                note="confirmed by refinement")
-        return Verdict.unknown(
-            prop.name, engine, cegar_iterations=iters,
-            property_kind=prop.kind,
-            note="could not decide after %d refinement(s): %s"
-                 % (iters, engine_result.note))
+                note="could not decide after %d refinement(s): %s"
+                     % (iters, engine_result.note)),
+            model)
 
     if status == "error":
-        return Verdict.error(prop.name, engine,
-                             property_kind=prop.kind,
-                             note=engine_result.note or "engine error")
+        return _attach_stuttering(
+            Verdict.error(prop.name, engine,
+                          property_kind=prop.kind,
+                          note=engine_result.note or "engine error"),
+            model)
 
     raise ValueError("unknown engine status %r" % (status,))
 
@@ -217,6 +247,7 @@ def cegar_liveness(reach_result, prop, cfg, engine):
         return Verdict.proven(
             prop.name, engine, n_states=n_states, evidence=evidence,
             property_kind=prop.kind,
+            stuttering_assumption=STUTTERING_ASSUMPTION,
             note=("goal reachable within horizon %d at step %s -- "
                   "bounded liveness holds" % (horizon, depth)))
 
@@ -225,6 +256,7 @@ def cegar_liveness(reach_result, prop, cfg, engine):
             prop.name, engine, counterexample={}, n_states=n_states,
             evidence={"liveness": "not_reached", "horizon": horizon},
             property_kind=prop.kind,
+            stuttering_assumption=STUTTERING_ASSUMPTION,
             violation_code=LIVENESS_BOUND_EXCEEDED,
             note=("goal not reachable within horizon %d -- "
                   "bounded liveness violated" % horizon))
@@ -234,6 +266,7 @@ def cegar_liveness(reach_result, prop, cfg, engine):
             prop.name, engine, n_states=n_states,
             evidence={"liveness": "unknown", "horizon": horizon},
             property_kind=prop.kind,
+            stuttering_assumption=STUTTERING_ASSUMPTION,
             note=("reach_within could not decide within horizon %d "
                   "(state budget exhausted) -- this is NOT a proof of "
                   "non-reachability" % horizon))

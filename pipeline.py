@@ -143,6 +143,36 @@ def _apply_two_layer(cpg_model, ir, verdict, quiet=False):
     return result
 
 
+def _record_ir_assumptions(verdict, ir):
+    """Phase 6.2: record the IR's state constraints (``ASSUME`` clauses) as
+    NAMED assumptions on the final verdict.
+
+    An assumption is a *state-space restriction* the engine respected
+    (sound pruning: a promise about the environment or a modelling
+    parameter, like a bound).  A PROVEN under such an assumption is a
+    PROVEN *under it* -- and the assumption must never be silent: a
+    bound/assumption that masks a bug (e.g. ``inflight <= 1`` masking the
+    parallel-fire race) is exactly what this record exists to surface.
+    The verdict status and the exit code are untouched; the assumption is
+    stated on the verdict (and hence in the JSON / MD report).
+    """
+    assumes = getattr(ir, "assumes", None) or []
+    if not assumes or verdict is None:
+        return
+    if verdict.assumptions is None:
+        verdict.assumptions = []
+    for a in assumes:
+        expr = getattr(a, "expr", a)
+        try:
+            from rot.expr_render import render_expr
+            txt = render_expr(expr)
+        except Exception:
+            txt = repr(expr)
+        note = getattr(a, "note", "") or ""
+        verdict.assumptions.append(
+            "assume: %s%s" % (txt, (" -- " + note) if note else ""))
+
+
 def _cpg_artifact_in(source_dir):
     """True if a ``*.cpg.json`` artifact exists under ``source_dir``."""
     if not source_dir or not os.path.isdir(source_dir):
@@ -379,6 +409,13 @@ def run(target_name="correct", property_name=None, engine="auto",
     if (cpg_model is not None
             and getattr(prop, "kind", None) != KIND_LIVENESS):
         verdict = _apply_two_layer(cpg_model, ir, verdict, quiet)
+
+    # 5c. Phase 6.2: the state constraints (TLA+ ASSUME clauses) that
+    # shaped the run are recorded as NAMED assumptions on the final
+    # verdict -- a PROVEN under an assumption is never silent about
+    # that assumption (e.g. the spend-cap K=1 bound masking the
+    # parallel-fire race).
+    _record_ir_assumptions(verdict, ir)
 
     # 6. auditable report (JSON + Markdown).
     report = VerdictReport(

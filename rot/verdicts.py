@@ -203,7 +203,8 @@ class Verdict(object):
                  counterexample=None, assumptions=None, soundness=None,
                  evidence=None, cegar_iterations=0, n_states=0, note="",
                  property_kind=None, violation_code=None, trace=None,
-                 advisories=None, discharge=None, fairness_label=None):
+                 advisories=None, discharge=None, fairness_label=None,
+                 stuttering_assumption=None):
         if status not in _STATUSES:
             raise ValueError("bad verdict status %r" % (status,))
         if property_kind is not None and property_kind not in _PROPERTY_KINDS:
@@ -252,6 +253,12 @@ class Verdict(object):
         # liveness claim is never silently strengthened by an unstated fairness
         # assumption (spec R2).  ``None`` for bounded liveness and safety.
         self.fairness_label = fairness_label
+        # Phase 6.1: the stated stuttering assumption (never silent).  The IR
+        # transition system has no stuttering steps, so safety verdicts are
+        # sound under it at no cost; liveness verdicts are sound only UNDER it
+        # (liveness-honest).  Carried on every verdict so the report states the
+        # semantic gap instead of hiding it.  See ``rot.ir.STUTTERING_ASSUMPTION``.
+        self.stuttering_assumption = stuttering_assumption
 
     # -- factories -----------------------------------------------------------
     @classmethod
@@ -320,6 +327,7 @@ class Verdict(object):
             "trace": self.trace,
             "discharge": self.discharge,
             "fairness_label": self.fairness_label,
+            "stuttering_assumption": self.stuttering_assumption,
         }
 
     def to_json(self, indent=2):
@@ -392,6 +400,11 @@ class Verdict(object):
             lines.append("")
             for a in self.assumptions:
                 lines.append("- %s" % a)
+            lines.append("")
+        if self.stuttering_assumption:
+            lines.append("## Stuttering assumption")
+            lines.append("")
+            lines.append(self.stuttering_assumption)
             lines.append("")
         if self.soundness:
             lines.append("## Soundness notes")

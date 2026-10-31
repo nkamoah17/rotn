@@ -32,6 +32,25 @@ The other two rules are enforced the same way:
   (R4) **no spurious liveness**: the goal must be a *decided outcome* (the
       task ends / escalates), not a tautology or a trivially-true flag.
 
+Phase 6 (TLA+ essentials):
+
+  * **The stuttering assumption is stated, never silent.**  The IR's
+    transition system has no stuttering (no-op) steps, so every liveness
+    verdict here carries :data:`rot.ir.STUTTERING_ASSUMPTION`: the claim is
+    **safety-safe** (a safety invariant holding in all non-stuttering
+    reachable states holds under stuttering extensions) but **liveness
+    honest** (an unbounded ``<>Goal`` is sound only *under* the assumption
+    -- the no-stuttering property itself, or a fairness assumption that
+    rules out infinite stuttering, is what closes the gap).
+  * **Fairness beyond single-action weak** (Phase 6.3): the unbounded
+    discharge states and records the full fairness formula -- strong
+    fairness ``SF(a)`` and multi-action conjunctions
+    ``WF(a1) / WF(a2)`` / ``SF(a1) / SF(a2)`` -- and validates the named
+    actions against the model (a formula over a non-existent action fails
+    closed).  The fairness-aware engine discharge itself is Apalache-level
+    (spec D2); until then the path fails closed to UNKNOWN with the
+    formula recorded.
+
 Pure stdlib, Python 3.6 compatible (no f-strings).
 """
 
@@ -107,6 +126,7 @@ def _enforce_r2(verdict, discharge, concrete, horizon_complete, fairness_label):
         n_states=verdict.n_states, evidence=verdict.evidence,
         property_kind=verdict.property_kind,
         discharge=verdict.discharge, fairness_label=verdict.fairness_label,
+        stuttering_assumption=getattr(verdict, "stuttering_assumption", None),
         note=note)
 
 
@@ -277,9 +297,52 @@ def fairness_label_for(cfg, action=None):
     ``action`` defaults to ``cfg.fairness_action`` or
     :data:`DEFAULT_FAIRNESS_ACTION`.  Fairness is stated on *harness* actions
     only.  Returns a string like ``"WF(Decide)"``.
+
+    Phase 6.3: for strong / multi-action fairness use
+    :func:`fairness_formula_for` (this function is the single-action weak
+    special case, kept for backward compatibility).
     """
     a = action or getattr(cfg, "fairness_action", None) or DEFAULT_FAIRNESS_ACTION
     return "WF(%s)" % a
+
+
+def fairness_formula_for(cfg):
+    """Phase 6.3: resolve the fairness formula from the config.
+
+    Returns ``(mode, actions, formula)`` where ``mode`` is ``"strong"`` or
+    ``"weak"`` and ``formula`` is the TLA+ fairness formula:
+
+      * ``cfg.strong_fairness_actions`` (one or more harness actions) ->
+        strong fairness ``SF(a1) / SF(a2) / ...``;
+      * ``cfg.weak_fairness_actions`` (two or more harness actions) ->
+        multi-action weak fairness ``WF(a1) / WF(a2) / ...``;
+      * otherwise the single-action weak fairness ``WF(action)`` (the
+        pre-Phase-6 behavior: ``cfg.fairness_action`` or the default).
+
+    Fairness is stated on *harness* actions only -- it is never imposed on
+    the agent (adversary).  The formula is ALWAYS recorded on the verdict
+    (never silent; spec R2 / D2).
+    """
+    sf = [a for a in (getattr(cfg, "strong_fairness_actions", None) or []) if a]
+    if sf:
+        return "strong", list(sf), " / ".join("SF(%s)" % a for a in sf)
+    wf = [a for a in (getattr(cfg, "weak_fairness_actions", None) or []) if a]
+    if len(wf) > 1:
+        return "weak", list(wf), " / ".join("WF(%s)" % a for a in wf)
+    a = getattr(cfg, "fairness_action", None) or DEFAULT_FAIRNESS_ACTION
+    return "weak", [a], "WF(%s)" % a
+
+
+def _stuttering(model):
+    """The stuttering assumption a verdict over ``model`` carries (Phase 6.1).
+
+    The model's own statement wins (it is the single source of truth); the
+    canonical :data:`rot.ir.STUTTERING_ASSUMPTION` text is the fallback so
+    the assumption is stated even for models built before Phase 6.
+    """
+    from .ir import STUTTERING_ASSUMPTION
+    s = getattr(model, "stuttering_assumption", None)
+    return s if s else STUTTERING_ASSUMPTION
 
 
 def _discharge_bounded(model, goal_expr, prop, cfg, horizon, target):
@@ -303,6 +366,7 @@ def _discharge_bounded(model, goal_expr, prop, cfg, horizon, target):
             prop.name, engine, n_states=0,
             property_kind=prop.kind, discharge=DISCHARGE_BOUNDED,
             evidence={"r3_vacuity": vac_reason, "r4_decided": dec_reason},
+            stuttering_assumption=_stuttering(model),
             note=("liveness goal rejected before checking -- R3/R4: %s; %s"
                   % (vac_reason, dec_reason)))
 
@@ -335,6 +399,7 @@ def _discharge_bounded(model, goal_expr, prop, cfg, horizon, target):
             prop.name, engine, n_states=evidence["primary"]["n_states"],
             property_kind=prop.kind, discharge=DISCHARGE_BOUNDED,
             evidence=evidence,
+            stuttering_assumption=_stuttering(model),
             note=("cross-engine disagreement on bounded liveness: symbolic=%r "
                   "tlc=%r -- refusing to PROVEN/VOLATED on a single engine "
                   "(spec: cross-engine agreement required)"
@@ -352,6 +417,7 @@ def _discharge_bounded(model, goal_expr, prop, cfg, horizon, target):
             prop.name, engine, n_states=evidence["primary"]["n_states"],
             property_kind=prop.kind, discharge=DISCHARGE_BOUNDED,
             evidence=evidence,
+            stuttering_assumption=_stuttering(model),
             note=("goal reachable within horizon %d (symbolic%s)"
                   % (horizon, suffix)))
     else:
@@ -360,6 +426,7 @@ def _discharge_bounded(model, goal_expr, prop, cfg, horizon, target):
             n_states=evidence["primary"]["n_states"],
             property_kind=prop.kind, discharge=DISCHARGE_BOUNDED,
             evidence=evidence,
+            stuttering_assumption=_stuttering(model),
             note=("goal NOT reachable within horizon %d (symbolic%s) -- "
                   "bounded liveness violated" % (horizon, suffix)))
     return _enforce_r2(verdict, DISCHARGE_BOUNDED, concrete=True,
@@ -369,45 +436,77 @@ def _discharge_bounded(model, goal_expr, prop, cfg, horizon, target):
 
 
 def _discharge_unbounded(model, goal_expr, prop, cfg, target):
-    """Discharge the *unbounded* liveness claim ``<>Goal`` under weak fairness
-    on the harness decision action (spec R2b / D1 / D2).
+    """Discharge the *unbounded* liveness claim ``<>Goal`` under a stated
+    fairness assumption (spec R2b / D1 / D2).
 
     The fairness formula is ALWAYS recorded on the verdict (never silent).
+    Phase 6.3: the assumption generalizes beyond single-action weak
+    fairness -- strong fairness ``SF(a)`` and multi-action conjunctions
+    ``WF(a1) / WF(a2)`` / ``SF(a1) / SF(a2)`` -- and the named actions are
+    validated against the model's action set (a formula over an action the
+    model does not have fails closed rather than being silently recorded).
+
+    The fairness-aware engine discharge itself is Apalache-level (spec D2);
+    this build records the assumption and FAILS CLOSED to UNKNOWN rather
+    than emit a PROVEN that is not soundly discharged under the fairness
+    assumption.  (A counterexample to the *un-fair* ``<>Goal`` is not, by
+    itself, a counterexample to the fair claim -- the witnessing behavior
+    may not satisfy the fairness formula -- so we do not use it either.)
+    The bounded path -- the default -- is the sound, cross-checked liveness
+    discharge.
+
     Returns a :class:`rot.verdicts.Verdict`.
     """
     from .verdicts import Verdict
 
     engine = getattr(cfg, "fairness_engine", "apalache") or "apalache"
-    label = fairness_label_for(cfg)
+    mode, actions, formula = fairness_formula_for(cfg)
+    fairness = {"mode": mode, "actions": list(actions), "formula": formula}
     evidence = {
         "discharge": DISCHARGE_FAIRNESS,
-        "fairness_label": label,
-        "fairness_action": (getattr(cfg, "fairness_action", None)
-                            or DEFAULT_FAIRNESS_ACTION),
+        "fairness": fairness,
+        "fairness_label": formula,
         "primary_engine": engine,
     }
 
-    # The unbounded (fair) liveness claim ``WF(action) => <>Goal`` can only be
-    # soundly discharged if the fairness assumption is actually *applied to the
-    # spec* and checked under it.  This build records the fairness assumption
-    # (never silent -- the label is always on the verdict, and the emitter can
-    # emit ``ASSUME WF(action)`` in the ``.cfg``, spec D2) but does not yet
-    # perform a fairness-aware engine discharge, so it FAILS CLOSED to UNKNOWN
-    # rather than emit a PROVEN that is not soundly discharged under the
-    # fairness assumption.  (A counterexample to the *un-fair* ``<>Goal`` is
-    # not, by itself, a counterexample to the fair claim -- the witnessing
-    # behavior may not satisfy WF(action) -- so we do not use it either.)
-    # The bounded path -- the default -- is the sound, cross-checked liveness
-    # discharge.
+    # A fairness formula must name actions the model actually has -- a
+    # formula over a non-existent action is never silently recorded.
+    try:
+        known = set(model.actions_by_name().keys())
+    except Exception:
+        known = set()
+    missing = [a for a in actions if a not in known]
+    if missing:
+        return Verdict.unknown(
+            prop.name, engine, n_states=0,
+            property_kind=prop.kind, discharge=DISCHARGE_FAIRNESS,
+            fairness_label=formula, evidence=evidence,
+            stuttering_assumption=_stuttering(model),
+            note=("fairness action(s) %r are not actions of the model -- "
+                  "the fairness formula %s cannot be discharged; failing "
+                  "closed to UNKNOWN rather than record a fairness "
+                  "assumption over an action that does not exist"
+                  % (missing, formula)))
+
+    # The unbounded (fair) liveness claim ``<fairness> => <>Goal`` can only
+    # be soundly discharged if the fairness assumption is actually *applied
+    # to the spec* and checked under it.  This build records the assumption
+    # (never silent -- the formula is always on the verdict, and the emitter
+    # can emit ``ASSUME <fairness>`` in the ``.cfg``, spec D2) but does not
+    # yet perform a fairness-aware engine discharge, so it FAILS CLOSED to
+    # UNKNOWN rather than emit a PROVEN that is not soundly discharged under
+    # the fairness assumption.
     return Verdict.unknown(
         prop.name, engine, n_states=0,
         property_kind=prop.kind, discharge=DISCHARGE_FAIRNESS,
-        fairness_label=label, evidence=evidence,
-        note=("unbounded liveness claim %s => <>Goal requires a fairness-aware "
-              "discharge; this build records the fairness assumption (never "
-              "silent) and fails closed to UNKNOWN rather than emit an unsound "
-              "PROVEN.  Use the bounded path (default) for the sound, "
-              "cross-checked liveness discharge." % label))
+        fairness_label=formula, evidence=evidence,
+        stuttering_assumption=_stuttering(model),
+        note=("unbounded liveness claim %s => <>Goal requires a "
+              "fairness-aware discharge (%s fairness on %r); this build "
+              "records the fairness assumption (never silent) and fails "
+              "closed to UNKNOWN rather than emit an unsound PROVEN.  Use "
+              "the bounded path (default) for the sound, cross-checked "
+              "liveness discharge." % (formula, mode, actions)))
 
 
 def discharge_liveness(model, goal_expr, prop, cfg, horizon=None, target="model"):
@@ -418,9 +517,16 @@ def discharge_liveness(model, goal_expr, prop, cfg, horizon=None, target="model"
       * off (default) -> the *bounded* claim (goal reachable within the
         horizon), discharged by the concrete symbolic engine and cross-checked
         by TLC.  This is the sound, fairness-free default.
-      * on            -> the *unbounded* claim ``<>Goal`` under weak fairness
-        on the harness decision action (Apalache primary, TLC cross-check),
-        with the fairness formula always recorded.
+      * on            -> the *unbounded* claim ``<>Goal`` under a stated
+        fairness assumption (spec R2b / D2): single-action weak fairness
+        ``WF(action)`` (the pre-Phase-6 default), strong fairness
+        ``SF(action)`` (``cfg.strong_fairness_actions``), or multi-action
+        weak fairness ``WF(a1) / WF(a2)`` (``cfg.weak_fairness_actions``,
+        Phase 6.3).  The fairness formula is ALWAYS recorded.
+
+    Phase 6.1: every verdict carries the stated stuttering assumption
+    (:data:`rot.ir.STUTTERING_ASSUMPTION` via ``model.stuttering_assumption``)
+    -- safety-safe, liveness-honest.
 
     Returns a :class:`rot.verdicts.Verdict`.  A ``PROVEN`` is only returned
     when the dual-soundness rule (R2) is satisfied; otherwise the verdict is
@@ -436,5 +542,6 @@ def discharge_liveness(model, goal_expr, prop, cfg, horizon=None, target="model"
 __all__ = [
     "DISCHARGE_BOUNDED", "DISCHARGE_FAIRNESS", "DEFAULT_FAIRNESS_ACTION",
     "r2_soundness_ok", "r3_goal_not_vacuous", "r3_negative_control",
-    "r4_goal_is_decided_outcome", "fairness_label_for", "discharge_liveness",
+    "r4_goal_is_decided_outcome", "fairness_label_for", "fairness_formula_for",
+    "discharge_liveness",
 ]

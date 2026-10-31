@@ -76,6 +76,8 @@ __all__ = [
     "spend_ok_guard_buggy",
     "spend_ok_guard_correct",
     "within_cap_property",
+    "assume_inflight_at_most",
+    "k_sweep",
 ]
 
 #: Uniform spend amount per request (the fixture reduces all amounts to one
@@ -156,7 +158,7 @@ def within_cap_property(amount=AMOUNT, cap=CAP):
 
 
 def build_ir(n=1, buggy=False, max_inflight=MAX_INFLIGHT, amount=AMOUNT, cap=CAP,
-             window=MAX_WINDOW):
+             window=MAX_WINDOW, assumes=None):
     """Build the spendcap IR.
 
     ``n`` is accepted for registry uniformity (this slice is a single
@@ -179,6 +181,14 @@ def build_ir(n=1, buggy=False, max_inflight=MAX_INFLIGHT, amount=AMOUNT, cap=CAP
     :data:`CAP`) so the hand-written model is unchanged, but a policy front-end
     can thread the policy's own values through so the model is *derived from
     the policy* rather than fixed to one example.
+
+    ``assumes`` (Phase 6.2) is an optional list of state constraints
+    (TLA+ ``ASSUME`` clauses) -- :class:`rot.ir.Assume` nodes or raw
+    expressions.  They restrict the state space the engines explore
+    (sound pruning: a promise about the environment or a modelling
+    parameter, like a bound) and are recorded on the IR, so a verdict
+    decided under them carries them as NAMED assumptions -- never silent.
+    See :func:`assume_inflight_at_most` and :func:`k_sweep`.
 
     Raises:
         ValueError: if ``max_inflight`` is not an integer >= 1.
@@ -240,6 +250,11 @@ def build_ir(n=1, buggy=False, max_inflight=MAX_INFLIGHT, amount=AMOUNT, cap=CAP
                   linearization="send(respond)",
                   source="spendcap.py:respond"),
     ]
+    # Phase 6.2: state constraints (TLA+ ASSUME clauses) -- normalized to
+    # :class:`rot.ir.Assume` nodes and carried on the IR so every consumer
+    # (engines, reports) sees the exact state space a verdict was decided in.
+    assumes = [a if isinstance(a, ir.Assume) else ir.Assume(a)
+               for a in (assumes or [])]
     return ir.ProtocolIR(
         name=name,
         variables=variables,
@@ -253,6 +268,7 @@ def build_ir(n=1, buggy=False, max_inflight=MAX_INFLIGHT, amount=AMOUNT, cap=CAP
         # the ``--policy`` path, ...) verify against the real cap predicate
         # instead of the ``ProtocolIR`` default of ``Const(True)``.
         pinned_property=within_cap_property(amount, cap),
+        assumes=assumes,
         source_path="tests/fixtures/aws_dogwood/spendcap",
         metadata={"protocol": "SPENDCAP", "target": "spendcap",
                   "buggy": buggy, "amount": amount, "cap": cap,
@@ -277,3 +293,84 @@ def build_ir(n=1, buggy=False, max_inflight=MAX_INFLIGHT, amount=AMOUNT, cap=CAP
                           "parallel-fire race"),
                   ]},
     )
+
+
+def assume_inflight_at_most(k, note=None):
+    """Phase 6.2: the in-flight bound as an ASSUME clause.
+
+    ``assume(inflight <= k)`` -- a state constraint restricting the state
+    space to at most ``k`` in-flight requests.  This is the concurrency
+    assumption behind the K-scale: at ``k = 1`` the parallel-fire race is
+    structurally masked (two in-flight requests cannot coexist), so a
+    PROVEN under it does NOT rule the race out -- the assumption is
+    recorded on the IR (and hence on the verdict as a named assumption) so
+    the masking is never silent.
+
+    Returns a :class:`rot.ir.Assume` node (usable as an IR ``assumes``
+    entry or in :func:`build_ir`).
+    """
+    k = int(k)
+    if k < 1:
+        raise ValueError("the in-flight bound must be >= 1 (got %r)" % (k,))
+    expr = ir.BinOp("<=", ir.V("inflight"), ir.C(k))
+    if note is None:
+        note = ("concurrency assumption: at most %d in-flight request(s); "
+                "at k=1 the parallel-fire race is masked" % k)
+    return ir.Assume(expr, note)
+
+
+def k_sweep(buggy=True, k_values=(1, 2, 3, 4), amount=AMOUNT, cap=CAP,
+            window=MAX_WINDOW, max_states=200000):
+    """Phase 6.4: the K-scale sweep.
+
+    Runs the pinned safety property (``spendcap_within_cap``) under a sweep
+    of the in-flight bound ``K`` (``max_inflight``) and returns one verdict
+    per ``K`` -- the K-masking boundary (``K = 1`` masks the parallel-fire
+    race; ``K >= 2`` exposes it) is *reported*, not assumed.
+
+    Each row is ``(K, verdict)`` where ``verdict`` is a
+    :class:`rot.verdicts.Verdict` decided by the concrete symbolic engine
+    (the independent oracle) with CEGAR refinement.  The verdict records
+    the bound in ``evidence["k"]`` and the ``MASKED_AT_LOW_K`` advisory in
+    ``evidence["k_masking"]`` when one applies (a PROVEN at a ``K`` below
+    the minimal overshoot count), and carries the bound as a NAMED
+    assumption -- never silent.
+
+    Returns a list; pure stdlib, Python 3.6 compatible.
+    """
+    from .cegar import cegar
+    from .config import Config
+    from .invariants import Invariant
+    from .linearization import linearize
+    from .symbolic import SymbolicEngine
+    from .verdicts import k_masking_advisory
+
+    prop = Invariant(
+        name="spendcap_within_cap",
+        description="settled + in-flight never exceeds the cap",
+        expression=within_cap_property(amount, cap))
+    cfg = Config(engine="symbolic", max_states=max_states)
+    out = []
+    for k in k_values:
+        ir = build_ir(buggy=buggy, max_inflight=k, amount=amount,
+                      cap=cap, window=window)
+        model = linearize(ir)
+        eng = SymbolicEngine(model, max_states=cfg.max_states)
+        res = eng.check(prop.expression)
+
+        def _recheck(mdl, p, ms, _eng=eng):
+            return _eng.check(p.expression)
+
+        v = cegar(res, prop, cfg, "symbolic", model=model,
+                  recheck=_recheck)
+        v.evidence = dict(v.evidence or {})
+        v.evidence["k"] = k
+        code, msg = k_masking_advisory(ir.metadata, v.status)
+        if code:
+            v.evidence["k_masking"] = {"code": code, "message": msg}
+        v.assumptions = list(v.assumptions or [])
+        v.assumptions.append(
+            "assume: inflight < %d (request-pool bound K=%d; at K=1 the "
+            "parallel-fire race is masked)" % (k, k))
+        out.append((k, v))
+    return out

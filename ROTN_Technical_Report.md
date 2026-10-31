@@ -251,6 +251,56 @@ budget always produce the same verdict and the same counterexample. This is what
 makes the Step 3.6.1 "deterministic counterexample" guarantee (§7) meaningful,
 and it is what allows CI to gate on a reproducible result.
 
+### 4.4 The TLA+ essentials (Phase 6)
+
+A TLA+ model is only as sound as the assumptions it *states*. Phase 6 closes the
+four "missing essentials" (joern-primary-ab-plan §2.3) by turning each silent
+gap into a stated, sound, auditable discipline. None of these change a safety
+verdict; they make the model's *assumptions* explicit so a reader can never
+mistake a bounded or restricted result for an unconditional one.
+
+**1. Stuttering assumption (§2.3 row 1).** The IR carries an explicit
+"no stuttering" assumption (`rot.ir.STUTTERING_ASSUMPTION`, a field on
+`ProtocolIR` and `LinearModel`). It is *stated* on every liveness discharge —
+bounded *and* unbounded (`rot.liveness`) — and on the CEGAR verdict, and rendered
+in the verdict report. This is **safety-safe** (a stated assumption never
+changes a safety verdict) and **liveness-honest** (a liveness claim is never read
+as holding without the assumption that closes the no-stutter gap).
+
+**2. State constraints — `assume` (§2.3 row 5).** First-class `Assume` clauses in
+the IR (`rot.ir.Assume`, carried on `ProtocolIR.assumes`). The concrete engine
+(`rot.symbolic`) *prunes* any state that does not definitely satisfy them — a
+sound pruning, because an `assume` is a promise about the environment or a
+modelling parameter, so every property that holds in the restricted space holds
+there genuinely. It is never silent: the pruned count is recorded, a verdict
+decided under an assumption carries it as a *named* assumption, and an `assume`
+that excludes the init state yields a *visible* vacuous `PROVEN` (`n_states=0`)
+rather than a silent one. `rot.spendcap.assume_inflight_at_most(k)` is the
+canonical use (bounding the in-flight pool).
+
+**3. Strong / multi-action fairness (§2.3 row 3).** Beyond the pre-Phase-6
+single-action weak `WF(a)`, the config now expresses strong fairness
+`SF(a1)/SF(a2)/...` and multi-action weak `WF(a1)/WF(a2)/...`
+(`rot.liveness.fairness_formula_for`). The formula is **always** recorded on the
+verdict (never silent), the named actions are validated against the model (a
+formula over a non-existent action fails closed, naming the action), and the R2
+dual-soundness rule still requires an explicit formula for any liveness `PROVEN`.
+The fairness-aware discharge itself is Apalache-level; until such an engine is
+wired, the unbounded path fails closed to `UNKNOWN` rather than assert.
+
+**4. Symmetry sets (§2.3 row 6).** The concrete engine quotients the state space
+by interchangeable variable sets — each orbit is represented by one canonical
+state (`rot.symbolic._canonicalize`, enabled via `SymbolicEngine(symmetry=...)`)
+— exact for group-invariant properties. The spend-cap `k_sweep`
+(`rot.spendcap`) is the K-scale: it sweeps the in-flight bound and reports the
+K-masking boundary (`K=1` masks the parallel-fire race; `K>=2` exposes it) with a
+loud `MASKED_AT_LOW_K` advisory, never silent.
+
+**Out of wedge scope (thesis-level).** Procedures vs. macros (flat `Action`s),
+ghost/auxiliary variables, refinement (spec ⊆ spec; CEGAR ≠ refinement), and
+multi-module / `INSTANCE` remain out of scope — documented as thesis-level, not
+silently dropped.
+
 ---
 
 ## 5. Blocking Permission (Step 3.6)
@@ -675,6 +725,14 @@ any deviation (esp. a buggy target that is `PROVEN`, or a correct target that is
 - **Apalache not a first-class engine.** Apalache is an external cross-check
   driven via `apalache-mc`; `run.ps1 -Engine apalache` is a reserved (WP2)
   placeholder, not an implemented pipeline engine (§9.1, §9.6).
+- **Fairness-aware discharge not implemented.** Unbounded liveness under
+  strong / multi-action fairness (§4.4) is *expressed and always recorded*, but
+  the discharge itself is Apalache-level; the concrete engine fails closed to
+  `UNKNOWN` rather than assert a liveness `PROVEN` it cannot soundly discharge
+  under the stated fairness.
+- **Thesis-level items out of scope.** Procedures vs. macros, ghost/auxiliary
+  variables, refinement (spec ⊆ spec; CEGAR ≠ refinement), and multi-module /
+  `INSTANCE` are documented as out of wedge scope (§4.4), not silently dropped.
 - **Not a proof certificate.** Bounded model checking is not the same as a
   theorem-proof; `PROVEN` means "held over the explored bound", not "proven for
   all time".

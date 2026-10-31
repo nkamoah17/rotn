@@ -120,6 +120,11 @@ def render_expr(expr):
     if isinstance(expr, ir.If):
         return "if (%s) then (%s) else (%s)" % (
             render_expr(expr.cond), render_expr(expr.then), render_expr(expr.els))
+    if isinstance(expr, ir.Assume):
+        # Phase 6.2: a state constraint (TLA+ ASSUME clause) -- rendered as a
+        # function application so it reads as a constraint on the state.
+        return "assume(%s)%s" % (render_expr(expr.expr),
+                                 (" -- " + expr.note) if expr.note else "")
     if isinstance(expr, ir.AllOf):
         return "all %s in (%s): %s" % (
             expr.var, render_expr(expr.coll), render_expr(expr.body))
