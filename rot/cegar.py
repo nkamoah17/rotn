@@ -342,6 +342,19 @@ def verify_candidate(ir, cfg, engine="symbolic", cpg=None):
                                                 shape=pattern)
         verdict = apply_soundness(verdict, soundness)
 
+    # Phase 5 (joern-primary-ab-plan §2.2): reduce the CPG->IR lossiness.
+    # Property-directed retention with the hard rule (over-approximate, don't
+    # omit) + CEGAR-on-disagreement (refine to model a dropped threat edge and
+    # re-check).  A deliberately-dropped dataflow edge either (a) is proven
+    # irrelevant (the verdict stands) or (b) forces UNKNOWN + unsound_abstraction
+    # -- and the kept/dropped manifest (retention) is named on the evidence.
+    retention_manifest = None
+    retention_refinement = None
+    if cpg is not None:
+        from .retention import apply_phase5
+        verdict, retention_manifest, retention_refinement = apply_phase5(
+            cpg, pattern, ir, verdict, cfg)
+
     # Stamp the candidate scope (E1 / E4 / E5) onto the verdict evidence so
     # the claim is never read as an unconditional statement about the codebase.
     evidence = dict(verdict.evidence)
@@ -357,6 +370,12 @@ def verify_candidate(ir, cfg, engine="symbolic", cpg=None):
                          "extracted control and its instantiation bounds")
     if soundness is not None:
         evidence["abstraction_soundness"] = soundness.to_dict()
+    # Phase 5: the kept/dropped retention manifest (a deliberately-dropped
+    # dataflow edge is always *named* here) + the CEGAR resolution record.
+    if retention_manifest is not None:
+        evidence["retention"] = retention_manifest.to_dict()
+    if retention_refinement is not None:
+        evidence["retention_refinement"] = retention_refinement
     verdict.evidence = evidence
     return verdict
 

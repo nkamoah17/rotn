@@ -468,6 +468,7 @@ def build_claim_packet(model, verticals_dict, coach_dict, shapes=None):
         shapes = sorted(verticals_dict)
     meta = dict(getattr(model, "meta", None) or {})
     verticals_out = {}
+    retention_out = {}
     ledger = []
     abstraction = []
 
@@ -508,6 +509,22 @@ def build_claim_packet(model, verticals_dict, coach_dict, shapes=None):
             "result": (xc.get("result") if isinstance(xc, dict) else None),
             "advisories": verdict.advisories,
         })
+        # Phase 5 (move 4): the retention manifest is part of the claim packet
+        # -- a deliberately-dropped dataflow edge is *named* here (kept vs
+        # dropped, each dropped edge classified irrelevant / unknown /
+        # taint-critical), plus the CEGAR-on-disagreement resolution.
+        rt = verdict.evidence.get("retention")
+        if isinstance(rt, dict):
+            retention_out[shape] = dict(rt)
+            rr = verdict.evidence.get("retention_refinement")
+            if rr is not None:
+                retention_out[shape]["refinement"] = rr
+            ledger.append({
+                "step": "retention", "shape": shape,
+                "kept": len(rt.get("kept", [])),
+                "dropped_irrelevant": len(rt.get("irrelevant", [])),
+                "dropped_unknown": len(rt.get("unknown", [])),
+            })
         c = coach_dict.get(shape)
         if c is not None:
             ledger.append({
@@ -539,6 +556,7 @@ def build_claim_packet(model, verticals_dict, coach_dict, shapes=None):
         "shapes": list(shapes),
         "verticals": verticals_out,
         "abstraction_manifest": abstraction,
+        "retention": retention_out,
         "non_claims": list(NON_CLAIMS),
         "coach": dict((k, coach_dict[k]) for k in sorted(coach_dict)),
         "ledger": ledger,
