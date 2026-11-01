@@ -86,6 +86,11 @@ class Manifest(object):
         produced the verdict.  They do not change ``overall``; they make the
         bound visible so a bounded ``PROVEN`` is never a silent
         false-negative.  Defaults to ``[]``.
+
+    The hashable body **always** carries a ``bounded_caveat`` (C4: "prove" vs
+    bounded): the verdict is a bounded model-checking result and the bound is
+    stated right next to it (see :meth:`_body`).  It is derived from
+    ``environment`` so it is deterministic and covered by ``manifest_id``.
     """
 
     def __init__(self, policy, environment, verdicts, witness, overall,
@@ -109,11 +114,17 @@ class Manifest(object):
 
     def _body(self):
         """The hashable body (no manifest_id). Key order is irrelevant -- the
-        canonical serializer sorts keys."""
+        canonical serializer sorts keys.
+
+        ``bounded_caveat`` is **always** present (C4: "prove" vs bounded): the
+        verdict is a bounded model-checking result and the bound is stated
+        right next to it, so a ``PROVEN`` is never read as unbounded.
+        """
         return {
             "schema": SCHEMA,
             "policy": self.policy,
             "environment": self.environment,
+            "bounded_caveat": _bounded_caveat(self.environment),
             "verdicts": self.verdicts,
             "witness": self.witness,
             "overall": self.overall,
@@ -152,6 +163,30 @@ def _overall_result(result):
     if result.all_proven():
         return "proven"
     return "unknown"
+
+
+def _bounded_caveat(environment):
+    """The bounded caveat, **always** carried on the manifest (C4).
+
+    A `PROVEN` manifest is sound *within the explored bound*; it is a bounded
+    model-checking result, not an unbounded theorem-proof. A budget cap can
+    yield `UNKNOWN` but never a false `PROVEN`. Rendered from the environment
+    bounds (``max_states`` / ``n_states`` / ``horizon``) so the bound is always
+    stated next to the verdict. Deterministic for a given environment.
+    """
+    env = environment or {}
+    parts = []
+    if env.get("max_states") is not None:
+        parts.append("state space <= %d states" % env["max_states"])
+    if env.get("n_states") is not None:
+        parts.append("%d states explored" % env["n_states"])
+    if env.get("horizon") is not None:
+        parts.append("liveness horizon B = %d" % env["horizon"])
+    bound = ", ".join(parts) if parts else "the declared bound"
+    return ("A `PROVEN` verdict is sound *within the explored bound* (%s); it "
+            "is a bounded model-checking result, not an unbounded "
+            "theorem-proof. A budget cap can yield `UNKNOWN` but never a "
+            "false `PROVEN`." % bound)
 
 
 def _primary_witness(result):

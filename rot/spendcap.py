@@ -330,7 +330,7 @@ def k_sweep(buggy=True, k_values=(1, 2, 3, 4), amount=AMOUNT, cap=CAP,
 
     Each row is ``(K, verdict)`` where ``verdict`` is a
     :class:`rot.verdicts.Verdict` decided by the concrete symbolic engine
-    (the independent oracle) with CEGAR refinement.  The verdict records
+    (the independent oracle) with the bounded re-check.  The verdict records
     the bound in ``evidence["k"]`` and the ``MASKED_AT_LOW_K`` advisory in
     ``evidence["k_masking"]`` when one applies (a PROVEN at a ``K`` below
     the minimal overshoot count), and carries the bound as a NAMED

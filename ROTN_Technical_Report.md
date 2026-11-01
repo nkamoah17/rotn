@@ -239,7 +239,7 @@ bound); if any reachable state breaks it, a counterexample exists.
 |------|---------|--------|
 | `-N` | `3` | number of 2PC participants (drives the size of the state space) |
 | `-MaxStates` | `200000` (pipeline default; `0` = use default) | upper bound on states explored before returning `UNKNOWN` |
-| `-CegarMaxIter` | `6` (pipeline default; `0` = use default) | CEGAR refinement cap for the symbolic engine |
+| `-CegarMaxIter` | `6` (pipeline default; `0` = use default) | bounded re-check cap for the symbolic engine (re-runs on `unknown`; not CEGAR refinement) |
 
 When a budget is exhausted the engine reports **`UNKNOWN`** (exit `2`), never a
 false PROVEN — so a budget cap can hide a violation but never *assert* one.
@@ -262,7 +262,7 @@ mistake a bounded or restricted result for an unconditional one.
 **1. Stuttering assumption (§2.3 row 1).** The IR carries an explicit
 "no stuttering" assumption (`rot.ir.STUTTERING_ASSUMPTION`, a field on
 `ProtocolIR` and `LinearModel`). It is *stated* on every liveness discharge —
-bounded *and* unbounded (`rot.liveness`) — and on the CEGAR verdict, and rendered
+bounded *and* unbounded (`rot.liveness`) — and on the re-check verdict, and rendered
 in the verdict report. This is **safety-safe** (a stated assumption never
 changes a safety verdict) and **liveness-honest** (a liveness claim is never read
 as holding without the assumption that closes the no-stutter gap).
@@ -856,7 +856,7 @@ This section is the normative overview. The full user guide, threat model, bound
 | Protocols (§1–§12) | `twopc`, `zab`, `pbft`, `payment`, … | IR authors | `agreement`, `validity`, `zab_leader`, … |
 | **Agent Mode (§17)** | `AgentStep` (`rot.agent_step`) | **Cedar** (`.cedar`), **Dogwood** (`.json`) | `policy_permits_request`, `policy_conformance`, `bounded_eventually` |
 
-All planes reduce to the same narrow waist: a `ProtocolIR` (§4) with a pinned `Invariant` (§4.2) and `metadata`. Agent Mode adds no new engine, verdict path, or soundness rule — it reuses `symbolic` / `TLC` / `apalache` / `sat` and the CEGAR loop exactly as the protocol plane does.
+All planes reduce to the same narrow waist: a `ProtocolIR` (§4) with a pinned `Invariant` (§4.2) and `metadata`. Agent Mode adds no new engine, verdict path, or soundness rule — it reuses `symbolic` / `TLC` / `apalache` / `sat` and the bounded re-check loop (`rot.cegar`; bounded re-checking, not CEGAR) exactly as the protocol plane does.
 
 ### 17.2 The two policy front-ends
 
@@ -997,14 +997,15 @@ this without a server or build step:
 ## Appendix A — WP1–WP6 Evidence & Honest Fallbacks
 
 This appendix maps each work package to the **actual** tests and verdicts that
-evidence it (the 629-test suite is authoritative), and records the honest
+evidence it (the 923-test product suite is authoritative; the count is pinned
+by `tests/test_suite_count.py` so it cannot drift), and records the honest
 fallbacks we used where full automation was not feasible.
 
 ### A.1 Work-package → evidence map
 
 | WP | Delivers (modules) | Evidence (tests) | Verdict evidence |
 |----|--------------------|------------------|------------------|
-| **WP1** IR + TLA+ emission + CEGAR | `rot.ir`, `rot.emitter`, `rot.cegar`, `rot.targets`, `rot.invariants` | `test_cegar.py`, `test_pipeline.py`, `test_invariants.py` | every target × invariant: `correct` → **PROVEN**, `buggy` → **VIOLATED** (exit 0 / exit 1) |
+| **WP1** IR + TLA+ emission + bounded re-check | `rot.ir`, `rot.emitter`, `rot.cegar`, `rot.targets`, `rot.invariants` | `test_cegar.py`, `test_pipeline.py`, `test_invariants.py` | every target × invariant: `correct` → **PROVEN**, `buggy` → **VIOLATED** (exit 0 / exit 1) |
 | **WP2** Symbolic SAT engine (sound baseline) | `rot.sat`, `rot.symbolic` | `test_sat.py`, `test_symbolic_engine.py` | DPLL + clause learning; 2PC/ZAB/PBFT `correct` PROVEN, `buggy` VIOLATED — runs with **no Java / no TLC jar** |
 | **WP3** 2PC protocol | `rot.twopc` | `test_twopc.py` | `agreement` invariant: correct PROVEN / buggy VIOLATED |
 | **WP4** ZAB protocol | `rot.zab` | `test_zab_target.py`, `test_zk_bug_replay.py` | `leader` invariant: correct PROVEN / buggy VIOLATED; ZK bug-replay (6-commit corpus) |

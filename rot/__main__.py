@@ -1171,7 +1171,7 @@ def cmd_doctor(args):
       * the Python interpreter is new enough (>= 3.6);
       * the ``rot`` package is importable (and reports its version);
       * the core modules import cleanly (trace, sitegen, IR, the three
-        engines, and the CEGAR loop);
+        engines, and the bounded re-check loop);
       * with ``--deep``: a real end-to-end verification of the committed
         spend-cap sample (build IR -> verify -> expect PROVEN).
 

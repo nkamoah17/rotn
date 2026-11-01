@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """verdicts.py -- the final verdict layer and human-readable report.
 
-Everything upstream (abstraction, engine, CEGAR) flows into a single
+Everything upstream (abstraction, engine, re-check) flows into a single
 :class:`Verdict`: the auditable answer to "does this protocol satisfy the
 pinned safety property, and under what recorded assumptions?"
 
@@ -9,7 +9,7 @@ Statuses:
   PROVEN    -- invariant holds.
   VIOLATED  -- a concrete, IR-feasible counterexample exists (a real bug).
   UNKNOWN   -- bounded/incomplete, or a counterexample could not be decided.
-  UNSOUND   -- a counterexample in an over-approximation that CEGAR could not
+  UNSOUND   -- a counterexample in an over-approximation that the re-check could not
                confirm concrete-feasible (do not trust).
   ERROR     -- a tool (TLC/Java) failed to run.
 
@@ -357,7 +357,7 @@ class Verdict(object):
         lines.append("- Status: %s" % badge)
         lines.append("- Engine: `%s`" % self.engine)
         lines.append("- States explored: %d" % self.n_states)
-        lines.append("- CEGAR iterations: %d" % self.cegar_iterations)
+        lines.append("- Re-check iterations: %d" % self.cegar_iterations)
         lines.append("- Note: %s" % self.note)
         if self.property_kind:
             lines.append("- Property kind: `%s`" % self.property_kind)

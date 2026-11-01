@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""cegar.py -- counterexample-guided refinement: engine result -> final Verdict.
+"""cegar.py -- engine result -> final Verdict (feasibility check + bounded re-check).
 
 An engine (symbolic or TLC) returns an :class:`rot.symbolic.EngineResult` with a
 status of ``proven`` / ``violated`` / ``unknown`` and, for a violation, a
 concrete witness state. This module turns that into the auditable
-:class:`rot.verdicts.Verdict`, and -- the CEGAR core -- *validates that a
+:class:`rot.verdicts.Verdict`, and -- the core step -- *validates that a
 counterexample is real* rather than an artefact of an over-approximation:
 
   * ``proven``   -> ``Verdict.proven``.
@@ -12,15 +12,21 @@ counterexample is real* rather than an artefact of an over-approximation:
                     state with the IR's own three-valued ``eval``.
                       - definite False -> a real bug -> ``Verdict.violated``.
                       - not definite   -> spurious    -> ``Verdict.unsound``.
-  * ``unknown`` / ``timeout`` -> bounded refinement loop (re-run the engine up
+  * ``unknown`` / ``timeout`` -> bounded re-check loop (re-run the engine up
                     to ``Config.cegar_max_iter``). If it converges to proven or
                     violated, report that; otherwise ``Verdict.unknown`` (a
                     sound "we could not decide" -- never silently proven).
   * ``error``    -> ``Verdict.error`` (a tool failed to run).
 
-For the bounded 2PC model both engines are concrete, so a ``violated`` witness
-is always IR-feasible and the loop terminates immediately; the loop and the
-feasibility check are what make the same code path correct for an
+Honesty note: this is a **bounded re-check**, *not* counterexample-guided
+abstraction refinement (CEGAR). The loop re-runs the same engine under the same
+bound; it never refines an abstraction from a counterexample. The module keeps
+its ``cegar`` name (and the ``cegar_max_iter`` knob) for API stability, but the
+claim is bounded re-checking -- real refinement is future/research work.
+
+For the bounded product models both engines are concrete, so a ``violated``
+witness is always IR-feasible and the loop terminates immediately; the loop and
+the feasibility check are what make the same code path correct for an
 over-approximating engine.
 
 Phase 6 verdict metadata: every verdict carries ``property_kind`` (taken from
@@ -36,8 +42,9 @@ Pure stdlib, Python 3.6 compatible.
 # The soundness of the factor-graph quotient (GSSM: the Kalman filter cannot
 # pass messages backward because it marginalizes every step).  The property-
 # directed hiding in rot.abstraction IS marginalization, so this module's
-# backward pass -- CEGAR refinement plus the two-layer static<->formal check --
-# runs BEFORE that hiding, while the full factor graph is still available for
+# backward pass -- the bounded re-check plus the two-layer static<->formal
+# check -- runs BEFORE that hiding, while the full factor graph is still
+# available for
 # backward inference.  This is the same theorem as "hiding never
 # under-approximates" (rot.abstraction), now named for the factor-graph view:
 # an existential hiding is a sound over-approximation of the reachable
@@ -46,7 +53,7 @@ Pure stdlib, Python 3.6 compatible.
 FACTOR_GRAPH_QUOTIENT_SOUNDNESS = (
     "factor-graph quotient soundness: existential hiding (marginalization) "
     "never under-approximates the reachable projection on the kept variables; "
-    "the CEGAR backward pass (refinement + the static<->formal check) runs "
+    "the bounded re-check pass (re-check + the static<->formal check) runs "
     "before that hiding so the full factor graph is available for backward "
     "inference; a proof over the abstract model is a proof over the concrete "
     "one, and a counterexample is a candidate bug (GSSM, marginalization delay)"
@@ -87,7 +94,7 @@ def _attach_stuttering(verdict, model):
 
 
 def cegar(engine_result, prop, cfg, engine, model=None, recheck=None):
-    """Map an ``EngineResult`` to a :class:`Verdict`, refining if needed.
+    """Map an ``EngineResult`` to a :class:`Verdict`, re-checking if needed.
 
     Parameters
     ----------
@@ -96,14 +103,15 @@ def cegar(engine_result, prop, cfg, engine, model=None, recheck=None):
     prop : rot.invariants.Invariant
         The pinned invariant (``.name`` + ``.expression``).
     cfg : rot.config.Config
-        Runtime config; ``cfg.cegar_max_iter`` caps the refinement loop.
+        Runtime config; ``cfg.cegar_max_iter`` caps the re-check loop.
     engine : str
         Resolved engine name (``"symbolic"`` / ``"tlc"``), recorded on the verdict.
     model : rot.linearization.LinearModel, optional
         Needed only if the ``recheck`` hook re-runs the engine.
     recheck : callable(model, prop, max_states) -> EngineResult, optional
-        Refinement hook. Called on ``unknown`` up to ``cfg.cegar_max_iter``
-        times to try to converge. Omit for a single-shot check.
+        Bounded re-check hook (NOT CEGAR refinement). Called on ``unknown`` up
+        to ``cfg.cegar_max_iter`` times to try to converge. Omit for a
+        single-shot check.
     """
     status = engine_result.status
     # The violation code a VIOLATED verdict carries: the invariant's declared
@@ -169,27 +177,27 @@ def cegar(engine_result, prop, cfg, engine, model=None, recheck=None):
                         cegar_iterations=iters,
                         property_kind=prop.kind,
                         violation_code=_code,
-                        note="confirmed by refinement"),
+                        note="confirmed by bounded re-check"),
                     model)
             return _attach_stuttering(
                 Verdict.unsound(
                     prop.name, engine, counterexample=cur.witness,
                     cegar_iterations=iters,
                     property_kind=prop.kind,
-                    note="refined counterexample not confirmed concrete"),
+                    note="re-checked counterexample not confirmed concrete"),
                 model)
         if cur.status == "proven":
             return _attach_stuttering(
                 Verdict.proven(
                     prop.name, engine, cegar_iterations=iters,
                     property_kind=prop.kind,
-                    note="confirmed by refinement"),
+                    note="confirmed by bounded re-check"),
                 model)
         return _attach_stuttering(
             Verdict.unknown(
                 prop.name, engine, cegar_iterations=iters,
                 property_kind=prop.kind,
-                note="could not decide after %d refinement(s): %s"
+                note="could not decide after %d re-check(s): %s"
                      % (iters, engine_result.note)),
             model)
 
@@ -331,7 +339,7 @@ def verify_candidate(ir, cfg, engine="symbolic", cpg=None):
         OUT_OF_SCOPE (a PROVEN is downgraded to UNKNOWN by the CPG-3
         cross-check when the ground truth threatens the pinned property).
 
-    The CEGAR backward pass here (cegar + the CPG-3 cross-check) runs before
+    The re-check backward pass here (cegar + the CPG-3 cross-check) runs before
     any property-directed hiding (marginalization, rot.abstraction), so the
     full factor graph is available for backward inference -- the soundness of
     the factor-graph quotient (FACTOR_GRAPH_QUOTIENT_SOUNDNESS).
@@ -377,7 +385,7 @@ def verify_candidate(ir, cfg, engine="symbolic", cpg=None):
 
     # Phase 5 (joern-primary-ab-plan §2.2): reduce the CPG->IR lossiness.
     # Property-directed retention with the hard rule (over-approximate, don't
-    # omit) + CEGAR-on-disagreement (refine to model a dropped threat edge and
+    # omit) + refine-on-disagreement (refine to model a dropped threat edge and
     # re-check).  A deliberately-dropped dataflow edge either (a) is proven
     # irrelevant (the verdict stands) or (b) forces UNKNOWN + unsound_abstraction
     # -- and the kept/dropped manifest (retention) is named on the evidence.
@@ -404,7 +412,8 @@ def verify_candidate(ir, cfg, engine="symbolic", cpg=None):
     if soundness is not None:
         evidence["abstraction_soundness"] = soundness.to_dict()
     # Phase 5: the kept/dropped retention manifest (a deliberately-dropped
-    # dataflow edge is always *named* here) + the CEGAR resolution record.
+    # dataflow edge is always *named* here) + the refine-on-disagreement
+    # resolution record.
     if retention_manifest is not None:
         evidence["retention"] = retention_manifest.to_dict()
     if retention_refinement is not None:

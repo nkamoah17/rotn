@@ -25,7 +25,7 @@ a `VIOLATED` counterexample and is not a `PROPERTY` in the `.cfg`.
   categories (domains, budget bounds, label membership, history shape);
   `no_deadlock` is safety with the `DEADLOCK` code; `task_ends_or_escalates` is
   liveness; the buggy orchestration is refuted with a circular-wait witness and
-  the CEGAR layer stamps `DEADLOCK`; the correct model holds.
+  the re-check layer stamps `DEADLOCK`; the correct model holds.
 - `tests/test_emitter_spec.py` — `TypeInvariant` emitted as a constraint (not
   `PROPERTY`), baked into `Init`/`Next` (drops ill-formed states); `no_deadlock`
   emitted as `PROPERTY`; the busy self-loop is preserved; IntRange models extend
@@ -52,8 +52,8 @@ a `VIOLATED` counterexample and is not a `PROPERTY` in the `.cfg`.
   (`reach_within(horizon)`): `done OR escalated` reachable within the bounded
   horizon; `escalate` is the escape hatch that makes it hold even in the
   deadlock-prone orchestration.
-- **`rot/cegar.py`** — bounded refinement for the liveness bound (the
-  `recheck` hook).
+- **`rot/cegar.py`** — bounded re-check for the liveness bound (the
+  `recheck` hook; bounded re-checking, not CEGAR refinement).
 - **`rot/emitter.py`** — emit the liveness property as a `PROPERTY` alongside
   the safety properties; keep the busy self-loop.
 - **`tests/`** — `task_ends_or_escalates` reachable in the correct model and in

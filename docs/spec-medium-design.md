@@ -84,9 +84,10 @@ well-formedness an explicit, auditable claim, (c) catch front-end bugs
 "True in every reachable state." Checked by *refuting* reachability of a bad
 state. Sound under over-approximation (concrete ⊆ over-approx); a violation
 witness found in an abstraction must be **re-validated as IR-feasible**
-(CEGAR) before it is trusted — the codebase already does this (`rot.cegar`;
+(bounded re-check) before it is trusted — the codebase already does this
+(`rot.cegar`;
 architecture.md §3: "a `VIOLATED` verdict is only ever accompanied by a
-counterexample that CEGAR re-validated as IR-feasible").
+counterexample that the bounded re-check re-validated as IR-feasible").
 
 ### 3.3 Deadlock-freedom (safety-shaped)
 
@@ -126,9 +127,9 @@ witness (R3, §4).
 
 | lighthouse rule | kind | codebase home | checker | soundness |
 |---|---|---|---|---|
-| `NoExfiltration` (labeled data ⇒ approved recipients) | safety | exfiltration property (G7), `coach_exfiltration` | symbolic + TLC/Apalache cross-check | R1 (over-approx proof; CEGAR witness) |
+| `NoExfiltration` (labeled data ⇒ approved recipients) | safety | exfiltration property (G7), `coach_exfiltration` | symbolic + TLC/Apalache cross-check | R1 (over-approx proof; re-check-validated witness) |
 | `SpendCap` (in-window sum ≤ cap, *including in-flight*) | safety | `spendcap_within_cap`, Plane B K-sweep | SMT/Z3 + TLC + policy-direct (zero shared code) | R1 |
-| `NoUnapprovedIrreversible` (irreversible ⇒ approved) | safety | `policy_conformance` + the over-privileged-tool bind | Trifecta / CEGAR | R1 |
+| `NoUnapprovedIrreversible` (irreversible ⇒ approved) | safety | `policy_conformance` + the over-privileged-tool bind | Trifecta / re-check | R1 |
 | `TaskEndsOrEscalates` (every task ends or escalates) | **liveness** | `task_ends_or_escalates` (G6), `bounded_eventually` | symbolic `reach_within` (concrete, `horizon_complete`) | **R2** |
 
 Plus the binds vocabulary the lighthouse lists, already shipped in
@@ -146,7 +147,8 @@ section makes it explicit and adds the two missing teeth (R3, R4).
 **R1 — safety is over-approx-sound.** If P is a safety property (§3.2, §3.3),
 then P holds on a sound over-approximation ⇒ P holds on the concrete model
 (concrete ⊆ over-approx). A *violation* witness from an over-approximation is
-a **candidate** and must be re-validated as IR-feasible (CEGAR) before it is
+a **candidate** and must be re-validated as IR-feasible (bounded re-check)
+before it is
 trusted.
 
 **R2 — liveness is concrete-only (or fairness-labeled).** If P is a liveness
@@ -161,7 +163,7 @@ The symmetry, made explicit — this is the "no hole" table a reviewer audits:
 | verdict direction | sound on over-approx? | why | required |
 |---|---|---|---|
 | safety PROVEN | **yes** | concrete ⊆ over-approx | — |
-| safety VIOLATED | witness may be spurious | abstraction adds paths/states | CEGAR IR-feasibility re-validation |
+| safety VIOLATED | witness may be spurious | abstraction adds paths/states | IR-feasibility re-validation (bounded re-check) |
 | liveness PROVEN (goal reached) | witness may be spurious | same | concrete re-validation (or run concrete: R2a) |
 | liveness VIOLATED (goal not reached in H) | **yes** | no path in the superset ⇒ none in the subset | `horizon_complete` |
 | unbounded liveness | **never** on a bare over-approx | fairness unasserted ⇒ stuttering is allowed | fairness + vacuity (R3) |

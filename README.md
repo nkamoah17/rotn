@@ -6,21 +6,23 @@
 
 > **CARAVEL** — *Agents are replacing the software that used to enforce our rules. We make the rules explicit, prove the policy holds even when the model attempts to break it, and coach the agent back in bounds when it does.*
 
-**ROTN** (R**o**gression-detection **O**racle via **T**race **N**on-emptiness) is a small, fully offline, **Python 3.6-compatible**, pure-stdlib verification platform that checks distributed-transaction and replication protocols against named safety invariants - and, in **Agent Mode**, verifies an autonomous agent's action choices against **Cedar** / **Dogwood** policies (safety, non-vacuity, bounded liveness) - using **three independent engines (SMT/Z3 + TLC + policy-direct), cross-confirmed by Apalache-ITF**, and a **bounded CEGAR** loop. Each protocol ships a *correct* variant (the invariant holds) and a *seeded-buggy* variant (the invariant is violated); the pipeline must discriminate them and, for the buggy one, hand back a **concrete, IR-feasible counterexample**.
+**ROTN** (R**o**gression-detection **O**racle via **T**race **N**on-emptiness) is a small, fully offline, **Python 3.6-compatible**, pure-stdlib verification platform for **agent tool policies**, led by the **spend-cap parallel-fire bug**: a payments policy that settles spend only against *settled* responses, so a parallel burst of in-flight requests overshoots the cap — invisible to a per-request monitor. ROTN checks a policy against a named invariant (`policy_conformance` safety, `policy_permits_request` non-vacuity, `bounded_eventually` bounded liveness within horizon B) with **three independent engines (SMT/Z3 + TLC + policy-direct)**, an **Apalache-ITF** trace engine that *refutes* a buggy policy (replays its counterexample) but **never proves** the corrected one, and a **bounded re-check** loop — on `unknown`, re-run the engine under a hard cap; that is bounded re-checking, *not* counterexample-guided abstraction refinement. Every target ships a *correct* variant (the invariant holds) and a *seeded-buggy* variant (the invariant is violated); the pipeline must discriminate them and, for the buggy one, hand back a **concrete, IR-feasible counterexample**. The protocol plane (2PC / ZAB / PBFT / Payment) is in the research repo (`rotn-research`), not this build.
 
 It is organised in verification planes over one sound core:
 
-1. **Formal core (Phase 1).** Property-directed, bounded verification over four protocol targets: **2PC**, **ZAB**, **PBFT**, and the **Payment** composition.
-2. **Composition plane (Phase 2).** Independently modelled services are merged into one concurrent IR and checked against *cross-service* invariants.
-3. **Merge-request gate.** Invariant verdicts map to `PASS`/`BLOCK` through an *assurance ladder* (label × rung × pinning).
-4. **Agent Mode (policy plane).** The autonomous agent's `AgentStep` model is checked against a **Cedar** (`.cedar`) or **Dogwood** (`.json`) policy: `policy_conformance` (safety), `policy_permits_request` (non-vacuity), `bounded_eventually` (bounded liveness within horizon B).
-5. **Two audit planes (different depth guarantees).** **Plane A** — structural + *behavioral* (MCP manifest / Cedar / Dogwood `.json`) — is the Trifecta audit mapped to **SOC 2 CC6** + **AIUC-1** (autonomy). The MCP-manifest audit is *behavioral* (gap G8): the manifest's safety property is **model-checked over the adversarial agent's tool-call sequences** — not just a declaration check — and the lethal-trifecta exfiltration risk is flagged (see `docs/manifest-format.md` §7). **Plane B** — deep temporal/concurrency (Dogwood `.dw` spend-cap) — is the cross-check proof (SMT/Z3 + TLC + policy-direct) that prevents spend-cap bypass, and carries the **CoachingArtifact** (Rule + Proof + **Coach**) that discharges **AIUC-1**. See `docs/architecture.md` §1A.
+1. **Policy plane (Agent Mode).** The autonomous agent's `AgentStep` model is checked against a **Cedar** (`.cedar`) or **Dogwood** (`.json`) policy: `policy_conformance` (safety), `policy_permits_request` (non-vacuity), `bounded_eventually` (bounded liveness within horizon B). The beachhead is the **spend-cap parallel-fire bug** (Plane B below).
+2. **Runtime coach.** `rot runtime eval` decides one live tool call against the *same guard* the offline engine proved safe; a denial is a computed remediation (`to_proceed`), not a log line.
+3. **Two audit planes (different depth guarantees).** **Plane A** — structural + *behavioral* (MCP manifest / Cedar / Dogwood `.json`) — is the Trifecta audit mapped to **SOC 2 CC6** + **AIUC-1** (autonomy). The MCP-manifest audit is *behavioral* (gap G8): the manifest's safety property is **model-checked over the adversarial agent's tool-call sequences** — not just a declaration check — and the lethal-trifecta exfiltration risk is flagged (see `docs/manifest-format.md` §7). **Plane B** — deep temporal/concurrency (Dogwood `.dw` spend-cap) — is the cross-check proof (SMT/Z3 + TLC + policy-direct) that prevents spend-cap bypass, and carries the **CoachingArtifact** (Rule + Proof + **Coach**) that discharges **AIUC-1**. See `docs/architecture.md` §1A.
+4. **Protocol plane (research).** The 2PC / ZAB / PBFT / Payment protocol targets and their composition / merge-request-gate / refinement machinery live in the **research repo** (`rotn-research`), which extends this registry; they are not part of the product build.
 
 ```
- CPG/IR  ->  property-directed abstraction  ->  linearization
-        ->  ENGINE  (symbolic-bounded-exhaustive  |  SMT-Z3  |  policy-direct  |  TLC  |  Apalache)
-        ->  bounded CEGAR (recheck on unknown)
+ policy / CPG  ->  property-directed abstraction  ->  linearization
+        ->  ENGINE  (symbolic-bounded-exhaustive  |  SMT-Z3  |  policy-direct  |  TLC)
+        ->  bounded re-check (re-run on unknown; hard-capped -- not CEGAR)
         ->  Verdict  ->  auditable report (JSON + Markdown)
+
+ Apalache-ITF (rot/itf.py): independent REFUTER only -- it replays a buggy
+ policy's counterexample and refutes it; it never reports `proven`.
 ```
 
 Everything is pure stdlib except the optional TLC engine (which shells out to
@@ -357,7 +359,7 @@ bash demo.sh          # bash (Linux/macOS)
 See `docs/spendcap-demo.md` (the demo walkthrough) and
 `docs/spendcap-usage.md` (CLI usage reference for the `.dw` policy path).
 
-### Phase 5: SAFE / UNSAFE classification (`--classify`)
+### Phase 5: SAFE / UNSAFE classification (product: `rot corpus`; legacy: `--classify`)
 
 The two endpoints above are *instances* of one structural question: **does the
 spend-cap sum over `request` (issued) rows — SAFE — or over `response` (settled)
@@ -367,6 +369,11 @@ UNSAFE), using the same sound core (`build_ir` + `ModelFinder.forall_reachable`)
 — no per-policy tuning.
 
 ```bash
+# Product batch classifier: run the whole corpus -> per-policy verdict + witness
+# + a coverage matrix (report semantics: exits 0 when the matrix is produced).
+rot corpus --corpus-dir tests/fixtures/aws_dogwood/spendcap --out out/corpus
+
+# Legacy CLI (classification semantics: exits non-zero on UNSAFE):
 # Classify one policy (SAFE -> exit 0, UNSAFE -> exit 1)
 python pipeline.py --classify --policy tests/fixtures/aws_dogwood/spendcap/policies/spendcap-buggy.dw
 
@@ -400,7 +407,13 @@ The verdict is driven solely by the event kind the sum quantifies over: every
 `response`-sum policy is UNSAFE (witness `completed=0, inflight=3`) and every
 `request`-sum policy is SAFE — regardless of filter, threshold, or forbid/permit
 shape. That is the point: the same sound core classifies unseen corpus policies
-with no per-policy tuning. Tests: `tests/test_classify.py`.
+with no per-policy tuning. The **product** batch classifier is `rot corpus`
+(per-policy verdict + witness, a coverage matrix, report semantics);
+`pipeline.py --classify` is the *legacy* CLI (classification semantics: exits
+non-zero on UNSAFE). The classifier core (SAFE/UNSAFE on these five first-class
+policies) and the legacy `--classify` CLI contract are pinned by
+`tests/test_classify.py` — do not confuse it with the assurance-ladder claim
+classifier; `rot corpus` is the batch SAFE/UNSAFE classifier.
 
 ### Invariants (pinnable one at a time)
 
@@ -573,7 +586,7 @@ behind the same `EngineResult` interface (`rot.symbolic.EngineResult`):
   (`Config.tlc_timeout`), and classifies the run as
   `HOLDS` / `VIOLATED` / `TIMEOUT` / `ERROR`.
 - On `VIOLATED` it locates and parses the TLC `.model` counterexample and maps
-  it back to IR state names, so the CEGAR recheck can validate it against the
+  it back to IR state names, so the bounded re-check can validate it against the
   IR semantics.
 
 ### 3. `apalache` — Apalache ITF counterexample evaluation (`rot/itf.py`)
@@ -620,13 +633,14 @@ $env:TLA2TOOLS_JAR = "C:\path\to\tla2tools.jar"
 </details>
 
 <details>
-<summary><strong>CEGAR (`rot/cegar.py`)</strong></summary>
+<summary><strong>Bounded re-check (`rot/cegar.py`)</strong></summary>
 
 
-Counterexample-guided handling of the engine outcome. It maps an
-`EngineResult` to a `Verdict` and, when the result is **unknown**, makes a
-**bounded** number of recheck/refinement attempts (capped by
-`Config.cegar_max_iter`) before giving up soundly.
+Bounded re-check handling of the engine outcome (the module keeps its
+`cegar` name for API stability, but this is *not* counterexample-guided
+abstraction refinement). It maps an `EngineResult` to a `Verdict` and, when
+the result is **unknown**, makes a **bounded** number of re-check attempts
+(capped by `Config.cegar_max_iter`) before giving up soundly.
 
 | engine result            | verdict      | notes                                            |
 |--------------------------|--------------|--------------------------------------------------|
@@ -654,7 +668,7 @@ loop **terminates** (`cegar_max_iter` is the hard cap).
 
 - `<target>_<property>.json` — machine-readable: config, engine, verdict,
   counterexample, the abstraction manifest (what was kept/dropped and why),
-  and the CEGAR iteration count.
+  and the re-check iteration count.
 - `<target>_<property>.md`   — human-readable summary.
 
 The **abstraction manifest** is the audit trail for soundness: it records
@@ -750,7 +764,7 @@ rot/
   sat.py            # bounded SAT solver (DPLL + clause learning)
   symbolic.py       # pure-Python SAT-based model checker (offline)
   tlc.py            # TLC engine (java + tla2tools.jar), robust output parsing
-  cegar.py          # bounded CEGAR: EngineResult -> Verdict (+ recheck hook)
+  cegar.py          # bounded re-check: EngineResult -> Verdict (+ recheck hook; not CEGAR)
   env.py            # bounded message-delay / environment fragments (--env)
   refine.py         # propose/check/repair refinement loop (--before / --after)
   itf.py            # Apalache ITF counterexample engine (--itf; refutes, never proves)
@@ -802,7 +816,7 @@ site/                 # the hosted replay site (Ship plane) -- zero framework / 
   data/*.trace.json   # RTF v1 traces (source of truth)
   data/traces.js      # deterministic offline registry (rot site / rot/sitegen.py)
 tests/
-  test_cegar.py             # CEGAR mapping + bounded refinement
+  test_cegar.py             # EngineResult -> Verdict mapping + bounded re-check
   test_pipeline.py          # end-to-end (symbolic) + CLI exit codes
   test_twopc.py             # IR / invariant units
   test_zab.py               # ZAB IR / invariant units
@@ -843,14 +857,15 @@ python -m unittest discover -s tests -v
 The suite is deterministic and **does not require Java/TLC**: it exercises the
 symbolic engine end-to-end for every protocol (`correct` proves its pinned
 invariant, `buggy` violates it with a witness that genuinely refutes the
-invariant), the CEGAR mapping for all four outcomes, the composition plane
-(cross-service merge, bounded witness), the MR gate (`PASS` / `BLOCK`), the
-environment fragments (`--env`), the refinement loop (`--before` / `--after`),
-the Apalache ITF engine (concrete-trace refutation, never `proven`), the
-LLM baseline (audit artifact only — never affects the verdict), the impact /
-spec-diff / trace-check / model-finding / ZK-bug / false-block extensions, the
-SAFE/UNSAFE spend-cap classifier (`tests/test_classify.py`), and the CLI
-exit-code contract. **947 tests** currently pass. The TLC and
+invariant), the EngineResult -> Verdict mapping (bounded re-check) for all
+four outcomes, the composition plane (cross-service merge, bounded witness), the
+MR gate (`PASS` / `BLOCK`), the environment fragments (`--env`), the refinement
+loop (`--before` / `--after`), the Apalache ITF engine (concrete-trace
+refutation, never `proven`), the LLM baseline (audit artifact only — never
+affects the verdict), the impact / spec-diff / trace-check / model-finding /
+ZK-bug / false-block extensions, the SAFE/UNSAFE spend-cap classifier
+(`rot corpus`), and the CLI exit-code contract. **923 tests** currently pass
+(pinned by `tests/test_suite_count.py`, so the count cannot drift). The TLC and
 Apalache engines are exercised by the CLI / `run.ps1` matrix when the
 respective tooling is available.
 

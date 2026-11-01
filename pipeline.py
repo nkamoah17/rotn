@@ -4,7 +4,7 @@
 Orchestrates the ROTN soundness core for the 2PC and ZAB targets:
 
     target -> IR -> property-directed abstraction -> linearization
-           -> engine (symbolic | TLC) -> CEGAR -> Verdict -> report (json+md)
+           -> engine (symbolic | TLC) -> re-check -> Verdict -> report (json+md)
 
 For 2PC, the IR can also be built directly from Java sources
 (``--source JAVA_DIR``), with an optional CPG artifact (``--cpg`` or an
@@ -427,7 +427,7 @@ def run(target_name="correct", property_name=None, engine="auto",
     # 4. linearize the concrete model (init + ordered transitions).
     linear_model = linearize(ir)
 
-    # 5. engine pass + CEGAR refinement.
+    # 5. engine pass + bounded re-check.
     #    * safety invariants -> unreachability check + ``cegar`` (re-runs the
     #      same engine on ``unknown`` up to ``cfg.cegar_max_iter`` times via
     #      the recheck hook; deterministic for the concrete engines, but
@@ -450,8 +450,8 @@ def run(target_name="correct", property_name=None, engine="auto",
             # Three-engine cross-check (SMT/Z3 + TLC + policy-direct).  Only
             # PROVEN/VIOLATED when all three engines agree; disagreement or
             # UNKNOWN -> UNKNOWN.
-            # Bypasses CEGAR (which refines a single engine's abstraction)
-            # because the point is to *not* trust any single engine.
+            # Bypasses the single-engine re-check loop because the point is to
+            # *not* trust any single engine.
             from rot.crosscheck import CrossChecker
             effective_engine = "crosscheck"
             verdict = CrossChecker(ir, linear_model, prop, cfg).check()
@@ -1388,7 +1388,8 @@ def main(argv=None):
                              % DEFAULT_MAX_STATES)
     parser.add_argument("--cegar-max-iter", dest="cegar_max_iter", type=int,
                         default=None,
-                        help="CEGAR refinement cap [default: %d]"
+                        help="bounded re-check cap (re-runs on unknown; not CEGAR) "
+                             "[default: %d]"
                              % DEFAULT_CEGAR_MAX_ITER)
     parser.add_argument("--tlc-jar", dest="tlc_jar", default=None,
                         help="path to tla2tools.jar (or set $TLA2TOOLS_JAR)")

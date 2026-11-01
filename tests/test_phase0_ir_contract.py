@@ -5,7 +5,7 @@ Every frontend -- the ``code`` and ``cpg`` P1 producers, the hand-authored
 ``targets`` oracle, and the ``java`` 2PC frontend -- must land in the *same*
 ``ProtocolIR`` type, stamp the contract metadata (the derived ``protocol``
 label + source-pinned ``provenance`` + a ``lossiness`` manifest), and the
-narrow waist must be green: ``linearize -> emit -> check -> CEGAR -> replay``
+narrow waist must be green: ``linearize -> emit -> check -> re-check -> replay``
 runs **byte-for-byte** identically on every frontend's IR of the *same
 control*.
 
@@ -90,7 +90,7 @@ def _structural(ir_model):
 
 
 def _chain(ir_model, prop_name, replay_path):
-    """``linearize -> emit -> check -> CEGAR -> replay``; the gate output.
+    """``linearize -> emit -> check -> re-check -> replay``; the gate output.
 
     Returns a canonical (JSON-normalised) tuple so byte-for-byte equality is
     the assertion -- exactly what the Phase 0 gate demands."""
@@ -155,7 +155,7 @@ class ContractTest(unittest.TestCase):
 
 class GateTest(unittest.TestCase):
     """The Phase 0 gate: the narrow waist is green -- the same control, from
-    any frontend, runs ``linearize -> emit -> check -> CEGAR -> replay``
+    any frontend, runs ``linearize -> emit -> check -> re-check -> replay``
     byte-for-byte identically."""
 
     def test_same_control_is_structurally_identical(self):
@@ -187,7 +187,7 @@ class GateTest(unittest.TestCase):
             for other in irs[1:]:
                 self.assertEqual(
                     ref, _chain(other, prop_name, path),
-                    "%s: linearize -> emit -> check -> CEGAR -> replay must "
+                    "%s: linearize -> emit -> check -> re-check -> replay must "
                     "be byte-for-byte identical across the frontends"
                     % label)
 

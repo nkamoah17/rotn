@@ -24,7 +24,7 @@ has fully-kept guards, so hiding the remaining variables only over-approximates
 reachable kept-variable projections -- exactly what a safety over-approximation
 requires. Hiding never under-approximates, so a TLC proof over the abstract
 model is a valid proof over the concrete one, and a TLC counterexample is a
-candidate real bug (validated by CEGAR).
+candidate real bug (validated by the bounded re-check).
 
 Everything is recorded (kept / hidden / bounded / dropped, each with a
 rationale and a soundness note) so a reviewer can audit exactly what was

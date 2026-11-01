@@ -52,7 +52,7 @@ code-derived IR, and the static half and the formal half *disagree loudly*.**
 **The TLA+ pipeline is a pure function of the IR:**
 
 ```
-IR  →  linearize  →  emit  →  check  →  CEGAR  →  verdict  →  replay / coach
+IR  →  linearize  →  emit  →  check  →  re-check  →  verdict  →  replay / coach
 rot.ir      rot.linearization  rot.emitter  rot.{tlc,symbolic,apalache}  rot.cegar  rot.verdicts  rot.trace / rot.coach
 ```
 

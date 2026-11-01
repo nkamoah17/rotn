@@ -2,12 +2,13 @@
 """ROTN -- the caravel/rot-verify temporal policy verification engine.
 
 ROTN ingests an AI agent's tool policy (Dogwood *or* an MCP manifest),
-verifies it with three independent engines and a bounded CEGAR loop,
+verifies it with three independent engines and a bounded re-check loop
+(bounded re-checking -- not counterexample-guided refinement),
 maps findings to SOC 2 / AIUC controls, and emits a deterministic,
 hashed trace that replays as an interactive proof on GitHub Pages.
 
 Pipeline: front-end -> ProtocolIR (the narrow waist) -> linearization
--> engine (symbolic | SMT | policy-direct) + bounded CEGAR -> verdict
+-> engine (symbolic | SMT | policy-direct) + bounded re-check -> verdict
 -> deterministic manifest (the RTF trace).
 
 This package is pure-stdlib (Python 3.6 compatible) so it runs fully

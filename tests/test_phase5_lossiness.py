@@ -13,7 +13,7 @@ discipline (``rot.retention``):
   * **the hard rule** -- a ``PROVEN`` verdict with a dropped edge of unknown
     relevance fails closed to ``UNKNOWN`` + ``unsound_abstraction`` (the edge
     is named); a ``PROVEN`` with only proven-irrelevant drops stands;
-  * **CEGAR on the front-end** -- a static <-> formal disagreement (the CPG
+  * **Refine-on-disagreement on the front-end** -- a static <-> formal disagreement (the CPG
     carries a dropped threat edge yet the IR proved the property) is resolved
     by refining the IR to model the threat and re-checking (taint-critical ->
     the refutation; or proven irrelevant -> the PROVEN stands);
@@ -201,7 +201,7 @@ class HardRuleTest(unittest.TestCase):
 
 
 class CegarDisagreementTest(unittest.TestCase):
-    """CEGAR on the front-end: a static <-> formal disagreement (the CPG
+    """Refine-on-disagreement on the front-end: a static <-> formal disagreement (the CPG
     carries a dropped threat edge yet the IR proved the property) is resolved
     by refining the IR to model the threat and re-checking."""
 

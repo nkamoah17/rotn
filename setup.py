@@ -38,7 +38,7 @@ setup(
     version=_read_version(),
     description=(
         "caravel/rot-verify -- verify an AI agent's tool policy (Dogwood or "
-        "an MCP manifest) with three independent engines + bounded CEGAR; "
+        "an MCP manifest) with three independent engines + bounded re-check; "
         "deterministic, hashed trace; SOC 2 / AIUC control mapping; zero "
         "runtime deps."
     ),
@@ -53,7 +53,7 @@ setup(
         "agent back in bounds when it does.*\n\n"
         "ROTN ingests an AI agent's tool policy (Dogwood *or* a standard "
         "MCP manifest), verifies it with three independent engines and a "
-        "bounded CEGAR loop, maps findings to SOC 2 / AIUC controls, gates "
+        "bounded re-check loop, maps findings to SOC 2 / AIUC controls, gates "
         "depth by tier, and emits a deterministic, hashed trace that "
         "replays as an interactive proof on GitHub Pages.\n\n"
         "Pure stdlib, zero external dependencies, Python 3.6+.\n\n"

@@ -24,7 +24,8 @@ Two concerns are central:
       jar is present and reachable, otherwise fall back to the symbolic engine.
       This keeps the whole pipeline runnable in a bare Python environment.
 
-  * BUDGETS / BOUNDS. State-space budgets (``max_states``), CEGAR iteration cap
+  * BUDGETS / BOUNDS. State-space budgets (``max_states``), re-check iteration
+    cap
     (``cegar_max_iter``), the bounded-liveness horizon (``liveness_horizon``,
     max steps for ``bounded_eventually`` reach_within checks), and the
     property-directed bounds (``participant_bound`` / ``env_bound``) that
@@ -119,7 +120,7 @@ class Config(object):
         self.max_states = int(max_states)
         self.cegar_max_iter = int(cegar_max_iter)
         # Phase 4: bounded-liveness horizon (max steps) for ``bounded_eventually``
-        # invariants, used by the CEGAR loop's ``SymbolicEngine.reach_within``.
+        # invariants, used by the re-check loop's ``SymbolicEngine.reach_within``.
         self.liveness_horizon = int(liveness_horizon)
         self.participant_bound = participant_bound
         self.env_bound = env_bound

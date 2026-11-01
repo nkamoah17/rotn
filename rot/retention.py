@@ -21,7 +21,7 @@ and loud**, soundly, with the 4 moves of §2.2:
    confirmed property source, so we cannot prove it irrelevant) -- and (b)
    forces ``UNKNOWN`` + the ``unsound_abstraction`` advisory.
 
-3. **CEGAR on the front-end (disagreement-driven).**  When the ground-truth
+3. **Refine-on-disagreement on the front-end (disagreement-driven).**  When the ground-truth
    CPG carries a dropped edge of unknown relevance (a potential threat) yet
    the IR *proved* the property, the abstraction and the ground truth
    disagree.  We refine the IR to *model* the threat edge and re-check: a
@@ -149,7 +149,7 @@ class RetentionManifest(object):
 
     def reclassify_unknown(self, new_relevance, note=""):
         """Re-classify every unknown-relevance dropped edge to
-        ``new_relevance`` (after a CEGAR refinement resolved the
+        ``new_relevance`` (after a refine-on-disagreement resolved the
         disagreement).  Returns a fresh manifest (this one is not mutated)."""
         new_dropped = []
         for e in self.dropped:
@@ -423,7 +423,7 @@ def apply_retention_rule(verdict, manifest):
 
 
 # ---------------------------------------------------------------------------
-# CEGAR on the front-end (move 3): disagreement-driven refinement
+# Refine-on-disagreement on the front-end (move 3): disagreement-driven refinement
 # ---------------------------------------------------------------------------
 def _refine_ir_modeling_threat(ir_model, shape):
     """Refine the IR to *model* the dropped threat edge (over-approximate).
@@ -443,7 +443,8 @@ def _refine_ir_modeling_threat(ir_model, shape):
 
 
 def _recheck(ir_model, cfg, shape, engine="symbolic"):
-    """Re-run the safety pipeline over a refined IR (the CEGAR re-check).
+    """Re-run the safety pipeline over a refined IR (the refine-on-disagreement
+    re-check).
 
     Mirrors the core of ``rot.cegar.verify_candidate`` (linearize -> engine ->
     cegar) *without* the cross-check / retention layers, so refining does not
@@ -456,7 +457,7 @@ def _recheck(ir_model, cfg, shape, engine="symbolic"):
 
     prop = Invariant(
         name=ir_model.name or shape,
-        description="CEGAR-on-disagreement re-check over the refined IR",
+        description="refine-on-disagreement re-check over the refined IR",
         expression=ir_model.pinned_property,
         kind=KIND_SAFETY,
     )
@@ -472,16 +473,16 @@ def _name_dropped_edge(verdict, manifest, relevance):
     names = ", ".join(manifest.dropped_edge_names(relevance))
     if not names:
         return verdict
-    prefix = ("Phase 5 CEGAR: dropped %s edge(s) %s; " % (relevance, names))
+    prefix = ("Phase 5 retention: dropped %s edge(s) %s; " % (relevance, names))
     note = ((prefix + (verdict.note or "")).strip())
     soundness = list(verdict.soundness)
-    soundness.append("Phase 5 CEGAR: dropped %s edge(s) %s"
+    soundness.append("Phase 5 retention: dropped %s edge(s) %s"
                      % (relevance, names))
     return _copy_verdict(verdict, note=note, soundness=soundness)
 
 
 def refine_on_disagreement(model, shape, ir, verdict, cfg, manifest=None):
-    """CEGAR on the front-end (move 3): resolve a static<->formal disagreement
+    """Refine-on-disagreement on the front-end (move 3): resolve a static<->formal disagreement
     by refining the IR to model the dropped threat edge and re-checking.
 
     A disagreement is: the ground-truth CPG carries a dropped dataflow edge of
@@ -509,7 +510,7 @@ def refine_on_disagreement(model, shape, ir, verdict, cfg, manifest=None):
     unknown = manifest.unknown()
     if not unknown:
         return verdict, manifest, None
-    # CEGAR can only *resolve* the disagreement for a shape whose threat edge
+    # The refine-on-disagreement pass can only *resolve* the disagreement for a shape whose threat edge
     # we can model in the IR (label_flow: the unmodeled egress).  For any other
     # shape the refinement would be a no-op, so we leave the unknown edges
     # un-reclassified and let the fail-closed hard rule (apply_retention_rule)
@@ -526,7 +527,7 @@ def refine_on_disagreement(model, shape, ir, verdict, cfg, manifest=None):
         # silent false negative.  Report the refutation (name the edge).
         resolved = manifest.reclassify_unknown(
             RELEVANCE_TAINT_CRITICAL,
-            "resolved by CEGAR refinement: modeling this edge refutes the "
+            "resolved by refine-on-disagreement: modeling this edge refutes the "
             "pinned property, so it is taint-critical")
         record = {
             "trigger": [e.to_dict() for e in unknown],
@@ -542,7 +543,7 @@ def refine_on_disagreement(model, shape, ir, verdict, cfg, manifest=None):
     # The refined model still proves: the dropped edge is proven irrelevant.
     resolved = manifest.reclassify_unknown(
         RELEVANCE_IRRELEVANT,
-        "resolved by CEGAR refinement: modeling this edge still proves the "
+        "resolved by refine-on-disagreement: modeling this edge still proves the "
         "pinned property, so it is proven irrelevant")
     record = {
         "trigger": [e.to_dict() for e in unknown],
@@ -560,7 +561,7 @@ def apply_phase5(model, shape, ir, verdict, cfg):
 
     1. Build the kept/dropped :class:`RetentionManifest` (property-directed
        retention, move 2).
-    2. **CEGAR on the front-end** (move 3): if the IR *proved* the property
+    2. **Refine-on-disagreement on the front-end** (move 3): if the IR *proved* the property
        yet the CPG carries a dropped edge of unknown relevance (a potential
        threat), refine the IR to model the threat and re-check -- resolving the
        static<->formal disagreement (taint-critical -> the refutation; or
@@ -571,8 +572,8 @@ def apply_phase5(model, shape, ir, verdict, cfg):
 
     Returns ``(verdict, manifest, refinement_record)``.  ``verdict`` is the
     final verdict (possibly a fresh object); ``manifest`` the resolved
-    kept/dropped manifest; ``refinement_record`` the CEGAR resolution
-    (``None`` when there was no disagreement).  Deterministic and a pure
+    kept/dropped manifest; ``refinement_record`` the refine-on-disagreement
+    resolution (``None`` when there was no disagreement).  Deterministic and a pure
     function of its inputs (unit-testable offline).
     """
     manifest = retention_manifest(model, shape)

@@ -44,7 +44,7 @@ blocking-permission rule:
 Most invariants are *safety*: the predicate must hold in **every** reachable
 state.  The ``bounded_eventually`` invariant is the first *liveness*
 invariant (``kind="liveness"``): its ``expression`` is a **goal** predicate
-that must be *reachable* within a bounded horizon, and the CEGAR loop
+that must be *reachable* within a bounded horizon, and the re-check loop
 (``rot.cegar``) dispatches it to ``SymbolicEngine.reach_within`` instead of
 a universal safety check.
 
@@ -115,7 +115,7 @@ class Invariant(object):
         Stable name, human text, IR predicate, and the invariant kind:
         ``"safety"`` (default -- the predicate must hold in every reachable
         state) or ``"liveness"`` (the predicate is a *goal* that must be
-        reachable within a bounded horizon; the CEGAR loop dispatches it to
+        reachable within a bounded horizon; the re-check loop dispatches it to
         ``SymbolicEngine.reach_within``).
     label : str or None
         One of :data:`LABEL_INDUCTIVE`, :data:`LABEL_BOUNDED`,
@@ -145,8 +145,9 @@ class Invariant(object):
         back to the clause it breaks.  ``None`` when not set.
     violation_code : str or None
         The :data:`rot.verdicts` violation code this invariant's violation
-        carries (e.g. ``DEADLOCK`` for ``no_deadlock``).  When set, the CEGAR
-        layer stamps VIOLATED verdicts with this code instead of the default
+        carries (e.g. ``DEADLOCK`` for ``no_deadlock``).  When set, the verdict
+        layer (``rot.cegar``) stamps VIOLATED verdicts with this code instead
+        of the default
         (``POLICY_DENIAL`` for safety / ``LIVENESS_BOUND_EXCEEDED`` for
         liveness).  ``None`` when not set (the default applies).
     """
@@ -478,7 +479,7 @@ def bounded_eventually(n=1, name="bounded_eventually", description=None,
     linear model reaches a state where ``decision != "idle"``.  This is the
     first *liveness* invariant (``kind="liveness"``): its ``expression`` is
     a **goal** predicate, not a universal safety predicate, so it is
-    evaluated differently by the CEGAR loop (``rot.cegar``), which dispatches
+    evaluated differently by the re-check loop (``rot.cegar``), which dispatches
     it to ``SymbolicEngine.reach_within`` over the linear model:
 
         REACHED     -> the goal is reachable within the horizon: PROVEN

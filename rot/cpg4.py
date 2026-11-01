@@ -605,7 +605,7 @@ def build_claim_packet(model, verticals_dict, coach_dict, shapes=None, ab=None):
         # Phase 5 (move 4): the retention manifest is part of the claim packet
         # -- a deliberately-dropped dataflow edge is *named* here (kept vs
         # dropped, each dropped edge classified irrelevant / unknown /
-        # taint-critical), plus the CEGAR-on-disagreement resolution.
+        # taint-critical), plus the refine-on-disagreement resolution.
         rt = verdict.evidence.get("retention")
         if isinstance(rt, dict):
             retention_out[shape] = dict(rt)

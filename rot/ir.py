@@ -12,13 +12,13 @@ and how it is verified:
     by ``tests/test_narrow_waist.py``.
   * Every downstream engine consumes *only* a ``ProtocolIR``: the TLA+
     emitter (``rot.emitter``), the TLC pipeline (``rot.tlc``), the bounded
-    CEGAR loop (``rot.cegar``), the property-directed abstraction, and the
+    re-check loop (``rot.cegar``), the property-directed abstraction, and the
     symbolic model checker.  None of them knows how the IR was built --
     whether from a Java CPG, a hand-authored fixture, or another language.
 
 Design principles (sound spec core):
   * Language-agnostic: an IR can be produced by CPG analysis of Java, or
-    authored by hand (fixture). Downstream stages (symbolic, emitter, CEGAR)
+    authored by hand (fixture). Downstream stages (symbolic, emitter, ``rot.cegar``)
     only ever see this IR.
   * Sound by construction: every state variable that can influence a pinned
     property is either ``precise`` (translated exactly) or ``existential``
@@ -748,7 +748,7 @@ class ProtocolIR(object):
     """The top-level, language-agnostic protocol model.
 
     This is the single contract between the CPG extraction stage and the
-    symbolic/emitter/CEGAR stages. It is fully serialisable (to_dict/from_dict)
+    symbolic/emitter/``rot.cegar`` stages. It is fully serialisable (to_dict/from_dict)
     so an IR can be authored by hand (fixture) or produced by JoernCPG analysis.
     """
 

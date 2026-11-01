@@ -14,7 +14,7 @@
 ## 0. The product in one line
 
 > **Ingest** an AI agent's tool policy (Dogwood *or* a standard **MCP
-> manifest**), **verify** it with three independent engines + bounded CEGAR,
+> manifest**), **verify** it with three independent engines + bounded re-check,
 > **map** findings to SOC 2 / AIUC controls, **gate** depth by tier (license
 > or GitHub-Action input), **emit** a deterministic trace, and **replay** it
 > as an interactive proof on GitHub Pages.
@@ -38,7 +38,7 @@ The whole system is built on four invariants that never change:
 │ MCP manifest  (NEW)  │──▶│ exhaustive BFS)     │──▶│ (deterministic, hashed)│──▶│ GitHub Pages (deploy-pages)│
 │ tools.json           │   │ SMT (Z3 + ref)      │   │ verdict+graph+CE+      │   │ verdict card, replay,    │
 └──────────────────────┘   │ policy-direct       │   │ timeline+narration+    │   │ findings+compliance      │
-                           │ + bounded CEGAR     │   │ findings+compliance+   │   └─────────────────────────┘
+                           │ + bounded re-check  │   │ findings+compliance+   │   └─────────────────────────┘
                            │  DepthBudget (tier) │   │ coaching (Rule+Proof+  │
                            └─────────────────────┘   │ Coach)                 │
                                                       └─────────────────────────┘
@@ -78,7 +78,7 @@ catalog is descriptive provenance — cross-checked against the policy (an actio
 named by the policy but absent from the catalog is recorded in IR metadata so a
 report can flag it) — but it never changes the model.
 
-### 1.2 Verify plane — *three independent engines + bounded CEGAR*
+### 1.2 Verify plane — *three independent engines + bounded re-check*
 
 The IR is first turned into a **deterministic linear model**
 (`rot.linearization.linearize` → `LinearModel`) so that no two engines can
@@ -93,16 +93,18 @@ The three independent engines (the "trifecta" of the product name):
 | **SMT** | **shipped** `rot.smtz3` | dual backend: Z3 (Int/Bool arithmetic, bounded by horizon `H`) **and** a pure-Python reference backend; the two must *agree* on status or the result is `UNKNOWN` | yes (bounded), when Z3 present |
 | **policy-direct** | **shipped** `rot.modelfind` | bounded enumeration over the IR's finite typed domains; the canonical concrete-state engine — counterexamples and witnesses come from it | yes (bounded) |
 
-**Bounded CEGAR** (`rot.cegar`) is the referee, not a fourth engine. It turns an
-engine's `EngineResult` into an auditable `rot.verdicts.Verdict` and — the CEGAR
-core — *validates that a counterexample is real* rather than an artefact of an
+**Bounded re-check** (`rot.cegar`; the module keeps its name for API
+stability — this is *not* CEGAR refinement) is the referee, not a fourth
+engine. It turns an
+engine's `EngineResult` into an auditable `rot.verdicts.Verdict` and — the core
+step — *validates that a counterexample is real* rather than an artefact of an
 over-approximation:
 
 - `proven` → `Verdict.proven`
 - `violated` → re-evaluate the invariant in the witness state with the IR's own
   3-valued `eval`: definite `False` → a real bug → `Verdict.violated`; not
   definite → spurious → `Verdict.unsound`
-- `unknown` / `timeout` → bounded refinement loop (re-run up to
+- `unknown` / `timeout` → bounded re-check loop (re-run up to
   `Config.cegar_max_iter`); if it converges, report that; otherwise
   `Verdict.unknown` (a sound "we could not decide" — never silently proven)
 - `error` → `Verdict.error` (a tool failed to run)
@@ -265,7 +267,7 @@ between "we verified this" and "here is the interactive proof."
 | `provenance` | policy hash + content, environment (model family + parameters), engine(s) used, the `DepthBudget` that applied, `n_states` explored, `horizon_complete` | the "how much did we explore" footer |
 
 **Soundness in the trace:** a `VIOLATED` verdict is only ever accompanied by a
-counterexample that CEGAR re-validated as IR-feasible; an `UNKNOWN` verdict is
+counterexample that the bounded re-check re-validated as IR-feasible; an `UNKNOWN` verdict is
 only ever accompanied by the budget that was exhausted and the honest
 `horizon_complete` flag. The trace never hides a gap.
 
@@ -281,7 +283,7 @@ named **`DepthBudget`** — a bundle of the exact knobs that already live in
 | knob | `Config` field | meaning |
 |------|----------------|---------|
 | state budget | `max_states` | max reachable states the engines may explore before returning `UNKNOWN` |
-| CEGAR depth | `cegar_max_iter` | max refinement iterations on an `unknown` result |
+| re-check depth | `cegar_max_iter` | max re-check iterations on an `unknown` result (bounded re-check, not CEGAR refinement) |
 | liveness horizon | `liveness_horizon` | max steps for `bounded_eventually` / `reach_within` |
 | abstraction bounds | `participant_bound` / `env_bound` | property-directed bounds that become recorded assumptions |
 | engine set | `engine` (`auto` / `symbolic` / `smt` / `tlc` / `apalache`) | which independent engines cross-check |
@@ -290,9 +292,9 @@ The tiers (planned; the underlying knobs are shipped):
 
 | tier | engines | budget | use |
 |------|---------|--------|-----|
-| `basic` | symbolic | small `max_states`, 1 CEGAR iter, short horizon | quick CI smoke, free tier |
-| `standard` | symbolic + SMT cross-check | medium `max_states`, bounded CEGAR, full horizon | default product tier |
-| `enterprise` | all three engines (+ TLC/Apalache when present) | large `max_states`, full CEGAR, longest horizon, compliance mapping | licensed / audit tier |
+| `basic` | symbolic | small `max_states`, 1 re-check iter, short horizon | quick CI smoke, free tier |
+| `standard` | symbolic + SMT cross-check | medium `max_states`, bounded re-check, full horizon | default product tier |
+| `enterprise` | all three engines (+ TLC/Apalache when present) | large `max_states`, full re-check, longest horizon, compliance mapping | licensed / audit tier |
 
 **Contract:** the tier only ever *shrinks or grows the budget* — it never
 changes the verdict semantics. A `basic`-tier `UNKNOWN` is the same honest
@@ -312,7 +314,7 @@ The verdict vocabulary is fixed (`rot.verdicts`):
 | `PROVEN` | invariant holds in every reachable state (bounded model) | `0` |
 | `VIOLATED` | a concrete, IR-feasible counterexample exists (a real bug) | `1` |
 | `UNKNOWN` | budget exhausted / could not decide — **never** read as proven | `2` |
-| `UNSOUND` | a counterexample CEGAR could not confirm concrete-feasible — do not trust | `2` |
+| `UNSOUND` | a counterexample the re-check could not confirm concrete-feasible — do not trust | `2` |
 | `ERROR` | a tool (TLC/Java/Z3) failed to run | `3` |
 
 The rules that make it fail-closed:
@@ -320,7 +322,7 @@ The rules that make it fail-closed:
 1. **`UNKNOWN` is never `PROVEN`.** A budget-truncated search is surfaced, not
    silently passed. (Enforced in `rot.symbolic`, `rot.modelfind`, `rot.cegar`.)
 2. **A violation needs a definite witness.** A counterexample is trusted only
-   after CEGAR re-evaluates the invariant in the witness state and sees a
+   after the re-check re-evaluates the invariant in the witness state and sees a
    *definite* `False` (never `UNDEF`).
 3. **Liveness is always bounded.** A `NOT_REACHED` liveness verdict is sound only
    because the whole horizon was explored (`horizon_complete`).
@@ -359,7 +361,7 @@ The rules that make it fail-closed:
 | Verify | `rot.symbolic` + `rot.sat` | symbolic (bounded-exhaustive) engine + DPLL SAT / 3-valued eval |
 | Verify | `rot.smtz3` | SMT engine (Z3 + pure-Python dual backend, cross-checked) |
 | Verify | `rot.modelfind` | policy-direct bounded enumerator (canonical concrete engine) |
-| Verify | `rot.cegar` | counterexample validation + bounded refinement |
+| Verify | `rot.cegar` | counterexample validation + bounded re-check (not CEGAR refinement) |
 | Verify | `rot.trifecta` | the three-facet audit (safety / liveness / conformance) |
 | Verify | `rot.config` | engine selection + budgets (the `DepthBudget` knobs) |
 | Verify | `rot.tlc` / `rot.apalache` / `rot.itf` | optional external engines (degrade, never required) |
@@ -381,7 +383,7 @@ The rules that make it fail-closed:
 3. **Deterministic.** Same `(policy, environment, tier)` → byte-identical,
    hash-stable trace. Enforced by `tests/test_manifest.py`.
 4. **Fail-closed.** `UNKNOWN` ≠ `PROVEN`; violations need a definite,
-   CEGAR-validated witness; exit codes `0/1/2/3`.
+   re-check-validated witness; exit codes `0/1/2/3`.
 5. **Python 3.6 compatible.** No f-strings, no dataclasses in the shipped core.
 
 ---
