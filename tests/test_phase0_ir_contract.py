@@ -9,12 +9,16 @@ narrow waist must be green: ``linearize -> emit -> check -> CEGAR -> replay``
 runs **byte-for-byte** identically on every frontend's IR of the *same
 control*.
 
-Controls covered (each frontend is UNAVAILABLE on the other control -- the
-plan records that as UNAVAILABLE, not a loss):
+Controls covered in the PRODUCT suite:
 
 * **spendcap** (budget P1): ``code`` + ``cpg`` + ``targets`` (correct and
   bypassable variants).
-* **2PC**: ``targets`` + ``java`` (correct and buggy variants).
+
+The **2PC** byte-for-byte control (``targets`` oracle vs the ``java``
+frontend) needs the protocol-plane oracle (``rot.twopc``), which lives in the
+research plane -- it runs in the ``rotn-research`` suite, not here.  The
+``java`` frontend's IR is still held to the metadata contract below (it is a
+product frontend and imports no research module).
 
 Run: python tests/test_phase0_ir_contract.py
 """
@@ -71,16 +75,6 @@ GATE_CONTROLS = [
      [lower_candidate(
          extract_file(os.path.join(CODE_FIX, "budget_bypassable.py"))),
       targets.build("spendcap-buggy", 1)]),
-    ("twopc-correct", "agreement",
-     ["vote_1_yes", "vote_2_yes", "vote_3_yes", "decide",
-      "apply_1", "apply_2", "apply_3", "done"],
-     [targets.build("correct", 3), java_fe.build_ir(JAVA_DIR, n=3,
-                                                     buggy=False)]),
-    ("twopc-buggy", "agreement",
-     ["vote_1_yes", "vote_2_no", "vote_3_yes", "decide",
-      "apply_1", "apply_2", "apply_3"],
-     [targets.build("buggy", 3), java_fe.build_ir(JAVA_DIR, n=3,
-                                                   buggy=True)]),
 ]
 
 

@@ -1,0 +1,41 @@
+{
+  "agent": {
+    "property": "rotn.probe.filter",
+    "value": "SPEC"
+  },
+  "cost": {
+    "enabled_classes": 1,
+    "total": 1.0,
+    "total_classes": 3,
+    "weight": {
+      "RECV": 1.0,
+      "SEND": 1.0,
+      "SPEC": 1.0
+    }
+  },
+  "digest": "sha256:5b7ec60dd55b9020acdec246e8ef3ad7a3d89a62b99b3681e1646f10ee8d059a",
+  "disabled": [
+    "SEND",
+    "RECV"
+  ],
+  "enabled": [
+    "SPEC"
+  ],
+  "format": "v1",
+  "obligations": [
+    "agreement",
+    "decision_before_apply",
+    "validity"
+  ],
+  "requirement": {
+    "agreement": [
+      "SPEC"
+    ],
+    "decision_before_apply": [
+      "SPEC"
+    ],
+    "validity": [
+      "SPEC"
+    ]
+  }
+}

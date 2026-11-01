@@ -1,0 +1,11 @@
+EXIT=False
+test_all_frontends_emit_the_same_protocol_ir_type (__main__.ContractTest) ... ok
+test_contract_metadata_is_stamped (__main__.ContractTest) ... ok
+test_code_and_cpg_agree_on_the_lossiness_manifest (__main__.GateTest) ... ok
+test_gate_chain_runs_byte_for_byte_on_all_frontends (__main__.GateTest) ... ok
+test_same_control_is_structurally_identical (__main__.GateTest) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.000s
+
+OK

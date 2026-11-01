@@ -1,0 +1,211 @@
+{
+  "blocks": [
+    {
+      "csType": "WHILE",
+      "endLineNumber": 0,
+      "fullName": "org.rotn.twopc.Coordinator.run#loop",
+      "kind": "CONTROL_STRUCTURE",
+      "lineNumber": 10,
+      "name": "loop",
+      "owner": "org.rotn.twopc.Coordinator.run"
+    },
+    {
+      "csType": "IF",
+      "endLineNumber": 0,
+      "fullName": "org.rotn.twopc.Coordinator.run#if0",
+      "kind": "CONTROL_STRUCTURE",
+      "lineNumber": 20,
+      "name": "if0",
+      "owner": "org.rotn.twopc.Coordinator.run"
+    },
+    {
+      "csType": "IF",
+      "endLineNumber": 0,
+      "fullName": "org.rotn.twopc.Coordinator.run#if1",
+      "kind": "CONTROL_STRUCTURE",
+      "lineNumber": 21,
+      "name": "if1",
+      "owner": "org.rotn.twopc.Coordinator.run"
+    }
+  ],
+  "calls": [],
+  "edges": [
+    {
+      "from": "org.rotn.twopc.Coordinator.run",
+      "line": 0,
+      "note": "",
+      "to": "org.rotn.twopc.Coordinator.run#loop",
+      "type": "CONTAINS"
+    },
+    {
+      "from": "vote_1",
+      "line": 0,
+      "note": "",
+      "to": "org.rotn.twopc.Coordinator.run#loop",
+      "type": "REACHING_DEF"
+    },
+    {
+      "from": "vote_2",
+      "line": 0,
+      "note": "",
+      "to": "org.rotn.twopc.Coordinator.run#loop",
+      "type": "REACHING_DEF"
+    },
+    {
+      "from": "vote_3",
+      "line": 0,
+      "note": "",
+      "to": "org.rotn.twopc.Coordinator.run#loop",
+      "type": "REACHING_DEF"
+    },
+    {
+      "from": "org.rotn.twopc.Coordinator.run#loop",
+      "line": 0,
+      "note": "",
+      "to": "org.rotn.twopc.Coordinator.run#if0",
+      "type": "CONTAINS"
+    },
+    {
+      "from": "prepare",
+      "line": 0,
+      "note": "",
+      "to": "org.rotn.twopc.Coordinator.run#if0",
+      "type": "REACHING_DEF"
+    },
+    {
+      "from": "vote_1",
+      "line": 0,
+      "note": "",
+      "to": "org.rotn.twopc.Coordinator.run#if0",
+      "type": "REACHING_DEF"
+    },
+    {
+      "from": "org.rotn.twopc.Coordinator.run#if0",
+      "line": 0,
+      "note": "",
+      "to": "decided",
+      "type": "CDG"
+    },
+    {
+      "from": "org.rotn.twopc.Coordinator.run#loop",
+      "line": 0,
+      "note": "",
+      "to": "org.rotn.twopc.Coordinator.run#if1",
+      "type": "CONTAINS"
+    },
+    {
+      "from": "decided",
+      "line": 0,
+      "note": "",
+      "to": "org.rotn.twopc.Coordinator.run#if1",
+      "type": "REACHING_DEF"
+    },
+    {
+      "from": "org.rotn.twopc.Coordinator.run#if1",
+      "line": 0,
+      "note": "",
+      "to": "done",
+      "type": "CDG"
+    }
+  ],
+  "fields": [],
+  "files": [],
+  "locals": [
+    {
+      "code": "",
+      "constant": null,
+      "endLineNumber": 0,
+      "fullName": "org.rotn.twopc.Coordinator.run#phase",
+      "lineNumber": 0,
+      "name": "phase",
+      "owner": "org.rotn.twopc.Coordinator.run",
+      "type": "Phase"
+    }
+  ],
+  "meta": {
+    "source": "org.rotn.twopc.Coordinator.java"
+  },
+  "methods": [
+    {
+      "args": [
+        "vote_1",
+        "vote_2",
+        "vote_3"
+      ],
+      "calls": [],
+      "defs": [
+        "phase"
+      ],
+      "endLineNumber": 60,
+      "fullName": "org.rotn.twopc.Coordinator.run",
+      "lineNumber": 5,
+      "name": "run",
+      "owner": "org.rotn.twopc.Coordinator",
+      "readFields": [],
+      "retType": "void",
+      "writtenFields": []
+    }
+  ],
+  "namespaces": [],
+  "params": [
+    {
+      "argumentIndex": 0,
+      "code": "",
+      "constant": null,
+      "direction": "IN",
+      "endLineNumber": 0,
+      "fullName": "org.rotn.twopc.Coordinator.run#vote_1",
+      "isExternal": false,
+      "isImplicit": false,
+      "lineNumber": 0,
+      "name": "vote_1",
+      "owner": "org.rotn.twopc.Coordinator.run",
+      "type": "boolean"
+    },
+    {
+      "argumentIndex": 1,
+      "code": "",
+      "constant": null,
+      "direction": "IN",
+      "endLineNumber": 0,
+      "fullName": "org.rotn.twopc.Coordinator.run#vote_2",
+      "isExternal": false,
+      "isImplicit": false,
+      "lineNumber": 0,
+      "name": "vote_2",
+      "owner": "org.rotn.twopc.Coordinator.run",
+      "type": "boolean"
+    },
+    {
+      "argumentIndex": 2,
+      "code": "",
+      "constant": null,
+      "direction": "IN",
+      "endLineNumber": 0,
+      "fullName": "org.rotn.twopc.Coordinator.run#vote_3",
+      "isExternal": false,
+      "isImplicit": false,
+      "lineNumber": 0,
+      "name": "vote_3",
+      "owner": "org.rotn.twopc.Coordinator.run",
+      "type": "boolean"
+    }
+  ],
+  "taint_sinks": [],
+  "taint_sources": [],
+  "types": [
+    {
+      "constants": [
+        "prepare",
+        "decided",
+        "done"
+      ],
+      "endLineNumber": 0,
+      "fullName": "org.rotn.twopc.Phase",
+      "inherits": [],
+      "lineNumber": 0,
+      "name": "Phase",
+      "owner": "org.rotn.twopc"
+    }
+  ]
+}

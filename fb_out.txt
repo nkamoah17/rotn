@@ -1,0 +1,76 @@
+EXIT=True
+.EEEEE
+======================================================================
+ERROR: test_including_blocked_diff_raises_rate (__main__.TestFalseBlock)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "tests/test_falseblock.py", line 67, in test_including_blocked_diff_raises_rate
+    report = measure_false_blocks(corpus, n=2, threshold=0.5)
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\rot\falseblock.py", line 128, in measure_false_blocks
+    v = mr_gate.evaluate_mr(before, after, n=n, max_states=max_states)
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\rot\mr_gate.py", line 384, in evaluate_mr
+    before_ir = _resolve_ir(before, n, "before")
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\rot\mr_gate.py", line 217, in _resolve_ir
+    % (what, x))
+ValueError: before: 'correct' is not a registered target and is not a ProtocolIR
+
+======================================================================
+ERROR: test_json_roundtrip (__main__.TestFalseBlock)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "tests/test_falseblock.py", line 106, in test_json_roundtrip
+    report = measure_false_blocks(safe_corpus(), n=2)
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\rot\falseblock.py", line 128, in measure_false_blocks
+    v = mr_gate.evaluate_mr(before, after, n=n, max_states=max_states)
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\rot\mr_gate.py", line 384, in evaluate_mr
+    before_ir = _resolve_ir(before, n, "before")
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\rot\mr_gate.py", line 217, in _resolve_ir
+    % (what, x))
+ValueError: before: 'correct' is not a registered target and is not a ProtocolIR
+
+======================================================================
+ERROR: test_outcome_records (__main__.TestFalseBlock)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "tests/test_falseblock.py", line 96, in test_outcome_records
+    report = measure_false_blocks([("correct", "buggy")], n=2)
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\rot\falseblock.py", line 128, in measure_false_blocks
+    v = mr_gate.evaluate_mr(before, after, n=n, max_states=max_states)
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\rot\mr_gate.py", line 384, in evaluate_mr
+    before_ir = _resolve_ir(before, n, "before")
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\rot\mr_gate.py", line 217, in _resolve_ir
+    % (what, x))
+ValueError: before: 'correct' is not a registered target and is not a ProtocolIR
+
+======================================================================
+ERROR: test_rate_exceeds_threshold_recommends_restriction (__main__.TestFalseBlock)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "tests/test_falseblock.py", line 80, in test_rate_exceeds_threshold_recommends_restriction
+    report = measure_false_blocks(corpus, n=2, threshold=0.3)
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\rot\falseblock.py", line 128, in measure_false_blocks
+    v = mr_gate.evaluate_mr(before, after, n=n, max_states=max_states)
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\rot\mr_gate.py", line 384, in evaluate_mr
+    before_ir = _resolve_ir(before, n, "before")
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\rot\mr_gate.py", line 217, in _resolve_ir
+    % (what, x))
+ValueError: before: 'correct' is not a registered target and is not a ProtocolIR
+
+======================================================================
+ERROR: test_safe_corpus_zero_rate (__main__.TestFalseBlock)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "tests/test_falseblock.py", line 54, in test_safe_corpus_zero_rate
+    report = measure_false_blocks(safe_corpus(), n=2, threshold=0.1)
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\rot\falseblock.py", line 128, in measure_false_blocks
+    v = mr_gate.evaluate_mr(before, after, n=n, max_states=max_states)
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\rot\mr_gate.py", line 384, in evaluate_mr
+    before_ir = _resolve_ir(before, n, "before")
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\rot\mr_gate.py", line 217, in _resolve_ir
+    % (what, x))
+ValueError: before: 'correct' is not a registered target and is not a ProtocolIR
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.000s
+
+FAILED (errors=5)

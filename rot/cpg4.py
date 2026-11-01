@@ -699,17 +699,24 @@ def claim_packet_for_cpg(model, cfg, shapes=None, cpg=None, ab=None):
     ``two_layer`` (the two-layer agreement, fail-closed), ``ab`` (the A/B
     winner table: the default frontend chosen by measurement, not
     assertion), and ``retention`` (the lossiness manifest).  ``ab``
-    defaults to :func:`rot.ab.winner_table` (``None`` when the bench corpus
-    is unavailable -- honest, never a loss).
+    defaults to :func:`rotn_research.ab.winner_table` (``None`` when the
+    research plane or the bench corpus is unavailable -- honest, never a loss).
     """
     _as_model(model)
     shapes = list(shapes) if shapes is not None else list(P1_SHAPES)
     if ab is None:
-        from rot.ab import winner_table
+        # The A/B winner table lives in the research plane (the rotn-research
+        # repo).  The product degrades honestly (ab=None) when the research
+        # package is not installed -- never a loss, never a hard dependency.
         try:
-            ab = winner_table()
-        except Exception:
-            ab = None  # the bench corpus is unavailable: honest, not a loss.
+            from rotn_research.ab import winner_table
+        except ImportError:
+            winner_table = None
+        if winner_table is not None:
+            try:
+                ab = winner_table()
+            except Exception:
+                ab = None  # the bench corpus is unavailable: honest, not a loss.
     vdict = verticals(model, cfg, shapes=shapes)
     cdict = dict((s, coach_vertical(model, s, cfg, cpg=cpg)) for s in shapes)
     return build_claim_packet(model, vdict, cdict, shapes=shapes, ab=ab)

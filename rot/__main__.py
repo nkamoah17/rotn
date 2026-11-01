@@ -1775,16 +1775,18 @@ def _add_policy_opts(p):
 def cmd_ladder(args):
     """Run the Phase 3 robustness ladder (R0 -> R1 -> R2) for a target.
 
-    The *same harness* is discharged at each rung (the environment weakens
-    monotonically: conforming agent -> compromised agent -> + benign harness
-    faults). Reports the per-rung verdicts, the highest rung at which the
-    claim holds (F1), and the named non-claims (F3). Optionally writes the
-    auditable refinement chain (F4).
-
-    Exit code: 0 if the claim holds at the top rung (R2), 1 if it regresses
-    below R2 (or holds nowhere), 3 on error.
+    RESEARCH command: the ladder lives in the ``rotn-research`` repo.  In a
+    product build (where the research modules are not installed) this exits 3
+    with a clear message instead of failing on a missing import.
     """
-    import rot.ladder as ladder
+    try:
+        import rot.ladder as ladder          # research module (rotn-research)
+    except ImportError:
+        print("ERROR: 'rot ladder' is a research command and is not part of "
+              "this build.\n"
+              "       It lives in the rotn-research repo "
+              "(pip install rotn-research).", file=sys.stderr)
+        return EXIT_ERROR
     from rot.emitter import emit_refinement_chain
 
     target = args.target
@@ -1851,14 +1853,18 @@ def cmd_ladder(args):
 def cmd_ab(args):
     """Frontend A/B over the bench corpus (Joern-primary, §3).
 
-    Compares the Ingest frontends on a shared oracle corpus, measuring the §3
-    quality metrics per (frontend, fixture) cell and emitting a lexicographic
-    winner.  Offline and deterministic: no network, no external tools, no
-    randomness.
-
-    Exit code: 0 (the A/B ran; the winner is in the output), 3 on error.
+    RESEARCH command: the A/B harness lives in the ``rotn-research`` repo.
+    In a product build (where the research modules are not installed) this
+    exits 3 with a clear message instead of failing on a missing import.
     """
-    import rot.ab as ab
+    try:
+        import rot.ab as ab                  # research module (rotn-research)
+    except ImportError:
+        print("ERROR: 'rot ab' is a research command and is not part of "
+              "this build.\n"
+              "       It lives in the rotn-research repo "
+              "(pip install rotn-research).", file=sys.stderr)
+        return EXIT_ERROR
     try:
         corpus = ab.load_corpus(getattr(args, "corpus", None))
     except Exception as exc:  # noqa: BLE001
@@ -2123,40 +2129,15 @@ def main(argv=None):
     p.add_argument("--quiet", action="store_true",
                    help="suppress the human summary")
 
-    p = sub.add_parser(
-        "ladder",
-        help="run the Phase 3 robustness ladder (R0 -> R1 -> R2) for a target")
-    p.add_argument("--target", default="orchestration",
-                   choices=["approval", "delegation", "orchestration",
-                            "budget", "livelock", "deadlock"],
-                   metavar="TARGET",
-                   help="the harness to ladder [default: orchestration]")
-    p.add_argument("--property", default=None, metavar="NAME",
-                   help="claim to discharge [default: the target's thesis rule]")
-    p.add_argument("--n", type=int, default=1, metavar="N",
-                   help="protocol size parameter n [default: 1]")
-    p.add_argument("--max-states", type=int, default=200000, metavar="N",
-                   help="bounded-search budget [default: 200000]")
-    p.add_argument("--horizon", type=int, default=12, metavar="H",
-                   help="bounded liveness horizon [default: 12]")
-    p.add_argument("--out", default=None, metavar="DIR",
-                   help="write the refinement chain + result JSON to DIR")
-    p.add_argument("--json", action="store_true",
-                   help="also print the full structured result as JSON")
-
-    p = sub.add_parser(
-        "ab", help="frontend A/B over the bench corpus (Joern-primary, §3)")
-    p.add_argument("--corpus", default=None, metavar="DIR",
-                   help="corpus dir [default: <repo>/bench]")
-    p.add_argument("--frontends", default=None, metavar="LIST",
-                   help="comma-separated frontends "
-                        "[default: each manifest's list]")
-    p.add_argument("--json", action="store_true",
-                   help="emit JSON (default: the human report)")
-    p.add_argument("--out", default=None, metavar="FILE",
-                   help="write the JSON result to FILE")
-    p.add_argument("--quiet", action="store_true",
-                   help="suppress the human report (with --json)")
+    # RESEARCH commands: `ladder` and `ab` live in the rotn-research repo.
+    # They are registered HIDDEN (absent from `rot --help`) so the product
+    # build lists only product commands, yet running one still yields a clear
+    # "research command, not in this build" message (exit 3) instead of an
+    # opaque argparse error (the Phase A product/research boundary).
+    sub.add_parser("ladder", help=argparse.SUPPRESS,
+                   description=("[research] not part of the product build"))
+    sub.add_parser("ab", help=argparse.SUPPRESS,
+                   description=("[research] not part of the product build"))
 
     args = parser.parse_args(argv)
     if args.command is None:
@@ -2168,8 +2149,7 @@ def main(argv=None):
             "coach": cmd_coach, "runtime": cmd_runtime,
             "site": cmd_site,
             "doctor": cmd_doctor,
-            "ladder": cmd_ladder,
-            "ab": cmd_ab}[args.command](args)
+            "ladder": cmd_ladder, "ab": cmd_ab}[args.command](args)
 
 
 if __name__ == "__main__":

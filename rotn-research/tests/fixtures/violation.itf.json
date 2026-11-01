@@ -1,0 +1,120 @@
+{
+  "#meta": {
+    "format": "ITF",
+    "format-description": "https://apalache-mc.org/docs/adr/015adr-trace.html",
+    "description": "Created by Apalache on Sun Oct 04 04:29:30 GMT 2026",
+    "varTypes": {
+      "vote_1": "Str",
+      "vote_2": "Str",
+      "vote_3": "Str",
+      "applied_1": "Str",
+      "applied_2": "Str",
+      "applied_3": "Str",
+      "decision": "Str",
+      "phase": "Str"
+    }
+  },
+  "vars": [
+    "vote_1",
+    "vote_2",
+    "vote_3",
+    "applied_1",
+    "applied_2",
+    "applied_3",
+    "decision",
+    "phase"
+  ],
+  "states": [
+    {
+      "#meta": {
+        "index": 0
+      },
+      "applied_1": "none",
+      "applied_2": "none",
+      "applied_3": "none",
+      "decision": "none",
+      "phase": "prepare",
+      "vote_1": "none",
+      "vote_2": "none",
+      "vote_3": "none"
+    },
+    {
+      "#meta": {
+        "index": 1
+      },
+      "applied_1": "none",
+      "applied_2": "none",
+      "applied_3": "none",
+      "decision": "none",
+      "phase": "prepare",
+      "vote_1": "none",
+      "vote_2": "none",
+      "vote_3": "no"
+    },
+    {
+      "#meta": {
+        "index": 2
+      },
+      "applied_1": "none",
+      "applied_2": "none",
+      "applied_3": "none",
+      "decision": "none",
+      "phase": "prepare",
+      "vote_1": "none",
+      "vote_2": "no",
+      "vote_3": "no"
+    },
+    {
+      "#meta": {
+        "index": 3
+      },
+      "applied_1": "none",
+      "applied_2": "none",
+      "applied_3": "none",
+      "decision": "none",
+      "phase": "prepare",
+      "vote_1": "yes",
+      "vote_2": "no",
+      "vote_3": "no"
+    },
+    {
+      "#meta": {
+        "index": 4
+      },
+      "applied_1": "none",
+      "applied_2": "none",
+      "applied_3": "none",
+      "decision": "abort",
+      "phase": "decided",
+      "vote_1": "yes",
+      "vote_2": "no",
+      "vote_3": "no"
+    },
+    {
+      "#meta": {
+        "index": 5
+      },
+      "applied_1": "none",
+      "applied_2": "abort",
+      "applied_3": "none",
+      "decision": "abort",
+      "phase": "decided",
+      "vote_1": "yes",
+      "vote_2": "no",
+      "vote_3": "no"
+    },
+    {
+      "#meta": {
+        "index": 6
+      },
+      "applied_1": "commit",
+      "applied_2": "abort",
+      "applied_3": "none",
+      "decision": "abort",
+      "phase": "decided",
+      "vote_1": "yes",
+      "vote_2": "no",
+      "vote_3": "no"
+    }
+  ]
+}

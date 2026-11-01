@@ -245,7 +245,10 @@ def _run_cpg_frontend(cpg_path, source_dir, out_dir, quiet=False):
     }
     ab = None
     try:
-        from rot.ab import winner_table
+        try:
+            from rotn_research.ab import winner_table   # research repo (preferred)
+        except ImportError:
+            from rot.ab import winner_table             # legacy product build
         ab = winner_table()
     except Exception:
         ab = None  # the bench corpus is unavailable: honest, not a loss.
@@ -335,7 +338,24 @@ def run(target_name="correct", property_name=None, engine="auto",
     # explicit ``frontend`` always wins.  The CPG branch is self-contained
     # (extract -> lower -> verify + two-layer agreement), so it returns here;
     # the other frontends fall through to the source / oracle path below.
-    from rot.ab import resolve_frontend
+    try:
+        try:
+            from rotn_research.ab import resolve_frontend   # research repo (preferred)
+        except ImportError:
+            from rot.ab import resolve_frontend             # legacy product build
+    except ImportError:
+        # Product build (research not installed): simple resolution.  An
+        # explicit frontend wins; else CPG if a CPG artifact is present;
+        # else the source frontend if source_dir is given; else the oracle
+        # registry (the product default).
+        def resolve_frontend(frontend, cpg_present=False, source_dir=None):
+            if frontend and frontend != "auto":
+                return frontend
+            if cpg_present:
+                return "cpg"
+            if source_dir:
+                return "java"
+            return "targets"
     cpg_present = (cpg_path is not None) or _cpg_artifact_in(source_dir)
     fe = resolve_frontend(frontend, cpg_present=cpg_present,
                           source_dir=source_dir)
@@ -540,7 +560,18 @@ def _run_llm_baseline(cfg, linear_model, prop, target_name, out_dir, spec,
     code. The report is always written to ``<out_dir>/<target>_<prop>_
     llmbaseline.json`` for auditability.
     """
-    from rot.llm_baseline import llm_baseline
+    # Research module: prefer rotn_research (the research repo), fall back to
+    # rot (legacy product build).  If neither is available, report an error
+    # (the LLM baseline is optional and never affects the formal verdict).
+    try:
+        from rotn_research.llm_baseline import llm_baseline
+    except ImportError:
+        try:
+            from rot.llm_baseline import llm_baseline
+        except ImportError:
+            return {"status": "error",
+                    "error": "LLM baseline unavailable (research module not "
+                             "installed).  The formal verdict is unaffected."}
 
     # Emit the exact TLA+ the engine sees, so the LLM reads the real spec.
     spec_text = ""

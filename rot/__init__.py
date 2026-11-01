@@ -28,7 +28,6 @@ __all__ = [
     "verdicts",
     "cegar",
     "config",
-    "cpg_reader",
     "mcp_adapter",
     "policy_verify",
 ]
