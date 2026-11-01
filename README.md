@@ -112,6 +112,97 @@ rot demo
 
 ---
 
+## Product 2, up front — the runtime coach (the 5-field refusal)
+
+> **the LLM proposes, the deterministic core decides.** Product 2 is that
+> decision, live: one command decides a tool call against the policy, and when
+> it is denied the answer is a *computed* remediation read straight from the
+> guard — not a log line, a guarantee.
+
+`rot runtime eval` decides **one live tool call** against a rule, using the
+*same guard predicate* the offline engine proved safe. The hero is the
+**five-field refusal** — `blocked`, `rule`, `why`, `to_proceed`, `allowed_now`
+— which walks the arc **rule → block → `to_proceed` → `allowed_now`**:
+
+```bash
+# a transfer while 3 requests are in flight (cap 200, $100 each) -> BLOCKED (exit 1)
+rot runtime eval --tool transfer --arg amount=100 --state '{"inflight": 3}'
+```
+
+```json
+{
+  "rule":       "spendcap_within_cap",
+  "blocked":    true,
+  "why":        "3 in-flight requests are invisible to the settled-trace monitor",
+  "to_proceed": "complete 1 in-flight (or cap inflight at 1)",
+  "allowed_now": false,
+  "hash":       "6d215e0c314251185bb70a567d26a6e1ee2d45124fcfeb733d6c662e790a0e2e"
+}
+```
+
+- **rule** — which policy/rung decided (`spendcap_within_cap`);
+- **blocked** — the decision (`true` = denied). `allowed_now` is the *same*
+  decision read the other way (`false`); the two never disagree;
+- **why** — the plain-English reason, naming the state-dependent quantity (the
+  in-flight count — exactly what the settled-trace monitor cannot see);
+- **to_proceed** — the *enabling condition*, computed from the guard's
+  currently-false conjuncts (the spec), not a hand-written rationale.
+
+The refusal is a **pure function** of (rule, request, state): deterministic,
+**hashable** (SHA-256 under the same discipline as the RTF trace), and
+**auditable** — a reader re-runs the guard on the recorded state and re-derives
+the decision byte-for-byte. An `UNKNOWN` guard (an unmodelled atom) is
+**fail-closed**: blocked, never allowed.
+
+> **Boundary (stated, not implied).** *Runtime* = fast in-path guard
+> evaluation, O(tools); *offline* = bounded model checking, CI / pre-deploy.
+> They are the **same guard, different engines** — and
+> `tests/test_runtime_offline_agreement.py` pins that they can never disagree
+> (a runtime mutation that ignores `inflight` fails it).
+
+`rot runtime serve` runs the same decision as an MCP `tools/call` gateway
+(HTTP, stdlib); `rot coach --aggregate` reads the decision ledger and re-proves
+any relaxation.
+
+---
+
+## The classifier, up front — `rot corpus`
+
+> **run your whole policy corpus → SAFE / UNSAFE, a witness per policy, and a
+> coverage matrix.** One command, no per-policy tuning.
+
+`rot corpus` walks a directory of `.dw` policies and classifies each one —
+**SAFE** (`PROVEN`) / **UNSAFE** (`VIOLATED`) / `OUT_OF_SCOPE` — attaching the
+**counterexample witness** to every UNSAFE, then emits an honest coverage
+matrix (how many SAFE / UNSAFE / out-of-scope, and which shape each is):
+
+```bash
+rot corpus --corpus-dir samples
+```
+
+```text
+Discovered 2 policies under samples
+  spendcap-buggy.dw    spendcap  yes  VIOLATED  {"completed": 0, "inflight": 3}
+  spendcap-correct.dw  spendcap  yes  PROVEN
+==========================================================================
+  ROTN corpus coverage matrix (2 policies, 2 lowerable)
+==========================================================================
+  proven         1
+  violated       1
+```
+
+Exit codes: `0` = the matrix was produced (report semantics) · `3` = internal
+error. A policy whose reachable state space exceeds the bounded-checking budget
+is reported **`OUT_OF_SCOPE`** — a stated limitation, not a bug, and never
+silently read as SAFE. The matrix is written to
+`out/corpus/corpus_matrix.{json,md}` (JSON + Markdown).
+
+> `rot corpus` is the **batch** classifier over a policy corpus. It is distinct
+> from the research-bound *ladder* claim-classifier (`tests/test_classify.py`),
+> which scores a single policy's assurance rung.
+
+---
+
 ## Deep dive
 
 <details>

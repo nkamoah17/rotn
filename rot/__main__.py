@@ -602,6 +602,102 @@ def cmd_trace(args):
 
 
 # ---------------------------------------------------------------------------
+# rot report
+# ---------------------------------------------------------------------------
+
+def cmd_report(args):
+    """The one-pager as an ATTESTATION (B3) -- not a summary.
+
+    Two modes (exactly one required):
+
+      * ``--one-pager --trace FILE`` -- derive the attestation (the
+        underwriter's view) FROM the RTF v1 trace (the source of truth) and
+        emit Markdown + HTML (byte-stable; re-runs reproduce the same bytes).
+        The attestation pins the trace's SHA-256 hash + the exact re-verify
+        command + the expected hash, renders the assumptions as coverage
+        conditions, carries the SOC 2 / AIUC controls, the bounded caveat, and
+        ``version = policy-hash + engine-version``.
+
+      * ``--verify-trace FILE --expect HASH`` -- the re-verify step: recompute
+        the trace's canonical body hash and check it against ``--expect``.
+        A match re-derives the attestation byte-for-byte (exit 0); a mismatch
+        means the policy/engine changed -- the attestation is STALE (exit 1).
+
+    Exit codes: 0 (attestation emitted / hash matches), 1 (STALE -- mismatch),
+    3 (error).
+    """
+    import rot.attestation as attmod
+
+    # -- mode 2: the re-verify step (byte-for-byte) ------------------------
+    verify_trace = getattr(args, "verify_trace", None)
+    if verify_trace:
+        if not os.path.isfile(verify_trace):
+            print("ERROR: trace file not found: %s" % verify_trace,
+                  file=sys.stderr)
+            return EXIT_ERROR
+        with open(verify_trace, "r") as fh:
+            trace_dict = json.load(fh)
+        computed = attmod.verify_trace_hash(trace_dict)
+        expected = getattr(args, "expect", None)
+        if expected is None:
+            print("  computed trace hash : %s" % computed)
+            return EXIT_PROVEN
+        if computed == expected:
+            print("MATCH    : %s" % computed)
+            return EXIT_PROVEN
+        print("MISMATCH : computed=%s expected=%s" % (computed, expected),
+              file=sys.stderr)
+        print("STALE -- the policy or engine changed; re-issue the "
+              "attestation.", file=sys.stderr)
+        return EXIT_VIOLATED
+
+    # -- mode 1: the one-pager (the attestation) ---------------------------
+    if getattr(args, "one_pager", False) and getattr(args, "trace", None):
+        trace_path = args.trace
+        if not os.path.isfile(trace_path):
+            print("ERROR: trace file not found: %s" % trace_path,
+                  file=sys.stderr)
+            return EXIT_ERROR
+        with open(trace_path, "r") as fh:
+            trace_dict = json.load(fh)
+        # Pin the trace's hash: prefer the stated top-level hash, but verify
+        # it against the re-derived body hash (a mismatch means a stale trace
+        # file -- warn, then re-derive from the body so the attestation is
+        # always consistent with what it pins).
+        stated = trace_dict.get("hash")
+        computed = attmod.verify_trace_hash(trace_dict)
+        if stated is not None and stated != computed:
+            print("WARNING: trace hash mismatch (stated=%s computed=%s); "
+                  "pinning the re-derived body hash." % (stated, computed),
+                  file=sys.stderr)
+            trace_dict = dict(trace_dict, hash=computed)
+        att = attmod.build_attestation(trace_dict)
+
+        out_dir = args.out or os.path.join(_repo_root(), "out", "report")
+        os.makedirs(out_dir, exist_ok=True)
+        md_path = args.md or os.path.join(out_dir, "one_pager.md")
+        html_path = args.html or os.path.join(out_dir, "one_pager.html")
+        with open(md_path, "w") as fh:
+            fh.write(att.to_markdown() + "\n")
+        with open(html_path, "w") as fh:
+            fh.write(att.to_html() + "\n")
+
+        if not getattr(args, "quiet", False):
+            print("  verdict    : %s" % att.verdict())
+            print("  trace hash : %s" % att.body["source_trace"]["hash"])
+            print("  version    : %s" % att.body["version"]["id"])
+            print("  att hash   : %s" % att.hash)
+            print("  markdown   : %s" % md_path)
+            print("  html       : %s" % html_path)
+            print("  re-verify  : %s" % att.body["reverify"]["command"])
+        return EXIT_PROVEN
+
+    print("ERROR: specify --one-pager --trace FILE or "
+          "--verify-trace FILE --expect HASH", file=sys.stderr)
+    return EXIT_ERROR
+
+
+# ---------------------------------------------------------------------------
 # rot coach
 # ---------------------------------------------------------------------------
 
@@ -784,14 +880,16 @@ def _cmd_coach_aggregate(args):
 
 
 def cmd_runtime(args):
-    """``rot runtime``: dispatch to ``eval`` / ``serve``."""
+    """``rot runtime``: dispatch to ``eval`` / ``tools`` / ``serve``."""
     which = getattr(args, "runtime_command", None)
     if which == "eval":
         return cmd_runtime_eval(args)
+    if which == "tools":
+        return cmd_runtime_tools(args)
     if which == "serve":
         return cmd_runtime_serve(args)
-    print("ERROR: specify 'rot runtime eval' or 'rot runtime serve'",
-          file=sys.stderr)
+    print("ERROR: specify 'rot runtime eval', 'rot runtime tools', or "
+          "'rot runtime serve'", file=sys.stderr)
     return EXIT_ERROR
 
 def _parse_kv(pairs, where):
@@ -865,6 +963,54 @@ def cmd_runtime_eval(args):
             print("  to-proceed: %s" % decision.refusal.to_proceed)
         print(_BAR)
     return EXIT_PROVEN if decision.allowed else EXIT_VIOLATED
+
+
+def cmd_runtime_tools(args):
+    """``rot runtime tools``: print the tools enabled in a state (the mask).
+
+    The tool-masking view (thesis 4.1): for the rule's tool universe (the IR's
+    decision actions), show which are **enabled** in ``state`` and which are
+    **blocked**.  The mask is the same per-guard evaluation the offline engine
+    proved safe -- no new proof engine, no LLM.
+
+    Exit codes: ``0`` (the mask was printed), ``3`` error.
+    """
+    rule = _load_rule(args)
+    if rule is None:
+        return EXIT_ERROR
+    state = {}
+    state_raw = getattr(args, "state", None)
+    if state_raw:
+        try:
+            state = json.loads(state_raw)
+        except ValueError:
+            print("ERROR: --state must be a JSON object, e.g. "
+                  "{\"completed\": 0, \"inflight\": 3}", file=sys.stderr)
+            return EXIT_ERROR
+        if not isinstance(state, dict):
+            print("ERROR: --state must be a JSON object", file=sys.stderr)
+            return EXIT_ERROR
+
+    from rot.runtime.core import RuntimeGuard
+
+    rg = RuntimeGuard(rule)
+    et = rg.enabled_tools(state)
+    enabled = sorted(t for t, ok in et.items() if ok)
+    blocked = sorted(t for t, ok in et.items() if not ok)
+    if getattr(args, "json", False):
+        sys.stdout.write(json.dumps(
+            {"rule": rule.rule_id, "state": state, "enabled": enabled,
+             "blocked": blocked,
+             "enabled_tools": {t: et[t] for t in sorted(et)}},
+            sort_keys=True, indent=2) + "\n")
+    else:
+        print(_BAR)
+        print("  ROTN runtime tool mask (rule %s)" % rule.rule_id)
+        print("  state     : %s" % json.dumps(state, sort_keys=True))
+        print("  enabled   : %s" % (", ".join(enabled) if enabled else "(none)"))
+        print("  blocked   : %s" % (", ".join(blocked) if blocked else "(none)"))
+        print(_BAR)
+    return EXIT_PROVEN
 
 
 def cmd_runtime_serve(args):
@@ -1963,6 +2109,33 @@ def main(argv=None):
     p.add_argument("--out", default=None, metavar="DIR",
                    help="output dir [default: <repo>/out/demo]")
 
+    p = sub.add_parser(
+        "report",
+        help="the one-pager as an ATTESTATION (B3): --one-pager --trace FILE "
+             "emits Markdown + HTML; --verify-trace FILE --expect HASH re-"
+             "derives the trace hash (the re-verify step)")
+    p.add_argument("--one-pager", action="store_true",
+                   help="derive the attestation from the RTF v1 trace "
+                        "(the underwriter's view)")
+    p.add_argument("--trace", default=None, metavar="FILE",
+                   help="the RTF v1 trace JSON (the source of truth)")
+    p.add_argument("--verify-trace", default=None, metavar="FILE",
+                   help="re-derive this trace's canonical body hash (the "
+                        "re-verify step; the attestation's expected hash is "
+                        "compared against it)")
+    p.add_argument("--expect", default=None, metavar="HASH",
+                   help="the expected trace hash (from the attestation's "
+                        "re-verify block); a mismatch means STALE (exit 1)")
+    p.add_argument("--out", default=None, metavar="DIR",
+                   help="output dir for one_pager.md / one_pager.html "
+                        "[default: <repo>/out/report]")
+    p.add_argument("--md", default=None, metavar="PATH",
+                   help="Markdown output path [default: <out>/one_pager.md]")
+    p.add_argument("--html", default=None, metavar="PATH",
+                   help="HTML output path [default: <out>/one_pager.html]")
+    p.add_argument("--quiet", action="store_true",
+                   help="suppress the human summary")
+
     p = sub.add_parser("corpus", help="run the AWS Dogwood corpus")
     p.add_argument("--corpus-dir", default=None, metavar="DIR",
                    help="corpus dir [default: "
@@ -2092,6 +2265,16 @@ def main(argv=None):
     pe.add_argument("--quiet", action="store_true",
                     help="suppress the human summary")
 
+    pt = rt_sub.add_parser("tools",
+                           help="print the tools enabled in a state (the mask)")
+    pt.add_argument("--rule", default=None, metavar="ID",
+                    help="rule id [default: spendcap_within_cap]")
+    pt.add_argument("--state", default=None, metavar="JSON",
+                    help="the guard's state as a JSON object, e.g. "
+                         "{\"completed\": 0, \"inflight\": 3}")
+    pt.add_argument("--json", action="store_true",
+                    help="emit JSON instead of the human summary")
+
     ps = rt_sub.add_parser("serve",
                            help="the MCP tools/call gateway (HTTP JSON-RPC)")
     ps.add_argument("--rule", default=None, metavar="ID",
@@ -2146,6 +2329,7 @@ def main(argv=None):
     return {"check": cmd_check, "replay": cmd_replay, "ci": cmd_ci,
             "demo": cmd_demo, "corpus": cmd_corpus,
             "license": cmd_license, "trace": cmd_trace,
+            "report": cmd_report,
             "coach": cmd_coach, "runtime": cmd_runtime,
             "site": cmd_site,
             "doctor": cmd_doctor,

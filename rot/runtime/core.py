@@ -192,6 +192,47 @@ class RuntimeGuard(object):
         """The decision action's guard (an ``ir.Expr``)."""
         return self.rule.guard()
 
+    # -- tool masking (B1, thesis 4.1) ---------------------------------------
+    def enabled_tools(self, state=None):
+        """The rule's tool universe with per-tool enabled status in ``state``.
+
+        Returns ``{tool: enabled}`` over the rule's IR decision actions (the
+        non-initial actions -- the tool universe the IR already knows), where
+        ``enabled`` is ``guard.eval(state) is True`` for that action's guard.
+        Fail-closed: a guard that is ``UNDEF`` (an unmodelled atom) or
+        ``False`` is **disabled**, never enabled -- the same sound fallback
+        :meth:`decide` uses.  Initial actions (setup, not callable) are
+        excluded: they are not tools the agent proposes.
+
+        This is the deterministic half of *tool masking*: the same guard the
+        offline engine proved safe, re-applied per tool, decides which tools
+        are available **now** -- no new proof engine, no LLM.  The value is a
+        plain ``bool`` (``UNDEF`` folded to ``False``), so the result is
+        JSON-serialisable and hashable.
+        """
+        state = dict(state or {})
+        out = {}
+        for a in self.ir().actions:
+            if a.is_initial:
+                continue
+            out[a.name] = (a.guard.eval(state) is True)
+        return out
+
+    def enabled(self, state=None):
+        """The set of tools enabled in ``state`` (the mask over the universe).
+
+        ``{t for t, ok in enabled_tools(state).items() if ok}``.  Always a
+        subset of the catalog (the tool universe).
+        """
+        return {t for t, ok in self.enabled_tools(state).items() if ok}
+
+    def blocked_tools(self, state=None):
+        """The set of tools blocked in ``state`` (the complement of
+        :meth:`enabled`).  Disjoint from :meth:`enabled`; the two partition the
+        catalog.
+        """
+        return {t for t, ok in self.enabled_tools(state).items() if not ok}
+
     def _state(self, state, request):
         """Merge an explicit ``state`` with any state carried by ``request``.
 

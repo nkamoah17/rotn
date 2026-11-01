@@ -45,7 +45,8 @@ Methods
 -------
 
     ping          -> "pong"
-    tools/list    -> the manifest's tool catalog (or the guarded rule names)
+    tools/list    -> the manifest's tool catalog (or the guarded rule names);
+                     masked to the enabled tools when the request carries state
     tools/call    -> the guard decision (allow/deny + the refusal JSON)
     rot/decide    -> the guard decision without recording (a probe)
     rot/rules     -> the rules the gateway enforces
@@ -359,16 +360,48 @@ class McpGateway(object):
         manifest's ``tools[]`` -- the same catalog the offline audit
         (``rot check --manifest``) consumed.  Without one, the guarded tool
         names (plus the default rule, if any) are listed.
+
+        **Masking (B1, thesis 4.1).**  When the request carries
+        ``params.state``, the catalog is *masked* to the tools currently
+        **enabled** in that state: a tool is kept iff its guard's decision
+        action is ``True`` in the state (an ``UNDEF`` guard, or an unruled
+        tool, is masked out -- fail-closed, never offered as available).
+        Without a state the full catalog is returned (no mask).  The response
+        carries ``masked`` and ``state`` so the mask is auditable.
         """
+        state = _state(params or {}, "tools/list")
+        masked = state is not None
+
+        def _keep(name):
+            if not masked:
+                return True
+            return self._tool_enabled(name, state)
+
         if self._manifest is not None:
-            tools = [t.to_dict() for t in self._manifest.tools]
-            return {"tools": tools}
-        tools = [{"name": n} for n in sorted(self._guards)]
+            tools = [t.to_dict() for t in self._manifest.tools
+                     if _keep(t.name)]
+            return {"tools": tools, "masked": masked, "state": state}
+        tools = [{"name": n} for n in sorted(self._guards) if _keep(n)]
         if self._default_guard is not None:
-            tools.append({"name": "*",
-                          "description": "default rule: %s"
-                                         % self._default_guard.rule.rule_id})
-        return {"tools": tools}
+            if (not masked) or self._tool_enabled("*", state):
+                tools.append({"name": "*",
+                              "description": "default rule: %s"
+                                             % self._default_guard.rule.rule_id})
+        return {"tools": tools, "masked": masked, "state": state}
+
+    def _tool_enabled(self, name, state):
+        """Whether tool ``name`` is enabled in ``state`` (the masking predicate).
+
+        The tool's guard (per-tool, else the default) decides it: the guard's
+        decision-action guard is enabled iff ``eval(state) is True``.  An
+        unruled tool (no per-tool rule and no default) is **disabled** --
+        fail-closed, never offered as available.  The same per-guard evaluation
+        the offline engine proved safe: no new proof engine, no LLM.
+        """
+        guard = self._guard_for(name)
+        if guard is None:
+            return False
+        return guard.guard_expr().eval(state) is True
 
     def decide(self, params):
         """``rot/decide``: the guard decision for a call, without recording.
