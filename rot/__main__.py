@@ -671,7 +671,18 @@ def cmd_report(args):
                   "pinning the re-derived body hash." % (stated, computed),
                   file=sys.stderr)
             trace_dict = dict(trace_dict, hash=computed)
-        att = attmod.build_attestation(trace_dict)
+        # D4: the corpus coverage metric (N of M SAFE/UNSAFE/UNKNOWN), when
+        # supplied via --corpus-matrix, is first-class in the attestation.
+        coverage = None
+        matrix_path = getattr(args, "corpus_matrix", None)
+        if matrix_path:
+            if not os.path.isfile(matrix_path):
+                print("ERROR: corpus matrix not found: %s" % matrix_path,
+                      file=sys.stderr)
+                return EXIT_ERROR
+            with open(matrix_path, "r") as fh:
+                coverage = json.load(fh).get("summary")
+        att = attmod.build_attestation(trace_dict, coverage=coverage)
 
         out_dir = args.out or os.path.join(_repo_root(), "out", "report")
         os.makedirs(out_dir, exist_ok=True)
@@ -686,6 +697,9 @@ def cmd_report(args):
             print("  verdict    : %s" % att.verdict())
             print("  trace hash : %s" % att.body["source_trace"]["hash"])
             print("  version    : %s" % att.body["version"]["id"])
+            cov = att.body.get("corpus_coverage")
+            if cov:
+                print("  coverage   : %s" % cov["human"])
             print("  att hash   : %s" % att.hash)
             print("  markdown   : %s" % md_path)
             print("  html       : %s" % html_path)
@@ -1602,14 +1616,31 @@ def cmd_ci(args):
 # ---------------------------------------------------------------------------
 
 def cmd_demo(args):
-    """The 5-phase spend-cap demo, exit-code aware (mirrors demo.sh).
+    """The beachhead demo: the whole arc in ONE command (D1).
 
-    Phase 1  PROVEN    correct.dw                 -> exit 0
-    Phase 2  VIOLATED  buggy.dw                   -> exit 1 (+ attack.jsonl)
-    Phase 3  REPLAY    attack.jsonl vs buggy.dw   -> exit 1 (reproduced)
-    Phase 5  K-SWEEP   buggy.dw K=1/2/3           -> 0 / 1 / 1
-    (Phase 4 crosscheck needs TLC/Java; see ``demo.sh`` for the full run.)
+    rule -> attack -> proof -> coach -> attestation
+
+    (1) rule         the spend-cap policy, rendered (policy -> model abstraction)
+    (2) attack       the deterministic counterexample + the K-sweep
+                     (K=1 masks the bug, K>=2 exposes it)
+    (3) proof        the corrected policy is safe (PROVEN) + its RTF manifest + hash
+    (4) coach        the runtime refusal (to_proceed + allowed_now) -- Product 2
+    (5) attestation  the one-pager (path + hash + the re-verify command)
+
+    The scope is stated explicitly (D2): the initial demo is the spend-cap
+    (payments) parallel-fire bug + the coach. The MCP/trifecta story ships
+    with B2.3 (not part of this demo).
+
+    Single command, exits 0 when every beat behaves as expected, and ends
+    with the attestation's SHA-256 + the re-verify command.
     """
+    beachhead = getattr(args, "beachhead", None) or "spendcap"
+    if beachhead != "spendcap":
+        print("ERROR: unknown beachhead %r (the initial demo is the spend-cap "
+              "parallel-fire bug + coach; the MCP/trifecta story ships with "
+              "B2.3)" % beachhead, file=sys.stderr)
+        return EXIT_ERROR
+
     root = _repo_root()
     fx = os.path.join(root, "tests", "fixtures", "aws_dogwood",
                       "spendcap", "policies")
@@ -1620,13 +1651,19 @@ def cmd_demo(args):
             print("ERROR: fixture not found: %s" % p, file=sys.stderr)
             return EXIT_ERROR
     out_dir = args.out or os.path.join(root, "out", "demo")
+    os.makedirs(out_dir, exist_ok=True)
     failures = []
-    bar = "-" * 66
+    bar = "=" * 66
+
+    def beat(n, title):
+        print(bar)
+        print("BEAT %d -- %s" % (n, title))
+        print(bar)
 
     def run(title, policy, k, expect, out=None):
         a = argparse.Namespace(policy=policy, kind=None, max_inflight=k,
-                               amount=None, cap=None, out=out, quiet=True,
-                               liveness_horizon=None)
+                               amount=None, cap=None, window=None, out=out,
+                               quiet=True, liveness_horizon=None)
         code = cmd_check(a)
         ok = code == expect
         if not ok:
@@ -1636,51 +1673,137 @@ def cmd_demo(args):
         return code
 
     print(bar)
-    print("Phase 1 -- PROVEN: spendcap-correct.dw")
+    print("  rot demo --beachhead spendcap")
+    print("  SCOPE (D2): the initial demo = the spend-cap (payments)")
+    print("  parallel-fire bug + the coach. The MCP/trifecta story ships")
+    print("  with B2.3 (not part of this demo).")
     print(bar)
-    run("Phase 1 PROVEN (correct.dw)", correct, None, EXIT_PROVEN)
 
-    print(bar)
-    print("Phase 2 -- VIOLATED: spendcap-buggy.dw (witness + attack.jsonl)")
-    print(bar)
-    code2 = run("Phase 2 VIOLATED (buggy.dw)", buggy, None, EXIT_VIOLATED,
-                out=out_dir)
+    # ------------------------------------------------------------------
+    # BEAT 1 -- RULE: the spend-cap policy, rendered (policy -> model)
+    # ------------------------------------------------------------------
+    beat(1, "RULE: the spend-cap policy (policy -> model abstraction)")
+    import rot.spendcap_display as sd
+    sd.render(buggy)
 
+    # ------------------------------------------------------------------
+    # BEAT 2 -- ATTACK: the deterministic counterexample + the K-sweep
+    # ------------------------------------------------------------------
+    beat(2, "ATTACK: the deterministic counterexample + the K-sweep")
+    code2 = run("buggy.dw VIOLATED (witness + attack.jsonl)", buggy, None,
+                EXIT_VIOLATED, out=out_dir)
     if code2 == EXIT_VIOLATED:
         attack = os.path.join(out_dir, "attack.jsonl")
         if os.path.isfile(attack):
-            print(bar)
-            print("Phase 3 -- REPLAY: attack.jsonl vs spendcap-buggy.dw")
-            print(bar)
             a = argparse.Namespace(attack=attack, policy=buggy,
                                    max_inflight=None, liveness_horizon=None)
             code = cmd_replay(a)
             ok = code == EXIT_VIOLATED
             if not ok:
-                failures.append("Phase 3 REPLAY")
+                failures.append("replay")
             print("  [%s] %-52s exit=%d expected=%d"
-                  % ("PASS" if ok else "FAIL", "Phase 3 REPLAY (attack.jsonl)",
-                     code, EXIT_VIOLATED))
+                  % ("PASS" if ok else "FAIL",
+                     "replay (the counterexample reproduces)", code,
+                     EXIT_VIOLATED))
         else:
             print("  [SKIP] no attack.jsonl produced in %s" % out_dir)
+    print("  -- K-sweep: the pool K is the whole story (K=1 masks, K>=2 exposes)")
+    run("K=1 masked (buggy.dw --max-inflight 1)", buggy, 1, EXIT_PROVEN)
+    run("K=2 exposes (buggy.dw --max-inflight 2)", buggy, 2, EXIT_VIOLATED)
 
-    print(bar)
-    print("Phase 5 -- K-SWEEP: buggy policy vs the concurrency pool K")
-    print(bar)
-    run("Phase 5 K=1 masked (buggy.dw --max-inflight 1)", buggy, 1,
+    # ------------------------------------------------------------------
+    # BEAT 3 -- PROOF: the corrected policy is safe + its RTF manifest + hash
+    # ------------------------------------------------------------------
+    beat(3, "PROOF: the corrected policy is safe (+ RTF manifest + hash)")
+    run("correct.dw PROVEN (the fix is verifiably safe)", correct, None,
         EXIT_PROVEN)
-    run("Phase 5 K=2 VIOLATED (buggy.dw --max-inflight 2)", buggy, 2,
-        EXIT_VIOLATED)
-    run("Phase 5 K=3 VIOLATED clean fire (buggy.dw --max-inflight 3)",
-        buggy, 3, EXIT_VIOLATED)
+    import rot.license as lic
+    try:
+        budget = _resolve_budget(args)
+    except lic.LicenseError:
+        budget = lic.resolve_budget()
+    a = argparse.Namespace(policy=correct, kind=None, max_inflight=None,
+                           amount=None, cap=None, window=None,
+                           liveness_horizon=None)
+    trace_res, _ = _trace_policy(correct, a, budget, 12, "free")
+    if trace_res is not None:
+        print("  manifest  : %s" % trace_res.manifest_id())
+        print("  hash      : %s" % trace_res.hash)
+    else:
+        print("  [WARN] could not build the corrected-policy trace",
+              file=sys.stderr)
+        failures.append("proof-manifest")
 
+    # ------------------------------------------------------------------
+    # BEAT 4 -- COACH: the runtime refusal (to_proceed + allowed_now)
+    # ------------------------------------------------------------------
+    beat(4, "COACH: the runtime refusal (to_proceed + allowed_now) -- Product 2")
+    from rot.runtime.core import RuntimeGuard
+    from rot.runtime.rules import get_rule
+    rule = get_rule("spendcap_within_cap")
+    # A state the buggy (settled-trace) monitor does NOT see: 2 in-flight.
+    state = {"completed": 0, "inflight": 2}
+    decision = RuntimeGuard(rule).decide(
+        state=state, request={"tool": "transfer", "args": {"amount": 100}})
+    refusal = decision.refusal
+    print("  state       : %s" % json.dumps(state, sort_keys=True))
+    print("  blocked     : %s" % refusal.blocked)
+    print("  why         : %s" % refusal.why)
+    print("  to-proceed  : %s" % refusal.to_proceed)
+    print("  allowed_now : %s" % refusal.allowed_now)
+    print("  refusal     : %s" % refusal.hash)
+    if not refusal.blocked:
+        print("  [WARN] expected a BLOCKED refusal at this state",
+              file=sys.stderr)
+        failures.append("coach")
+
+    # ------------------------------------------------------------------
+    # BEAT 5 -- ATTESTATION: the one-pager (path + hash + re-verify command)
+    # ------------------------------------------------------------------
+    beat(5, "ATTESTATION: the one-pager (path + hash + re-verify command)")
+    import rot.attestation as attmod
+    a = argparse.Namespace(policy=buggy, kind=None, max_inflight=None,
+                           amount=None, cap=None, window=None,
+                           liveness_horizon=None)
+    trace_res, _ = _trace_policy(buggy, a, budget, 12, "free")
+    if trace_res is None:
+        print("  [WARN] could not build the buggy-policy trace",
+              file=sys.stderr)
+        failures.append("attestation")
+    else:
+        # The RTF v1 trace is the source of truth (written next to the
+        # one-pager); the attestation pins its hash.
+        with open(os.path.join(out_dir, "trace.json"), "w") as fh:
+            fh.write(trace_res.to_json() + "\n")
+        # D4: attach the corpus coverage metric (N of M SAFE/UNSAFE/UNKNOWN).
+        coverage = None
+        try:
+            coverage = _corpus_report(os.path.dirname(fx))["summary"]
+        except Exception:  # noqa: BLE001
+            coverage = None
+        att = attmod.build_attestation(trace_res.to_dict(), coverage=coverage)
+        md_path = os.path.join(out_dir, "one_pager.md")
+        html_path = os.path.join(out_dir, "one_pager.html")
+        with open(md_path, "w") as fh:
+            fh.write(att.to_markdown() + "\n")
+        with open(html_path, "w") as fh:
+            fh.write(att.to_html() + "\n")
+        if coverage is not None:
+            print("  coverage  : %s" % attmod.summarize_coverage(coverage)["human"])
+        print("  one-pager : %s" % md_path)
+        print("  html      : %s" % html_path)
+        print("  att hash  : %s" % att.hash)
+        print("  re-verify : %s" % att.body["reverify"]["command"])
+
+    # ------------------------------------------------------------------
     print(bar)
     if failures:
-        print("DEMO FAILED: %d phase(s) deviated: %s"
+        print("DEMO FAILED: %d beat(s) deviated: %s"
               % (len(failures), ", ".join(failures)))
         return EXIT_VIOLATED
-    print("DEMO OK: all phases behaved as expected. "
-          "(Phase 4 crosscheck needs TLC/Java -- run demo.sh for it.)")
+    print("DEMO OK: rule -> attack -> proof -> coach -> attestation. "
+          "Single command, exit 0; the attestation hash + re-verify "
+          "command are above.")
     return EXIT_PROVEN
 
 
@@ -1688,6 +1811,105 @@ def cmd_demo(args):
 # ---------------------------------------------------------------------------
 # rot corpus
 # ---------------------------------------------------------------------------
+
+def _corpus_report(corpus_dir, max_inflight=None):
+    """Classify every .dw policy under ``corpus_dir``; return the report dict.
+
+    The report is ``{corpus_dir, generated_by, policies, summary}`` where
+    ``summary`` is the coverage metric (total / lowerable / proven / violated
+    / out_of_scope / error).  No printing, no file writing -- the caller
+    (``rot corpus`` or the demo) decides what to show.  This is the single
+    source of the corpus classification, so the demo's coverage metric (D4)
+    and ``rot corpus`` can never drift apart.
+    """
+    from rot.modelfind import ProductTooLarge
+
+    policies = []
+    for dirpath, dirnames, filenames in os.walk(corpus_dir):
+        dirnames.sort()
+        for fn in sorted(filenames):
+            if fn.endswith(".dw"):
+                policies.append(os.path.join(dirpath, fn))
+
+    results = []
+    for p in policies:
+        name = os.path.relpath(p, corpus_dir).replace(os.sep, "/")
+        a = argparse.Namespace(policy=p, kind=None,
+                               max_inflight=max_inflight, amount=None,
+                               cap=None, out=None, quiet=True,
+                               liveness_horizon=None)
+        entry = _classify_corpus_policy(p, a, ProductTooLarge)
+        entry["policy"] = name
+        results.append(entry)
+
+    summary = {}
+    for r in results:
+        key = r["verdict"] or "error"
+        summary[key] = summary.get(key, 0) + 1
+    lowerable_count = sum(1 for r in results if r["lowerable"])
+
+    return {
+        "corpus_dir": corpus_dir,
+        "generated_by": "rot corpus (Phase B.2)",
+        "policies": results,
+        "summary": dict({"total": len(results),
+                         "lowerable": lowerable_count}, **summary),
+    }
+
+
+def _classify_corpus_policy(p, a, ProductTooLarge):
+    """Classify one policy into the coverage-matrix entry (the loop body).
+
+    OUT_OF_SCOPE is an honest classification (a lowering failure, or a state
+    space over the bounded-checking budget) -- NOT a bug.  An unexpected
+    engine exception is an ``error`` (the report's only non-zero gate).
+    """
+    entry = {
+        "shape": None, "lowerable": False,
+        "verdict": None, "witness": None, "note": None,
+    }
+    ir = None
+    try:
+        ir = _build_ir(p, a)
+        ir.validate()
+        entry["lowerable"] = True
+        entry["shape"] = (ir.metadata.get("protocol") or "unknown").lower()
+    except Exception as exc:
+        # A lowering failure is an honest out-of-scope row (the shape is
+        # not yet supported by the general lowering), not an internal error.
+        entry["verdict"] = "out_of_scope"
+        entry["note"] = "not lowerable: %s" % exc
+    if entry["lowerable"]:
+        kind = ir.metadata.get("property_kind") or "safety"
+        if kind == "safety":
+            try:
+                status, witness, note = _verify(ir, a)
+                entry["verdict"] = status
+                entry["witness"] = witness
+                if note:
+                    entry["note"] = note
+                # K-masking advisory (A1): a PROVEN cap/budget policy at a
+                # K below the minimal overshoot is a silent false-negative
+                # (the K=1 trap).  Loud, non-fatal -- the PROVEN stands.
+                from rot.verdicts import k_masking_advisory
+                adv_code, adv_msg = k_masking_advisory(ir.metadata, status)
+                if adv_code:
+                    entry["advisory"] = adv_code
+                    entry["advisory_message"] = adv_msg
+            except ProductTooLarge as exc:
+                # Honest out-of-scope: the reachable state space exceeds the
+                # bounded-checking budget. A known limitation, not a bug.
+                entry["verdict"] = "out_of_scope"
+                entry["note"] = "state space exceeded budget: %s" % exc
+            except Exception as exc:
+                entry["verdict"] = "error"
+                entry["note"] = "engine error: %s" % exc
+        else:
+            entry["verdict"] = "out_of_scope"
+            entry["note"] = ("property kind %r not supported by the "
+                             "corpus harness" % kind)
+    return entry
+
 
 def cmd_corpus(args):
     """Run every .dw policy under the corpus dir; emit an honest coverage matrix.
@@ -1739,89 +1961,34 @@ def cmd_corpus(args):
                 # hard error (the user asked to fetch); dry-run degrades softly.
                 return EXIT_ERROR
 
-    policies = []
-    for dirpath, dirnames, filenames in os.walk(corpus_dir):
-        dirnames.sort()
-        for fn in sorted(filenames):
-            if fn.endswith(".dw"):
-                policies.append(os.path.join(dirpath, fn))
-    if not policies:
+    report = _corpus_report(corpus_dir, max_inflight=args.max_inflight)
+    results = report["policies"]
+    full_summary = report["summary"]
+    summary = {k: v for k, v in full_summary.items()
+               if k not in ("total", "lowerable")}
+    lowerable_count = full_summary.get("lowerable", 0)
+
+    if not results:
         print("ERROR: no .dw policies under %s" % corpus_dir, file=sys.stderr)
         return EXIT_ERROR
 
-    print("Discovered %d policies under %s" % (len(policies), corpus_dir))
-    results = []
-    for p in policies:
-        name = os.path.relpath(p, corpus_dir).replace(os.sep, "/")
-        a = argparse.Namespace(policy=p, kind=None,
-                               max_inflight=args.max_inflight, amount=None,
-                               cap=None, out=None, quiet=True,
-                               liveness_horizon=None)
-        entry = {
-            "policy": name, "shape": None, "lowerable": False,
-            "verdict": None, "witness": None, "note": None,
-        }
-        ir = None
-        try:
-            ir = _build_ir(p, a)
-            ir.validate()
-            entry["lowerable"] = True
-            entry["shape"] = (ir.metadata.get("protocol") or "unknown").lower()
-        except Exception as exc:
-            # A lowering failure is an honest out-of-scope row (the shape is
-            # not yet supported by the general lowering), not an internal error.
-            entry["verdict"] = "out_of_scope"
-            entry["note"] = "not lowerable: %s" % exc
-        if entry["lowerable"]:
-            kind = ir.metadata.get("property_kind") or "safety"
-            if kind == "safety":
-                try:
-                    status, witness, note = _verify(ir, a)
-                    entry["verdict"] = status
-                    entry["witness"] = witness
-                    if note:
-                        entry["note"] = note
-                    # K-masking advisory (A1): a PROVEN cap/budget policy at a
-                    # K below the minimal overshoot is a silent false-negative
-                    # (the K=1 trap).  Loud, non-fatal -- the PROVEN stands.
-                    from rot.verdicts import k_masking_advisory
-                    adv_code, adv_msg = k_masking_advisory(ir.metadata, status)
-                    if adv_code:
-                        entry["advisory"] = adv_code
-                        entry["advisory_message"] = adv_msg
-                except ProductTooLarge as exc:
-                    # Honest out-of-scope: the reachable state space exceeds the
-                    # bounded-checking budget. A known limitation, not a bug.
-                    entry["verdict"] = "out_of_scope"
-                    entry["note"] = "state space exceeded budget: %s" % exc
-                except Exception as exc:
-                    entry["verdict"] = "error"
-                    entry["note"] = "engine error: %s" % exc
-            else:
-                entry["verdict"] = "out_of_scope"
-                entry["note"] = ("property kind %r not supported by the "
-                                 "corpus harness" % kind)
-        results.append(entry)
-        v = (entry["verdict"] or "?").upper()
-        w = ""
-        if entry.get("witness") is not None:
-            try:
-                w = json.dumps(entry["witness"], sort_keys=True)
-            except (TypeError, ValueError):
-                w = repr(entry["witness"])
-        elif entry.get("note"):
-            w = entry["note"]
-        if entry.get("advisory"):
-            w = (w + "  " if w else "") + "ADVISORY: %s" % entry["advisory"]
-        print("  %-40s %-14s %-6s %-13s %s" % (
-            name[:40], entry["shape"] or "-",
-            "yes" if entry["lowerable"] else "no", v, w))
-
-    summary = {}
+    print("Discovered %d policies under %s" % (len(results), corpus_dir))
     for r in results:
-        key = r["verdict"] or "error"
-        summary[key] = summary.get(key, 0) + 1
-    lowerable_count = sum(1 for r in results if r["lowerable"])
+        name = r.get("policy", "?")
+        v = (r["verdict"] or "?").upper()
+        w = ""
+        if r.get("witness") is not None:
+            try:
+                w = json.dumps(r["witness"], sort_keys=True)
+            except (TypeError, ValueError):
+                w = repr(r["witness"])
+        elif r.get("note"):
+            w = r["note"]
+        if r.get("advisory"):
+            w = (w + "  " if w else "") + "ADVISORY: %s" % r["advisory"]
+        print("  %-40s %-14s %-6s %-13s %s" % (
+            name[:40], r["shape"] or "-",
+            "yes" if r["lowerable"] else "no", v, w))
 
     print(_BAR)
     print("  ROTN corpus coverage matrix (%d policies, %d lowerable)"
@@ -1830,14 +1997,6 @@ def cmd_corpus(args):
     for k in sorted(summary):
         print("  %-14s %d" % (k, summary[k]))
     print(_BAR)
-
-    report = {
-        "corpus_dir": corpus_dir,
-        "generated_by": "rot corpus (Phase B.2)",
-        "policies": results,
-        "summary": dict({"total": len(results),
-                         "lowerable": lowerable_count}, **summary),
-    }
 
     out_dir = args.out or os.path.join(root, "out", "corpus")
     if not os.path.isdir(out_dir):
@@ -2105,7 +2264,16 @@ def main(argv=None):
     p.add_argument("--out", default="ci", metavar="DIR",
                    help="artifact dir [default: ci]")
 
-    p = sub.add_parser("demo", help="the 5-phase spend-cap demo")
+    p = sub.add_parser(
+        "demo",
+        help="the beachhead demo: rule -> attack -> proof -> coach -> "
+             "attestation (one command)")
+    p.add_argument("--beachhead", default="spendcap", choices=["spendcap"],
+                   metavar="NAME",
+                   help="which beachhead to demo [default: spendcap -- the "
+                        "initial demo is the spend-cap (payments) "
+                        "parallel-fire bug + coach; the MCP/trifecta story "
+                        "ships with B2.3]")
     p.add_argument("--out", default=None, metavar="DIR",
                    help="output dir [default: <repo>/out/demo]")
 
@@ -2133,6 +2301,10 @@ def main(argv=None):
                    help="Markdown output path [default: <out>/one_pager.md]")
     p.add_argument("--html", default=None, metavar="PATH",
                    help="HTML output path [default: <out>/one_pager.html]")
+    p.add_argument("--corpus-matrix", default=None, metavar="FILE",
+                   help="the rot corpus matrix JSON (D4: attach the corpus "
+                        "coverage metric, N of M SAFE/UNSAFE/UNKNOWN, to the "
+                        "attestation)")
     p.add_argument("--quiet", action="store_true",
                    help="suppress the human summary")
 

@@ -106,11 +106,20 @@ CI gate (JUnit XML + SARIF for GitHub PR annotations):
 rot ci --policy samples/spendcap-buggy.dw --out ci   # exit 1; writes ci/JUnit.xml + ci/results.sarif
 ```
 
-Full 5-phase demo (PROVEN / VIOLATED / REPLAY / K-sweep):
+The whole arc in **one command** — `rot demo --beachhead spendcap`:
+**rule** (policy rendered) → **attack** (deterministic counterexample + the
+K-sweep, `K=1` masks / `K≥2` exposes) → **proof** (corrected-safe + manifest +
+hash) → **coach** (`to_proceed` + `allowed_now`) → **attestation** (one-pager
+path + hash + the re-verify command). Exits 0 and prints the attestation hash
+and the re-verify command.
 
 ```bash
-rot demo
+rot demo --beachhead spendcap
 ```
+
+> **Scope (stated up front).** The initial demo is the **spend-cap (payments)
+> parallel-fire bug + the coach**. The MCP / lethal-trifecta story ships with
+> **B2.3** — it is *not* part of this demo.
 
 ---
 
@@ -318,28 +327,36 @@ the cap. The pinned invariant `spendcap_within_cap`
 **VIOLATED** on `spendcap-buggy` (counterexample `completed=0, inflight=3`). The
 one-word diff (`request` vs. `response`) is the entire seeded bug.
 
-> **Defensible claim.** ROTN does **not** claim to compile arbitrary policy
-> text into an equivalent model. It **lowers the spend-cap policy class**
-> (aggregate-over-events + cap) to a bounded transition system by a
-> **mechanical derivation** from the parsed policy — parameterized on
-> amount/cap/pool — and verifies it with **multiple independent engines**
-> (Z3 SMT + TLC) **and a second, structurally different model family**
-> (direct policy SMT). The three engines span two axes of independence:
-> *engine* independence (SMT/Z3 and TLC are independent model checkers over
-> the same IR state-machine) and *model* independence (the policy-direct
-> engine checks a different model family — a direct Z3 encoding of the policy
-> obligation over a bounded event sequence, not the transition system). The
-> correspondence between the model and the policy is **checked**, not argued
-> (`tests/test_correspondence.py`). The policy→model derivation and the
-> assumptions it bakes in (uniform `AMOUNT=100`, `CAP=200`, bounded pool `K`)
-> are shown explicitly by the demo's `POLICY → MODEL ABSTRACTION` block
-> (`python -m rot.spendcap_display <policy.dw>`).
->
-> **What we do NOT claim.** No arbitrary-policy compilation. The lowering
-> (`rot/lower.py::lower_policy`) reads the parsed structure (the `Sum` node,
-> the event reference's `.kind`, the `<= cap` comparison, the `input.amount`
-> binding) and constructs the IR — it does not interpret arbitrary Dogwood
-> text. Policies outside the spend-cap class are not supported.
+### Defensible claim / What we do NOT claim (the moat)
+
+> This section is the product's **moat** — it is preserved verbatim in the
+> attestation footer (every `rot report --one-pager` artifact carries it), so
+> the claim and its boundary travel with the proof.
+
+**Defensible claim.** ROTN does **not** claim to compile arbitrary policy
+text into an equivalent model. It **lowers the spend-cap policy class**
+(aggregate-over-events + cap) to a bounded transition system by a
+**mechanical derivation** from the parsed policy — parameterized on
+amount/cap/pool — and verifies it with **multiple independent engines**
+(Z3 SMT + TLC) **and a second, structurally different model family**
+(direct policy SMT). The three engines span two axes of independence:
+*engine* independence (SMT/Z3 and TLC are independent model checkers over
+the same IR state-machine) and *model* independence (the policy-direct
+engine checks a different model family — a direct Z3 encoding of the policy
+obligation over a bounded event sequence, not the transition system). The
+correspondence between the model and the policy is **checked**, not argued
+(`tests/test_correspondence.py`). The policy→model derivation and the
+assumptions it bakes in (uniform `AMOUNT=100`, `CAP=200`, bounded pool `K`)
+are shown explicitly by the demo's `POLICY → MODEL ABSTRACTION` block
+(`python -m rot.spendcap_display <policy.dw>`).
+
+**What we do NOT claim.** No arbitrary-policy compilation. The lowering
+(`rot/lower.py::lower_policy`) reads the parsed structure (the `Sum` node,
+the event reference's `.kind`, the `<= cap` comparison, the `input.amount`
+binding) and constructs the IR — it does not interpret arbitrary Dogwood
+text. Policies outside the spend-cap class are not supported. Every verdict is
+**bounded**: it holds over the explored state space, not over all possible
+states.
 
 Both Dogwood policies (`.dw`), the exact IR model ROTN checks, the
 counterexample trace, and the Dogwood-atom → IR-action mapping table live in the
@@ -864,7 +881,7 @@ loop (`--before` / `--after`), the Apalache ITF engine (concrete-trace
 refutation, never `proven`), the LLM baseline (audit artifact only — never
 affects the verdict), the impact / spec-diff / trace-check / model-finding /
 ZK-bug / false-block extensions, the SAFE/UNSAFE spend-cap classifier
-(`rot corpus`), and the CLI exit-code contract. **923 tests** currently pass
+(`rot corpus`), and the CLI exit-code contract. **924 tests** currently pass
 (pinned by `tests/test_suite_count.py`, so the count cannot drift). The TLC and
 Apalache engines are exercised by the CLI / `run.ps1` matrix when the
 respective tooling is available.

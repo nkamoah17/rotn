@@ -1,0 +1,23 @@
+Discovered 13 policies under tests\fixtures\aws_dogwood\spendcap
+  corpus/0299_sum_resolved_filter/policy_1 exists_sum     yes    VIOLATED      {"completed": 0, "inflight": 3}
+  corpus/0301_sum_resolved_range_filter/po exists_sum     yes    VIOLATED      {"completed": 0, "inflight": 3}
+  corpus/mcagg_0299_sum_resolved_filter/po exists_sum     yes    VIOLATED      {"completed": 0, "inflight": 3}
+  examples/alert_total_transfer_over_200/p exists_sum     yes    PROVEN        
+  examples/cap_open_agent_prs_windowed/pol count_window   yes    VIOLATED      {"open": 3}
+  examples/refund_budget_settled_plus_curr refund_budget  yes    OUT_OF_SCOPE  state space exceeded budget: reachable_states exceeded budget 200000
+  policies/spendcap-buggy.dw               spendcap       yes    VIOLATED      {"completed": 0, "inflight": 3}
+  policies/spendcap-correct.dw             spendcap       yes    PROVEN        
+  policies/spendcap-inflight-filter.dw     exists_sum     yes    PROVEN        
+  policies/spendcap-resolved-filter.dw     exists_sum     yes    VIOLATED      {"completed": 0, "inflight": 3}
+  policies/spendcap-resolved-range-filter. exists_sum     yes    VIOLATED      {"completed": 0, "inflight": 3}
+  policies/taint-egress-buggy.dw           taint_egress   yes    VIOLATED      {"exfiltrated": true, "holding_private": true}
+  policies/taint-egress-correct.dw         taint_egress   yes    PROVEN        
+==========================================================================
+  ROTN corpus coverage matrix (13 policies, 13 lowerable)
+==========================================================================
+  out_of_scope   1
+  proven         4
+  violated       8
+==========================================================================
+  matrix      : _d0_corpus3\corpus_matrix.json
+  markdown    : _d0_corpus3\corpus_matrix.md

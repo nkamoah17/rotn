@@ -45,12 +45,15 @@ import rot.trace as trace
 __all__ = [
     "SCHEMA",
     "ARTIFACT_HIERARCHY",
+    "DEFENSIBLE_CLAIM",
+    "NOT_CLAIMED",
     "Attestation",
     "build_attestation",
     "attestation_hash",
     "verify_trace_hash",
     "is_stale",
     "reverify_command",
+    "summarize_coverage",
     "render_markdown",
     "render_html",
 ]
@@ -80,6 +83,29 @@ ARTIFACT_HIERARCHY = [
         "role": "demo view (interactive; renders the same trace data)",
     },
 ]
+
+#: The moat (D3) -- the defensible claim and its complement, stated ONCE.
+#: The README carries the named section "Defensible claim / What we do NOT
+#: claim"; every attestation footer carries this same text, so the claim
+#: travels with the artifact it supports (the underwriter reads the footer,
+#: not the repo).  Fixed text: deterministic, no timestamps.
+DEFENSIBLE_CLAIM = (
+    "ROTN does NOT claim to compile arbitrary policy text into an equivalent "
+    "model.  It lowers the spend-cap policy class (aggregate-over-events + "
+    "cap) to a bounded transition system by a mechanical derivation from the "
+    "parsed policy -- parameterized on amount / cap / pool -- and verifies "
+    "it with independent engines.  The policy<->model correspondence is "
+    "CHECKED, not argued (tests/test_correspondence.py)."
+)
+
+NOT_CLAIMED = (
+    "No arbitrary-policy compilation.  The lowering reads the parsed "
+    "structure (the Sum node, the event reference's .kind, the '<= cap' "
+    "comparison, the amount binding) and constructs the IR -- it does not "
+    "interpret arbitrary policy text; policies outside the spend-cap class "
+    "are not supported.  Every verdict is BOUNDED: it holds over the "
+    "explored state space, not over all possible states."
+)
 
 
 # ---------------------------------------------------------------------------
@@ -247,19 +273,56 @@ def _bounded_caveat(n_states):
             "require a re-issue of this attestation.")
 
 
-def build_attestation(trace_dict):
+def summarize_coverage(summary):
+    """The corpus coverage metric (D4): N of M SAFE / UNSAFE / UNKNOWN.
+
+    ``summary`` is the ``rot corpus`` summary dict (``total`` / ``proven`` /
+    ``violated`` / ``out_of_scope`` / ``error`` / ``lowerable``).  The mapping
+    is honest and fixed:
+
+      SAFE      = ``proven``       (the invariant holds over the explored space)
+      UNSAFE    = ``violated``     (a counterexample witness is attached)
+      UNKNOWN   = ``out_of_scope`` (an honest non-discharge -- never read as SAFE)
+
+    The metric is first-class in the demo, the attestation, and ``rot
+    report``; it is expected to RISE as new invariant kinds (B2) land (more
+    of the corpus becomes lowerable / discharged).
+    """
+    s = summary or {}
+    total = int(s.get("total") or 0)
+    safe = int(s.get("proven") or 0)
+    unsafe = int(s.get("violated") or 0)
+    unknown = int(s.get("out_of_scope") or 0)
+    return {
+        "total": total,
+        "safe": safe,
+        "unsafe": unsafe,
+        "unknown": unknown,
+        "lowerable": s.get("lowerable"),
+        "human": "%d of %d SAFE, %d of %d UNSAFE, %d of %d UNKNOWN "
+                 "(out of scope)"
+                 % (safe, total, unsafe, total, unknown, total),
+    }
+
+
+def build_attestation(trace_dict, coverage=None):
     """Derive the attestation (one-pager) from an RTF v1 trace dict.
 
     A **pure function** of ``trace_dict`` (the trace body + its top-level
-    ``hash``): the same trace always yields the same attestation, and hence
-    byte-identical Markdown and HTML. No verification logic is added; fields
-    are re-assembled into the underwriter's view and the trace's hash is
-    pinned for re-derivation.
+    ``hash``) and the optional ``coverage`` summary: the same inputs always
+    yield the same attestation, and hence byte-identical Markdown and HTML.
+    No verification logic is added; fields are re-assembled into the
+    underwriter's view and the trace's hash is pinned for re-derivation.
 
     Parameters
     ----------
     trace_dict : dict
         The full RTF v1 trace (``TraceResult.to_dict()`` -- body + ``hash``).
+    coverage : dict, optional
+        The ``rot corpus`` summary dict (D4: the corpus coverage metric,
+        N of M SAFE / UNSAFE / UNKNOWN).  When given, the attestation
+        carries it first-class (``corpus_coverage``); when omitted, the
+        attestation is exactly the trace-derived view (no coverage field).
 
     Returns
     -------
@@ -301,12 +364,20 @@ def build_attestation(trace_dict):
         "counterexample": trace_dict.get("counterexample"),
         "controls": _controls(compliance),
         "bounded_caveat": _bounded_caveat(n_states),
+        "claims": {
+            "defensible": DEFENSIBLE_CLAIM,
+            "not_claimed": NOT_CLAIMED,
+        },
         "stale": False,
         "reverify": {
             "command": reverify_command(policy_path, trace_hash),
             "expected_hash": trace_hash,
         },
     }
+    if coverage is not None:
+        # D4: the corpus coverage metric (N of M SAFE/UNSAFE/UNKNOWN) is
+        # first-class in the attestation (not a footnote).
+        body["corpus_coverage"] = summarize_coverage(coverage)
     return Attestation(body)
 
 
@@ -438,6 +509,15 @@ def render_markdown(att):
     for c in att.get("out_of_scope") or []:
         lines.append("- %s" % c)
     lines.append("")
+    cov = att.get("corpus_coverage")
+    if cov:
+        lines.append("## Corpus coverage (the beachhead corpus)")
+        lines.append("")
+        lines.append("**%s**" % cov.get("human"))
+        lines.append("")
+        lines.append("_first-class metric: it is expected to RISE as new "
+                     "invariant kinds (B2) land._")
+        lines.append("")
     lines.append("## Counterexample")
     lines.append("")
     ce = att.get("counterexample")
@@ -466,6 +546,14 @@ def render_markdown(att):
     lines.append("")
     lines.append("Expected trace hash: `%s`" % reverify.get("expected_hash"))
     lines.append("")
+    claims = att.get("claims") or {}
+    if claims.get("defensible") or claims.get("not_claimed"):
+        lines.append("## Defensible claim / What we do NOT claim")
+        lines.append("")
+        lines.append("**Defensible claim.** %s" % claims.get("defensible"))
+        lines.append("")
+        lines.append("**What we do NOT claim.** %s" % claims.get("not_claimed"))
+        lines.append("")
     lines.append("---")
     lines.append("")
     lines.append("**Attestation hash (SHA-256):** `%s`" % att.get("hash"))
@@ -571,6 +659,8 @@ view (this artifact) &rarr; site = demo view.</div>
 %(coverage)s
 <h2>Out of scope</h2>
 %(out_of_scope)s
+<h2>Corpus coverage (the beachhead corpus)</h2>
+%(corpus)s
 <h2>Counterexample</h2>
 %(counterexample)s
 <h2>Controls (SOC 2 / AIUC)</h2>
@@ -580,6 +670,8 @@ view (this artifact) &rarr; site = demo view.</div>
 <h2>Re-verify (byte-for-byte)</h2>
 <pre><code>%(reverify_cmd)s</code></pre>
 <p>Expected trace hash: <code>%(expected_hash)s</code></p>
+<h2>Defensible claim / What we do NOT claim</h2>
+%(claims)s
 <div class="footer">
 %(stale)s
 <p><strong>Attestation hash (SHA-256):</strong> <code>%(att_hash)s</code></p>
@@ -625,6 +717,21 @@ def render_html(att):
                   if att.get("stale")
                   else "<p class='fresh'><strong>Stale:</strong> no</p>")
 
+    cov = att.get("corpus_coverage")
+    if cov:
+        coverage_html = ("<p><strong>%s</strong></p>"
+                         "<p><em>first-class metric: it is expected to RISE "
+                         "as new invariant kinds (B2) land.</em></p>"
+                         % _esc(cov.get("human")))
+    else:
+        coverage_html = "<p><em>no corpus coverage attached</em></p>"
+
+    claims = att.get("claims") or {}
+    claims_html = ("<p><strong>Defensible claim.</strong> %s</p>"
+                   "<p><strong>What we do NOT claim.</strong> %s</p>"
+                   % (_esc(claims.get("defensible") or ""),
+                      _esc(claims.get("not_claimed") or "")))
+
     return _HTML_TEMPLATE % {
         "tone": tone,
         "verdict": _esc(_verdict_label(verdict)),
@@ -634,12 +741,14 @@ def render_html(att):
         "version": _esc(version.get("id")),
         "scope_rows": scope_rows,
         "coverage": _html_list(att.get("coverage_conditions") or []),
+        "corpus": coverage_html,
         "out_of_scope": _html_list(att.get("out_of_scope") or []),
         "counterexample": ce_html,
         "controls": _html_controls(controls),
         "caveat": _esc(att.get("bounded_caveat")),
         "reverify_cmd": _esc(reverify.get("command")),
         "expected_hash": _esc(reverify.get("expected_hash")),
+        "claims": claims_html,
         "stale": stale_html,
         "att_hash": _esc(att.get("hash")),
     }
