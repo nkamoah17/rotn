@@ -1,6 +1,0 @@
-Manifest-Version: 1.0
-Agent-Class: com.rot.n.agent.SmokeAgent
-Premain-Class: com.rot.n.agent.SmokeAgent
-Can-Redefine-Classes: true
-Can-Retransform-Classes: true
-

@@ -31,7 +31,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from rot.runtime.core import RuntimeGuard  # noqa: E402
 from rot.runtime.rules import spendcap_rule  # noqa: E402
-from rot.runtime.mcp import McpGateway  # noqa: E402
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -162,38 +161,6 @@ class CliToolsTests(unittest.TestCase):
     def test_tools_unknown_rule_is_exit_3(self):
         code, _ = self._run("runtime", "tools", "--rule", "nope")
         self.assertEqual(code, 3)
-
-
-# ---------------------------------------------------------------------------
-# Surface 2: the masked MCP tools/list
-# ---------------------------------------------------------------------------
-class McpMaskedToolsListTests(unittest.TestCase):
-    """``tools/list`` with a state is masked to the enabled tools only."""
-
-    def _gw(self):
-        return McpGateway(rules={"transfer": spendcap_rule()})
-
-    def test_no_state_returns_full_catalog(self):
-        resp = self._gw().handle_message(
-            {"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
-        self.assertEqual(resp["result"]["masked"], False)
-        names = {t["name"] for t in resp["result"]["tools"]}
-        self.assertEqual(names, {"transfer"})
-
-    def test_high_inflight_masks_transfer(self):
-        resp = self._gw().handle_message({
-            "jsonrpc": "2.0", "id": 2, "method": "tools/list",
-            "params": {"state": {"completed": 0, "inflight": 3}}})
-        self.assertEqual(resp["result"]["masked"], True)
-        names = {t["name"] for t in resp["result"]["tools"]}
-        self.assertNotIn("transfer", names)
-
-    def test_low_inflight_keeps_transfer(self):
-        resp = self._gw().handle_message({
-            "jsonrpc": "2.0", "id": 3, "method": "tools/list",
-            "params": {"state": {"completed": 0, "inflight": 0}}})
-        names = {t["name"] for t in resp["result"]["tools"]}
-        self.assertIn("transfer", names)
 
 
 if __name__ == "__main__":

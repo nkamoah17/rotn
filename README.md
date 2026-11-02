@@ -725,7 +725,50 @@ on top of the verdict:
 - **`ab`** — the *A/B winner table* (`rot/ab.py`): which of the four source
   frontends is the default, chosen by measurement (no-false-PROVEN hard gate
   first, then the lexicographic tuple), not by assertion.
-- **`retention`** — the *lossiness manifest*: which CPG facts were kept,
+- **`retention`** — the *lossiness manifest*: which CPG facts were kept, which
+  were dropped, and the measured fidelity of the abstraction (the retention
+  gate), so a reviewer can see exactly what the static layer lost.
+
+---
+
+## License — the open-core position
+
+ROTN is **open-core**, not "open vs. closed."  The proof is open (the
+credibility wedge); the value is closed (the business).
+
+| Layer | What's in it | License |
+|-------|--------------|---------|
+| **Open core** (the wedge + credibility) | the bounded engine, the spend-cap policy class, the deterministic counterexample + K-sweep, the tests, the one-pager generator, the CI gate | **Apache-2.0** |
+| **Paid / commercial** (the business) | the runtime coach **as a service** (Product 2), fleet near-miss learning (4.4), risk forecasting (4.3/DBN), the agent-framework / payment / MCP integrations, attestation-as-a-service (Product 3), the B2 generalization, enterprise support | **SSPL-1.0** or a commercial license |
+
+- **Apache-2.0 (not MIT)** for the core: permissive *plus* the explicit patent
+  grant/defense MIT lacks — the one "stronger than MIT" upgrade that actually
+  matters for a security product.
+- **SSPL-1.0** on the paid layer: the closest thing to "stronger" that still
+  lets you host it.  It bites a competitor who hosts a clone of the paid layer
+  (they must open-source their entire stack or buy a license).  A deterrent,
+  not a moat — it won't stop a clean-room build.
+- **The fleet-data delta is the product:** a self-hoster gets *their*
+  near-misses; a service customer gets the *aggregate of everyone's*.  That is
+  what no single self-hoster can reproduce.
+
+**One line:** Apache-2.0 core (the proof is open — the credibility wedge),
+SSPL/commercial on the service + learning + integrations (the value is closed).
+
+Where it lives: `LICENSE` (Apache-2.0, the `rot` core) · `setup.py` (the free
+`rotn` dist — excludes `rot.commercial`) · `rot/commercial/LICENSE` (SSPL /
+commercial, the paid layer) · `setup_commercial.py` (the `rotn-commercial`
+dist, depends on `rotn`) · `docs/licensing.md` (the full position).
+
+**Install:**
+
+```sh
+pip install rotn            # Apache-2.0 core: rot demo, rot check, rot report
+pip install rotn-commercial # + the paid layer: rot runtime serve, coach --aggregate, mcp behavior
+```
+
+On a core-only install the paid commands degrade to a clear
+`install rotn-commercial` error rather than a raw traceback.
   which were dropped, which were unknown (unknown → `UNKNOWN`, never silent).
 
 > **The static↔formal agreement invariant** (named property, thesis-quotable):
@@ -905,8 +948,10 @@ loop (`--before` / `--after`), the Apalache ITF engine (concrete-trace
 refutation, never `proven`), the LLM baseline (audit artifact only — never
 affects the verdict), the impact / spec-diff / trace-check / model-finding /
 ZK-bug / false-block extensions, the SAFE/UNSAFE spend-cap classifier
-(`rot corpus`), and the CLI exit-code contract. **924 tests** currently pass
-(pinned by `tests/test_suite_count.py`, so the count cannot drift). The TLC and
+(`rot corpus`), and the CLI exit-code contract. **844 tests** currently pass
+(pinned by `tests/test_suite_count.py`, so the count cannot drift). The 80
+service-plane tests (LangChain / MCP gateway / fleet aggregate -- Product 2)
+live in the paid layer under `rot/commercial/tests/`. The TLC and
 Apalache engines are exercised by the CLI / `run.ps1` matrix when the
 respective tooling is available.
 

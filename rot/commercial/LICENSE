@@ -1,0 +1,61 @@
+Server Side Public License, version 1 (SSPL-1.0) / Commercial
+================================================================
+
+This file and the software it governs -- the ``rotn-commercial`` paid layer
+(``rot.commercial``: the Product 2 runtime coach **as a service**, the LangChain
+adapter, the MCP ``tools/call`` gateway, the fleet near-miss aggregate, the G8
+behavioral audit, and the Lethal-Trifecta risk surface) -- are **NOT** part of
+the Apache-2.0 core.  They are distributed under the **Server Side Public
+License, version 1 (SSPL-1.0)** and/or a **commercial license** issued by
+CARAVEL.
+
+Why a second license
+--------------------
+The **core** of ROTN (``rot`` -- the bounded engine, the spend-cap policy
+class, the deterministic counterexample, the tests, the one-pager generator,
+and the CI gate) is **Apache-2.0** (see the top-level ``LICENSE``): the proof
+is open, that is the credibility wedge.
+
+This **paid** layer is the value.  It is licensed so that a competitor who
+offers a **hosted clone** of this layer must either (a) comply with the SSPL --
+which requires offering the complete source of the *entire* hosted service
+stack -- or (b) buy a commercial license from CARAVEL.  This is the legal
+deterrent on the specific "hosted clone of my paid layer" threat.
+
+What SSPL-1.0 adds over the core
+--------------------------------
+The one clause that matters for this layer is the **Additional Use Grant /
+hosted-service obligation**: if you use this software to provide a service to
+others, you must make available the complete source code of the **entire**
+service (this software *and* every component of the hosting stack) under an
+SSPL-compatible license.  The full, authoritative text of SSPL-1.0 is:
+
+    https://www.mongodb.com/legal/licenses
+    https://www.mongodb.com/about/legal/licenses/server-side-public-license/
+
+A commercial license
+--------------------
+If you intend to use this layer in production or as a hosted service and
+prefer the Apache-style permissive terms, or need to avoid the SSPL
+hosted-service obligation, contact CARAVEL for a commercial license:
+
+    https://github.com/caravel/rot-verify
+
+Commercial terms (summary)
+--------------------------
+1. This layer is provided "AS IS", without warranty of any kind, express or
+   implied, including the implied warranties of merchantability and fitness
+   for a particular purpose.  The entire risk as to quality is with you.
+
+2. In no event and under no legal theory shall CARAVEL or its licensors be
+   liable for any direct, indirect, incidental, special, consequential, or
+   other damages arising out of the use or inability to use this layer.
+
+3. You may not use, copy, modify, or redistribute this layer except as
+   expressly permitted by SSPL-1.0 or by a written commercial license from
+   CARAVEL.
+
+Copyright 2026 CARAVEL.  All rights reserved.
+Licensed under the Server Side Public License, version 1 (SSPL-1.0),
+and/or a commercial license issued by CARAVEL.  See the SSPL-1.0 text at the
+URLs above and the licensing position in ``docs/licensing.md``.

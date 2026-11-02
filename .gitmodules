@@ -1,0 +1,3 @@
+[submodule "rotn-research"]
+	path = rotn-research
+	url = https://github.com/nkamoah17/rotn-research.git

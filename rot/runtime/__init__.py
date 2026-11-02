@@ -59,30 +59,15 @@ from .ledger import (
     LedgerEntry,
     DecisionLedger,
 )
-from .aggregate import (
-    SCHEMA as AGGREGATE_SCHEMA,
-    SAFE,
-    UNSAFE,
-    UNVERIFIED,
-    NOT_APPLICABLE,
-    AggregateResult,
-    aggregate_ledger,
-)
-from .mcp import (
-    JSONRPC,
-    MCP_SCHEMA,
-    McpError,
-    McpGateway,
-    intercept_tools_call,
-    build_http_server,
-)
-from .langchain import (
-    LangChainNotInstalled,
-    GuardRunner,
-    langchain_runnable,
-    langchain_tool_callback,
-    guarded_tool,
-)
+# The *service* plane (B3 LangChain adapter, B4 MCP gateway, B5 fleet
+# aggregate) lives in the **paid** layer ``rot.commercial.runtime``
+# (SSPL / commercial -- see ``rot/commercial/LICENSE``).  The core keeps the
+# deterministic decision (:class:`RuntimeGuard`), the canonical rules, the
+# hashable refusal shape, and the append-only ledger -- the credibility wedge,
+# all pure stdlib, importable and runnable without the paid layer.
+#
+#   from rot.commercial.runtime import langchain, mcp, aggregate
+#   (requires the ``rotn-commercial`` distribution)
 
 __all__ = [
     # B2 refusal
@@ -101,30 +86,11 @@ __all__ = [
     "exfiltration_rule",
     "get_rule",
     "RULES",
-    # B4 adapters
-    "LangChainNotInstalled",
-    "GuardRunner",
-    "langchain_runnable",
-    "langchain_tool_callback",
-    "guarded_tool",
-    "JSONRPC",
-    "MCP_SCHEMA",
-    "McpError",
-    "McpGateway",
-    "intercept_tools_call",
-    "build_http_server",
-    # B5 ledger + aggregate
+    # B5 ledger
     "LEDGER_SCHEMA",
     "GENESIS_HASH",
     "LedgerError",
     "ChainBreak",
     "LedgerEntry",
     "DecisionLedger",
-    "AGGREGATE_SCHEMA",
-    "SAFE",
-    "UNSAFE",
-    "UNVERIFIED",
-    "NOT_APPLICABLE",
-    "AggregateResult",
-    "aggregate_ledger",
 ]

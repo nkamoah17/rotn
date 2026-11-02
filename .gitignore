@@ -97,3 +97,6 @@ tmp_err.txt
 
 # --- CI output (JUnit / SARIF artifacts) ---
 /ci/
+
+# A3: the research plane is a SEPARATE git repo (nkamoah17/rotn-research), pulled in as a git
+# SUBMODULE (see .gitmodules). A5: zero protocol/CPG/ab/llm code in the product build (it lives there).

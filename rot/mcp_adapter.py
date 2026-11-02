@@ -835,9 +835,15 @@ def audit_manifest(manifest, budget=None, max_states=200000,
     # be a cycle.
     behavioral = None
     if run_behavioral and not note:
-        import rot.mcp_behavioral as mcp_behavioral
-        behavioral = mcp_behavioral.behavioral_audit(manifest,
-                                                     max_states=max_states)
+        try:
+            import rot.commercial.mcp_behavioral as mcp_behavioral
+        except ImportError:
+            # Paid layer not installed -> structural audit only (already
+            # surfaced via the "behavioral audit skipped" facets note below).
+            behavioral = None
+        else:
+            behavioral = mcp_behavioral.behavioral_audit(
+                manifest, max_states=max_states)
 
     policy_info = {
         "server": manifest.server,

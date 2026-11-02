@@ -68,11 +68,14 @@ setup(
         "Issues": "https://github.com/caravel/rot-verify/issues",
         "Documentation": "https://caravel.github.io/rot-verify/",
     },
-    license="MIT",
+    license="Apache-2.0",
     python_requires=">=3.6",
     packages=find_packages(exclude=[
         "tests", "tests.*",        # top-level test tree (not shipped)
         "rot.tests", "rot.tests.*",  # in-package Java-build integration tests
+        # The **paid** layer is a separate distribution (``rotn-commercial``,
+        # SSPL / commercial) -- it must NOT ship inside the free Apache-2.0 core.
+        "rot.commercial", "rot.commercial.*",
     ]),
     package_data={
         # Include .dw fixture files if they are inside the package tree.
@@ -89,7 +92,7 @@ setup(
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
         "Intended Audience :: Information Technology",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",

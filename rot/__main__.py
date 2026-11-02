@@ -822,8 +822,14 @@ def _cmd_coach_aggregate(args):
     Exit codes: ``0`` relaxation SAFE / not applicable, ``1`` UNSAFE,
     ``2`` UNVERIFIED (fail-closed), ``3`` error.
     """
-    import rot.runtime.aggregate as agg
     from rot.runtime.ledger import DecisionLedger, LedgerError
+    try:
+        import rot.commercial.runtime.aggregate as agg
+    except ImportError:
+        print("ERROR: 'rot coach --aggregate' (fleet near-miss learning) needs "
+              "the paid layer -- install rotn-commercial "
+              "(pip install rotn-commercial)", file=sys.stderr)
+        return EXIT_ERROR
 
     ledger_path = getattr(args, "ledger", None)
     if not ledger_path:
@@ -1033,8 +1039,14 @@ def cmd_runtime_serve(args):
     if rule is None:
         return EXIT_ERROR
 
-    from rot.runtime.mcp import McpGateway, build_http_server
     from rot.runtime.ledger import DecisionLedger
+    try:
+        from rot.commercial.runtime.mcp import McpGateway, build_http_server
+    except ImportError:
+        print("ERROR: 'rot runtime serve' (the MCP gateway) needs the paid "
+              "layer -- install rotn-commercial "
+              "(pip install rotn-commercial)", file=sys.stderr)
+        return EXIT_ERROR
 
     manifest = None
     manifest_path = getattr(args, "manifest", None)
