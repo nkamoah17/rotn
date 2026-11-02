@@ -12,13 +12,13 @@ and how it is verified:
     by ``tests/test_narrow_waist.py``.
   * Every downstream engine consumes *only* a ``ProtocolIR``: the TLA+
     emitter (``rot.emitter``), the TLC pipeline (``rot.tlc``), the bounded
-    CEGAR loop (``rot.cegar``), the property-directed abstraction, and the
+    re-check loop (``rot.cegar``), the property-directed abstraction, and the
     symbolic model checker.  None of them knows how the IR was built --
     whether from a Java CPG, a hand-authored fixture, or another language.
 
 Design principles (sound spec core):
   * Language-agnostic: an IR can be produced by CPG analysis of Java, or
-    authored by hand (fixture). Downstream stages (symbolic, emitter, CEGAR)
+    authored by hand (fixture). Downstream stages (symbolic, emitter, ``rot.cegar``)
     only ever see this IR.
   * Sound by construction: every state variable that can influence a pinned
     property is either ``precise`` (translated exactly) or ``existential``
@@ -74,6 +74,43 @@ PERMISSION_NAMES = {
     PERM_WARN:  "warn",
     PERM_BLOCK: "block",
 }
+
+
+# ---------------------------------------------------------------------------
+# IR contract metadata (Phase 0, docs/joern-primary-ab-plan.md)
+# ---------------------------------------------------------------------------
+#: Every ``ProtocolIR`` -- from any frontend (the ``code`` / ``cpg`` P1
+#: producers, the hand-authored ``targets`` oracle, or the ``java`` 2PC
+#: frontend) -- stamps these keys in ``metadata`` so a fair A/B compares
+#: producers on the same contract:
+#:
+#: * ``protocol``   -- the derived protocol label (e.g. ``"SPENDCAP"`` /
+#:   ``"2PC"``), derived from the control, not asserted by the producer.
+#: * ``provenance`` -- the source-pinned provenance (file / function / line,
+#:   or the oracle module for a hand-authored model).  Producer-specific: the
+#:   A/B parity gate compares IRs with it stripped.
+#: * ``source``     -- the producer frontend (e.g. ``"rot.frontends.cpg"``).
+#:   Producer-specific: stripped by the A/B parity gate.
+#: * ``lossiness``  -- the lossiness manifest: a list of
+#:   :func:`lossiness_entry` dicts recording what the source -> IR lowering
+#:   dropped and why that is acceptable.  Stamped by the shared lowering
+#:   (``rot.lower``), so the ``code`` and ``cpg`` producers of the same
+#:   control agree on it -- the A/B parity gate compares it (it must match).
+PROTOCOL_KEY = "protocol"
+PROVENANCE_KEY = "provenance"
+SOURCE_KEY = "source"
+LOSSINESS_KEY = "lossiness"
+
+
+def lossiness_entry(dropped, reason):
+    """One row of the IR's lossiness manifest (``metadata[LOSSINESS_KEY]``).
+
+    ``dropped`` names what the source -> IR lowering did not carry into the
+    model; ``reason`` records why that is acceptable (out of the pinned
+    property's cone, or captured by a coarser abstraction).  Plain dicts, so
+    the manifest round-trips through ``to_dict`` / ``from_dict`` unchanged.
+    """
+    return {"dropped": dropped, "reason": reason}
 
 
 # ---------------------------------------------------------------------------
@@ -184,6 +221,8 @@ class Expr(object):
             return AllOf(d["var"], Expr.from_dict(d["coll"]), Expr.from_dict(d["body"]))
         if tag == "anyof":
             return AnyOf(d["var"], Expr.from_dict(d["coll"]), Expr.from_dict(d["body"]))
+        if tag == "assume":
+            return Assume(Expr.from_dict(d["expr"]), d.get("note", ""))
         raise ValueError("unknown expr tag: %r" % (tag,))
 
 
@@ -372,6 +411,41 @@ class AnyOf(Expr):
     def to_dict(self):
         return {"tag": "anyof", "var": self.var,
                 "coll": self.coll.to_dict(), "body": self.body.to_dict()}
+
+
+class Assume(Expr):
+    """Phase 6.2: a state constraint (a TLA+ ``ASSUME`` clause).
+
+    ``Assume(p)`` restricts the model's state space to the states where
+    ``p`` is *definitely* true: concrete engines prune any state (including
+    the initial state) for which ``p`` is False or UNDEF.  This is a *sound
+    pruning* -- it removes behaviors from consideration (a promise about the
+    environment or a modelling parameter, like a bound), so every property
+    that holds in the restricted state space holds there genuinely.  It is
+    never silent: the constraint is recorded on the IR (and hence in the
+    report), and a verdict decided under it carries it as a named assumption
+    -- an ``assume`` that masks a bug does so *by construction*, exactly like
+    a bound (e.g. the spend-cap sweep's ``inflight <= 1`` masks the
+    parallel-fire race).
+
+    ``eval`` never returns ``False`` -- an assumption is not a refutable
+    claim about a state: it returns ``True`` when the constraint holds
+    definitely, and ``UNDEF`` when it cannot be evaluated.  Engines that
+    prune on assumptions keep a state iff ``eval`` is definitely ``True``.
+    """
+    def __init__(self, expr, note=""):
+        self.expr = _as_expr(expr)
+        self.note = note or ""
+
+    def eval(self, state):
+        r = self.expr.eval(state)
+        return Expr.UNDEF if r is Expr.UNDEF else True
+
+    def to_dict(self):
+        d = {"tag": "assume", "expr": self.expr.to_dict()}
+        if self.note:
+            d["note"] = self.note
+        return d
 
 
 # -- ergonomic constructors -------------------------------------------------
@@ -635,18 +709,54 @@ class AdversarialPolicy(object):
             sorted(self.allowed), sorted(self.denied))
 
 
+#: Phase 6.1: the stuttering assumption -- the single stated semantic gap
+#: between this IR and full TLA+ semantics.
+#:
+#: TLA+ semantics allows *stuttering steps*: an execution may linger in a
+#: state with a no-op step.  This IR's transition system has **no** stuttering
+#: steps -- every successor is produced by an action with a non-trivial
+#: effect (the concrete engines even drop no-op transitions).  Stating the
+#: assumption (instead of hiding it) is the Phase 6 move, and it is
+#: *safety-safe / liveness-honest*:
+#:
+#:   * **safety-safe** -- a safety invariant that holds in every reachable,
+#:     non-stuttering state also holds when stuttering steps are added,
+#:     because a stuttering step never produces a new (observable) state.
+#:     Stating the assumption costs nothing for safety.
+#:   * **liveness-honest** -- a liveness claim (``<>Goal``) proved over a
+#:     no-stuttering system does NOT by itself establish the unbounded TLA+
+#:     liveness claim, which must hold over stuttering extensions too.  The
+#:     gap is closed only by additionally discharging the *no-stuttering*
+#:     property itself (or by a fairness assumption that rules out infinite
+#:     stuttering).  Liveness verdicts therefore carry the assumption and
+#:     are never read as stronger than "under the stated stuttering
+#:     assumption".
+STUTTERING_ASSUMPTION = (
+    "Stuttering assumption: every step of the model is an observable "
+    "action step; the IR transition system has no stuttering (no-op) "
+    "steps.  Safety-safe: a safety invariant holding in all reachable "
+    "non-stuttering states holds under stuttering extensions, since a "
+    "stuttering step produces no new state.  Liveness-honest: a liveness "
+    "claim proved over this no-stuttering system is sound only UNDER this "
+    "assumption -- it does not by itself establish the unbounded TLA+ "
+    "liveness claim unless the no-stuttering property is discharged (or "
+    "fairness rules out infinite stuttering)."
+)
+
+
 class ProtocolIR(object):
     """The top-level, language-agnostic protocol model.
 
     This is the single contract between the CPG extraction stage and the
-    symbolic/emitter/CEGAR stages. It is fully serialisable (to_dict/from_dict)
+    symbolic/emitter/``rot.cegar`` stages. It is fully serialisable (to_dict/from_dict)
     so an IR can be authored by hand (fixture) or produced by JoernCPG analysis.
     """
 
     def __init__(self, name, variables=None, channels=None, actions=None,
                  init=None, pinned_property=None, assumptions=None,
                  abstraction_manifest=None, source_path="", metadata=None,
-                 policy=None):
+                 policy=None, alphabet=None, final_states=None,
+                 assumes=None, stuttering_assumption=None):
         self.name = name
         self.variables = list(variables or [])
         self.channels = list(channels or [])
@@ -660,6 +770,28 @@ class ProtocolIR(object):
         # Optional adversarial agent policy (the AgentStep family). ``None`` for
         # every existing target -- the narrow waist stays backward compatible.
         self.policy = policy
+        # The FSM 5-tuple's remaining components (the FSM-extraction lift,
+        # joern-primary-ab-plan Phase 1 / ``rot/fsmextract.py``): ``alphabet``
+        # is Sigma -- the inputs the FSM's transitions consume -- and
+        # ``final_states`` is F -- the states the protocol must reach.  Both
+        # default to the empty list: an IR without them is exactly the
+        # dataflow/abstraction model it was before (backward compatible),
+        # and a fixture may carry a partial 5-tuple (e.g. F present, Sigma
+        # not) without the missing component being an error.
+        self.alphabet = list(alphabet or [])
+        self.final_states = list(final_states or [])
+        # Phase 6.2: state constraints (TLA+ ``ASSUME`` clauses).  Each is an
+        # :class:`Assume` node; concrete engines prune the states that do not
+        # definitely satisfy them (sound pruning).  Empty by default: an IR
+        # without assumptions is exactly the model it was before.
+        self.assumes = list(assumes or [])
+        # Phase 6.1: the stuttering assumption (stated, never silent).  The
+        # IR's transition system has no stuttering steps, so the canonical
+        # text (see :data:`STUTTERING_ASSUMPTION`) is the default; a model
+        # author may override it with an explicit statement.
+        self.stuttering_assumption = (
+            STUTTERING_ASSUMPTION if stuttering_assumption is None
+            else stuttering_assumption)
 
     # -- structural equality -------------------------------------------------
     # ``metadata`` is provenance (which ``.dw`` file produced the model, or a
@@ -714,6 +846,8 @@ class ProtocolIR(object):
                 walk(e.cond); walk(e.then); walk(e.els)
             elif isinstance(e, (AllOf, AnyOf)):
                 walk(e.coll); walk(e.body)
+            elif isinstance(e, Assume):
+                walk(e.expr)
         if expr is not None:
             walk(expr)
         return out
@@ -736,6 +870,13 @@ class ProtocolIR(object):
         for n in self.vars_in(self.pinned_property):
             if n not in names:
                 names.append(n)
+        # Phase 6.2: state constraints reference variables too (an ``assume``
+        # over an undeclared variable is a validation error, like anywhere
+        # else in the IR).
+        for a in self.assumes:
+            for n in self.vars_in(a.expr):
+                if n not in names:
+                    names.append(n)
         return names
 
     def to_dict(self):
@@ -751,6 +892,13 @@ class ProtocolIR(object):
             "policy": self.policy.to_dict() if self.policy is not None else None,
             "source_path": self.source_path,
             "metadata": dict(self.metadata),
+            # The FSM 5-tuple's Sigma and F (empty on pre-FSM-extraction IRs).
+            "alphabet": list(self.alphabet),
+            "final_states": list(self.final_states),
+            # Phase 6.2: state constraints (TLA+ ASSUME clauses).
+            "assumes": [a.to_dict() for a in self.assumes],
+            # Phase 6.1: the stated stuttering assumption.
+            "stuttering_assumption": self.stuttering_assumption,
         }
 
     @classmethod
@@ -767,6 +915,11 @@ class ProtocolIR(object):
             policy=AdversarialPolicy.from_dict(d["policy"]) if d.get("policy") is not None else None,
             source_path=d.get("source_path", ""),
             metadata=dict(d.get("metadata", {})),
+            alphabet=list(d.get("alphabet", [])),
+            final_states=list(d.get("final_states", [])),
+            assumes=[Expr.from_dict(a) for a in d.get("assumes", [])],
+            stuttering_assumption=d.get("stuttering_assumption",
+                                         STUTTERING_ASSUMPTION),
         )
 
     # -- validation ----------------------------------------------------------
@@ -836,10 +989,10 @@ __all__ = [
     "RUNG_STRUCTURAL", "RUNG_LOCAL", "RUNG_PROTOCOL", "RUNG_E2E",
     "RUNG_ENV", "ALL_RUNGS", "RUNG_CEILING", "PERMISSION_NAMES",
     "Domain", "IntRange", "Bool", "Enum",
-    "Expr", "Const", "Var", "BinOp", "UnOp", "If", "AllOf", "AnyOf",
+    "Expr", "Const", "Var", "BinOp", "UnOp", "If", "AllOf", "AnyOf", "Assume",
     "T", "F", "eq", "neq", "And", "Or", "Not", "V", "C",
     "MODE_PRECISE", "MODE_EXISTENTIAL",
     "StateVar", "Channel", "Assignment", "Action",
     "AbstractionEntry", "AdversarialPolicy", "ProtocolIR", "IRFileError",
-    "load_ir", "save_ir",
+    "load_ir", "save_ir", "STUTTERING_ASSUMPTION",
 ]

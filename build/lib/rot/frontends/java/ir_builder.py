@@ -31,7 +31,7 @@ import os
 import re
 
 from rot.ir import (Action, And, Assignment, Const, Enum, If, Not, Or,
-                    ProtocolIR, StateVar, T, V, C, eq)
+                    ProtocolIR, StateVar, T, V, C, eq, lossiness_entry)
 
 PROTOCOL_TWOPC = "twopc"
 
@@ -459,12 +459,28 @@ def build_ir(source_dir, protocol=PROTOCOL_TWOPC, n=3, buggy=None,
             "buggy": buggy,
             "protocol": PROTOCOL_TWOPC,
             "language": "java",
+            "source": "rot.frontends.java",
             "apply_mode": "buggy" if buggy else "correct",
             "enums": {k: list(v) for k, v in vocab.items()},
             "provenance": _collect_provenance(files),
             "description": "Two-phase commit, %d participants, %s" % (
                 n, "BUGGY (participants self-decide)" if buggy
                 else "correct (participants apply coordinator decision)"),
+            # Phase 0 IR contract: the lossiness manifest of this frontend's
+            # source -> IR lowering.
+            "lossiness": [
+                lossiness_entry(
+                    "message passing and network asynchrony (the Java "
+                    "message bus)",
+                    "collapsed into shared state (phase / decision / vote_i / "
+                    "applied_i); the linearized action order is the sound "
+                    "special case"),
+                lossiness_entry(
+                    "non-2PC methods in the scanned sources",
+                    "only the 2PC control (vote / decide / apply) is "
+                    "modeled; the rest is outside the pinned property's "
+                    "cone"),
+            ],
         },
     )
 

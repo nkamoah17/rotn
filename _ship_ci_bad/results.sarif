@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "runs": [
+    {
+      "artifacts": [
+        {
+          "location": {
+            "uri": "file://samples/spendcap-buggy.dw"
+          }
+        }
+      ],
+      "results": [
+        {
+          "level": "error",
+          "message": {
+            "text": "VIOLATED: spendcap_within_cap  witness={\"completed\": 100, \"inflight\": 2}"
+          },
+          "ruleId": "rotn.spendcap_within_cap"
+        }
+      ],
+      "tool": {
+        "driver": {
+          "name": "ROTN",
+          "version": "0.1.0"
+        }
+      }
+    }
+  ],
+  "version": "2.1.0"
+}

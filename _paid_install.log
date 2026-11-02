@@ -1,0 +1,35 @@
+Invalid requirement: ''.[paid]''
+Traceback (most recent call last):
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\.venv_ship\lib\site-packages\pip\_vendor\packaging\requirements.py", line 92, in __init__
+    req = REQUIREMENT.parseString(requirement_string)
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\.venv_ship\lib\site-packages\pip\_vendor\pyparsing.py", line 1617, in parseString
+    raise exc
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\.venv_ship\lib\site-packages\pip\_vendor\pyparsing.py", line 1607, in parseString
+    loc, tokens = self._parse( instring, 0 )
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\.venv_ship\lib\site-packages\pip\_vendor\pyparsing.py", line 1379, in _parseNoCache
+    loc,tokens = self.parseImpl( instring, preloc, doActions )
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\.venv_ship\lib\site-packages\pip\_vendor\pyparsing.py", line 3376, in parseImpl
+    loc, exprtokens = e._parse( instring, loc, doActions )
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\.venv_ship\lib\site-packages\pip\_vendor\pyparsing.py", line 1379, in _parseNoCache
+    loc,tokens = self.parseImpl( instring, preloc, doActions )
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\.venv_ship\lib\site-packages\pip\_vendor\pyparsing.py", line 3698, in parseImpl
+    return self.expr._parse( instring, loc, doActions, callPreParse=False )
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\.venv_ship\lib\site-packages\pip\_vendor\pyparsing.py", line 1379, in _parseNoCache
+    loc,tokens = self.parseImpl( instring, preloc, doActions )
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\.venv_ship\lib\site-packages\pip\_vendor\pyparsing.py", line 3359, in parseImpl
+    loc, resultlist = self.exprs[0]._parse( instring, loc, doActions, callPreParse=False )
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\.venv_ship\lib\site-packages\pip\_vendor\pyparsing.py", line 1383, in _parseNoCache
+    loc,tokens = self.parseImpl( instring, preloc, doActions )
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\.venv_ship\lib\site-packages\pip\_vendor\pyparsing.py", line 2670, in parseImpl
+    raise ParseException(instring, loc, self.errmsg, self)
+pip._vendor.pyparsing.ParseException: Expected W:(abcd...) (at char 0), (line:1, col:1)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\.venv_ship\lib\site-packages\pip\req\req_install.py", line 82, in __init__
+    req = Requirement(req)
+  File "C:\Users\jeren\Documents\KAMANU\ROTN\.venv_ship\lib\site-packages\pip\_vendor\packaging\requirements.py", line 96, in __init__
+    requirement_string[e.loc:e.loc + 8]))
+pip._vendor.packaging.requirements.InvalidRequirement: Invalid requirement, parse error at ""'.[paid]""
+

@@ -1,0 +1,27 @@
+usage: rot coach [-h] [--shape SHAPE] [--policy FILE] [--out FILE]
+                 [--max-inflight K] [--amount N] [--cap N] [--window W]
+                 [--aggregate] [--ledger FILE] [--max-states N] [--rule ID]
+                 [--quiet]
+
+optional arguments:
+  -h, --help        show this help message and exit
+  --shape SHAPE     which shape to coach: 'spendcap' (a .dw policy, the
+                    default) or 'exfiltration' (the NoExfiltration harness --
+                    no policy file needed)
+  --policy FILE     spend-cap policy file (.dw) to coach (the AWS Dogwood
+                    vertical slice; --shape spendcap)
+  --out FILE        write the coaching artifact JSON here [default: stdout]
+  --max-inflight K  bounded concurrency pool K (spend-cap .dw policies)
+  --amount N        per-request amount override (spend-cap .dw policies)
+  --cap N           spend cap override (spend-cap .dw policies)
+  --window W        temporal window W (spend-cap .dw policies)
+  --aggregate       coach the rules from the decision ledger: which
+                    prompts/tool-descriptions cause blocks, which rules block
+                    legitimate work, and a re-proof that any relaxation stays
+                    safe (B5)
+  --ledger FILE     decision ledger (JSONL or JSON) to aggregate (required
+                    with --aggregate)
+  --max-states N    bounded-search budget for the relaxation re-proof
+  --rule ID         rule id for the relaxation re-proof [default: derived from
+                    --shape]
+  --quiet           suppress the human summary

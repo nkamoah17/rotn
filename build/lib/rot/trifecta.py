@@ -97,7 +97,7 @@ class FacetVerdict(object):
     """
 
     def __init__(self, facet, status, property_name="", witness=None,
-                 evidence=None, n_states=0, note=""):
+                 evidence=None, n_states=0, note="", fairness_label=None):
         if status not in (PROVEN, VIOLATED, UNKNOWN):
             raise ValueError("bad facet status %r" % (status,))
         self.facet = facet
@@ -107,6 +107,11 @@ class FacetVerdict(object):
         self.evidence = evidence or {}
         self.n_states = int(n_states)
         self.note = note
+        # The explicit fairness formula for a liveness facet, or ``None`` when
+        # the facet is fairness-free (the bounded default).  Recorded on the
+        # LIVENESS facet so a liveness claim is never silently strengthened by
+        # an unstated fairness assumption (spec R2 / D3).
+        self.fairness_label = fairness_label
 
     def is_proven(self):
         return self.status == PROVEN
@@ -126,6 +131,7 @@ class FacetVerdict(object):
             "evidence": self.evidence,
             "n_states": self.n_states,
             "note": self.note,
+            "fairness_label": self.fairness_label,
         }
 
     def to_json(self):
@@ -340,6 +346,11 @@ def _audit_liveness(ir_model, horizon, max_states):
         },
         n_states=reach.n_states,
         note=note,
+        # Bounded liveness is a pure reachability claim -- fairness-free.  The
+        # label is recorded (as None) so the facet never silently assumes
+        # fairness (spec R2 / D3); the unbounded (fair) discharge lives in
+        # rot.liveness and records an explicit WF(action) label there.
+        fairness_label=None,
     )
 
 

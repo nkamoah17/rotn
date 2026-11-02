@@ -54,7 +54,12 @@ Bounded verification model
   "choice = action family" pattern): pick principal -> action -> resource ->
   each attribute, then the policy actions fire.
 * Cedar evaluation is preserved: ``forbid`` wins over ``permit`` and the
-  default decision is ``deny``.
+  default decision is ``deny``.  The ``decide`` action writes two precise
+  signals: ``decision`` (the final verdict) and ``forbidden`` (the raw
+  disjunction of the ``forbid`` rules).  Keeping ``forbidden`` separate is
+  what lets a downstream verifier check the *safety* direction --
+  ``forbidden -> not decision`` over the whole bounded request space -- not
+  just the *realizability* direction (``exists`` a permitted request).
 
 Pure stdlib + ``rot.ir``, Python 3.6 compatible (no f-strings).
 """
@@ -914,10 +919,14 @@ class _Builder(object):
         variables.append(ir.StateVar(
             "decision", ir.Bool(), mode=ir.MODE_PRECISE,
             desc="policy decision (True = permitted)"))
+        variables.append(ir.StateVar(
+            "forbidden", ir.Bool(), mode=ir.MODE_PRECISE,
+            desc="forbid-rule match (True = some forbid rule matches)"))
 
         actions = [ir.Action(
             name="init", owner="cedar", is_initial=True, guard=ir.T(),
-            effects=[("stage", ir.C(0)), ("decision", ir.F())])]
+            effects=[("stage", ir.C(0)), ("decision", ir.F()),
+                     ("forbidden", ir.F())])]
 
         stage = 0
         stage = self._pick_stage(actions, "principal", self.universe, stage)
@@ -928,10 +937,13 @@ class _Builder(object):
                 actions, name, _domain_values(self.attr_vars[name]), stage)
 
         # Final stage: evaluate the policy set (forbid > permit > deny).
+        # ``forbidden`` is the raw forbid-rule disjunction (the safety signal);
+        # ``decision`` folds it with the permits (forbid overrides permit).
         actions.append(ir.Action(
             name="decide", owner="cedar",
             guard=ir.eq(ir.Var("stage"), ir.C(stage)),
-            effects=[("decision", self._decision_expr())]))
+            effects=[("decision", self._decision_expr()),
+                     ("forbidden", self._forbid_expr())]))
 
         return ir.ProtocolIR(
             name="cedar_policy",
@@ -951,6 +963,24 @@ class _Builder(object):
                 effects=[(var, ir.C(v)), ("stage", ir.C(stage + 1))]))
         return stage + 1
 
+    def _forbid_expr(self):
+        """IR expression for the disjunction of all ``forbid`` conditions.
+
+        This is the ``forbidden`` signal: True iff some ``forbid`` policy
+        matches the current request.  Exposed separately (and as the
+        ``forbidden`` state variable) so downstream verifiers can reason
+        about the forbid rules independently of the final decision -- the
+        safety direction (``forbidden -> not decision``) that a
+        realizability-only check cannot express.
+        """
+        clauses = [self.eval(p.cond) for p in self.policies if p.is_forbid]
+        return ir.Or(*clauses) if clauses else ir.F()
+
+    def _permit_expr(self):
+        """IR expression for the disjunction of all ``permit`` conditions."""
+        clauses = [self.eval(p.cond) for p in self.policies if not p.is_forbid]
+        return ir.Or(*clauses) if clauses else ir.F()
+
     def _decision_expr(self):
         """IR expression for the final decision.
 
@@ -958,17 +988,7 @@ class _Builder(object):
         is permitted iff some permit policy matches and no forbid policy
         matches.
         """
-        permit_clauses = []
-        forbid_clauses = []
-        for p in self.policies:
-            cond = self.eval(p.cond)
-            if p.is_forbid:
-                forbid_clauses.append(cond)
-            else:
-                permit_clauses.append(cond)
-        forbid = ir.Or(*forbid_clauses) if forbid_clauses else ir.F()
-        permit = ir.Or(*permit_clauses) if permit_clauses else ir.F()
-        return ir.And(ir.Not(forbid), permit)
+        return ir.And(ir.Not(self._forbid_expr()), self._permit_expr())
 
 
 def _safe_name(value):

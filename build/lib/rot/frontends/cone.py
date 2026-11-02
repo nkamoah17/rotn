@@ -77,7 +77,12 @@ def cone_of_influence(model, roots, max_depth=None):
             "cone_of_influence: no root matched a method or field: %s" % roots)
 
     # BFS over the call graph from root methods, forward + backward.
-    in_cone = set()          # fullNames of methods in the cone
+    # The roots are in the cone *by definition*; seed ``in_cone`` and
+    # ``depth`` together.  (Seeding only ``depth`` is a liveness bug:
+    # ``add`` never lowers a recorded depth, so the roots would never be
+    # admitted into ``in_cone``, and the ``not in in_cone`` guards below
+    # would re-queue them forever whenever two roots are call-connected.)
+    in_cone = set(root_methods)
     depth = dict((m, 0) for m in root_methods)
 
     def add(mfn, d):

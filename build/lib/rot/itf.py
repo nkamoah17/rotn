@@ -26,8 +26,8 @@ Engine semantics (sound by construction)
 ----------------------------------------
 * the first trace state where the invariant evaluates to a definite
   ``False`` is a refutation -> ``EngineResult("violated", witness=state)``;
-  the CEGAR recheck re-evaluates the invariant on that concrete dict, so
-  the verdict survives the refinement loop;
+  the bounded re-check re-evaluates the invariant on that concrete dict, so
+  the verdict survives the re-check loop;
 * if the invariant never evaluates to ``False`` on the trace, the engine
   reports ``unknown`` with an explanatory note -- a single concrete path
   can REFUTE a safety property but can never PROVE it, and ROTN never

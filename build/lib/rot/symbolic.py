@@ -152,6 +152,72 @@ def _step(model, state, actions):
     return out
 
 
+def _canonicalize(state, sets):
+    """Phase 6.4: the canonical orbit representative of ``state``.
+
+    For each symmetry set -- a group of interchangeable state variables
+    (e.g. the per-participant ``vote_<i>`` / ``applied_<i>`` variables of
+    the 2PC model) -- the canonical representative assigns the sorted
+    multiset of the set's values to the sorted variable names.  That is
+    exactly the lexicographically minimum orbit representative: two states
+    in the same orbit canonicalize to the same state, and states in
+    different orbits canonicalize to different states.  Values are sorted
+    by ``repr`` so mixed value kinds (ints, enum strings, booleans) always
+    have a total, deterministic order.
+    """
+    out = dict(state)
+    for s in sets:
+        vals = sorted((state[n] for n in s), key=repr)
+        for n, v in zip(s, vals):
+            out[n] = v
+    return out
+
+
+def _validate_symmetry(symmetry, model):
+    """Phase 6.4: validate a symmetry-set spec; return normalized sets.
+
+    ``symmetry`` is a list of variable-name lists, each naming ONE symmetry
+    set (a group of interchangeable state variables).  Returns a list of
+    sorted name tuples, or ``None`` when no symmetry was requested.
+
+    Raises
+    ------
+    ValueError
+        If a set has fewer than two variables, or names a variable not
+        declared in ``model``.
+
+    Soundness conditions (the caller's responsibility -- they cannot be
+    checked generically):
+
+      * the action set is closed under the permutation group: permuting a
+        set's variables maps every action to another existing action (true
+        for the 2PC model, which carries *every* per-participant action);
+      * the property being checked is invariant under the group (e.g. the
+        2PC ``agreement`` / ``validity`` invariants name no specific
+        participant).
+
+    When both hold, the quotient state space explored by the engine is
+    exactly the orbit image of the full state space, so PROVEN / VIOLATED
+    verdicts over the quotient are verdicts over the full model (and the
+    quotient is strictly smaller -- the scale win).
+    """
+    if not symmetry:
+        return None
+    var_names = set(v.name for v in model.variables)
+    sets = []
+    for s in symmetry:
+        names = sorted(set(n for n in s))
+        if len(names) < 2:
+            raise ValueError(
+                "a symmetry set needs >= 2 variables, got %r" % (list(s),))
+        for n in names:
+            if n not in var_names:
+                raise ValueError(
+                    "symmetry set references undeclared variable %r" % (n,))
+        sets.append(tuple(names))
+    return sets
+
+
 class SymbolicEngine(object):
     """Bounded-exhaustive safety checker over a :class:`LinearModel`.
 
@@ -160,10 +226,38 @@ class SymbolicEngine(object):
     ``actions`` list or an explicit action list.
     """
 
-    def __init__(self, model, max_states=200000):
+    def __init__(self, model, max_states=200000, assumes=None, symmetry=None):
         self.model = model
         self.max_states = int(max_states)
         self.actions = [a for a in model.actions if not a.is_initial]
+        # Phase 6.2: state constraints (TLA+ ASSUME clauses).  An explicit
+        # ``assumes`` argument wins; otherwise the model's own constraints
+        # (``model.assumes``, carried over from the IR) apply.  Raw ``Expr``
+        # nodes are wrapped so the pruning predicate is uniform.
+        if assumes is None:
+            assumes = getattr(model, "assumes", None) or []
+        from .ir import Assume
+        self.assumes = [a if isinstance(a, Assume) else Assume(a)
+                        for a in assumes]
+        self.assume_pruned = 0   # #states pruned by the constraints (loud)
+        # Phase 6.4: symmetry sets (orbit quotient of the state space).
+        self.symmetry_sets = _validate_symmetry(symmetry, model)
+
+    # -- Phase 6.2 / 6.4 state-space shaping ---------------------------------
+    def _prunes(self, state):
+        """True iff some state constraint fails (or is UNDEF) in ``state`` --
+        such states are outside the assumed state space and are pruned."""
+        for a in self.assumes:
+            r = a.expr.eval(state)
+            if r is Expr.UNDEF or not r:
+                return True
+        return False
+
+    def _shape(self, state):
+        """Phase 6.4: canonicalize a state when symmetry sets are active."""
+        if self.symmetry_sets:
+            return _canonicalize(state, self.symmetry_sets)
+        return state
 
     def reachable(self, max_states=None):
         """BFS from the init state; return (states, complete).
@@ -171,9 +265,23 @@ class SymbolicEngine(object):
         ``states`` is the ordered list of reachable state dicts (at most the
         budget). ``complete`` is True iff the frontier was fully drained (i.e.
         the search was not truncated by the budget).
+
+        Phase 6.2: states that do not definitely satisfy every state
+        constraint (``assumes``) are pruned from the state space -- including
+        the initial state (if an assumption excludes init, the state space is
+        empty and the invariant holds *vacuously*; the verdict records
+        ``n_states=0`` so the vacuity is visible, not silent).  Phase 6.4:
+        with symmetry sets, the quotient state space is explored (states are
+        canonicalized to their orbit representative before the ``seen``
+        check) -- exact for group-invariant properties (see
+        :func:`_validate_symmetry`).
         """
         budget = self.max_states if max_states is None else int(max_states)
         init = dict(self.model.init_state)
+        init = self._shape(init)
+        if self._prunes(init):
+            self.assume_pruned += 1
+            return [], True
         seen = {frozenset(init.items())}
         queue = [init]
         i = 0
@@ -185,6 +293,10 @@ class SymbolicEngine(object):
                 complete = False
                 break
             for ns in _step(self.model, cur, self.actions):
+                if self._prunes(ns):
+                    self.assume_pruned += 1
+                    continue
+                ns = self._shape(ns)
                 k = frozenset(ns.items())
                 if k not in seen:
                     seen.add(k)
@@ -265,6 +377,18 @@ class SymbolicEngine(object):
             return path
 
         init = dict(self.model.init_state)
+        init = self._shape(init)
+        if self._prunes(init):
+            # Phase 6.2: the assumption excludes the initial state, so the
+            # state space is empty -- the goal is unreachable (sound: there
+            # is no state at all).  Vacuity is recorded in the note.
+            self.assume_pruned += 1
+            return ReachResult(
+                NOT_REACHED, B, n_states=0, n_visits=0,
+                budget_complete=True, horizon_complete=True,
+                note=("the state constraints prune the initial state; the "
+                      "state space is empty, so the goal is unreachable "
+                      "(vacuous)"))
         init_key = frozenset(init.items())
         if goal_ok(init):
             return ReachResult(
@@ -289,6 +413,10 @@ class SymbolicEngine(object):
             for s in level:
                 n_visits += 1
                 for ns in _step(self.model, s, self.actions):
+                    if self._prunes(ns):
+                        self.assume_pruned += 1
+                        continue
+                    ns = self._shape(ns)
                     k = frozenset(ns.items())
                     if k in seen:
                         continue

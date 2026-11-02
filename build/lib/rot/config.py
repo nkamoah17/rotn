@@ -24,7 +24,8 @@ Two concerns are central:
       jar is present and reachable, otherwise fall back to the symbolic engine.
       This keeps the whole pipeline runnable in a bare Python environment.
 
-  * BUDGETS / BOUNDS. State-space budgets (``max_states``), CEGAR iteration cap
+  * BUDGETS / BOUNDS. State-space budgets (``max_states``), re-check iteration
+    cap
     (``cegar_max_iter``), the bounded-liveness horizon (``liveness_horizon``,
     max steps for ``bounded_eventually`` reach_within checks), and the
     property-directed bounds (``participant_bound`` / ``env_bound``) that
@@ -103,7 +104,12 @@ class Config(object):
                  apalache_jar=None,
                  apalache_java=None,
                  apalache_timeout=120,
-                 apalache_length=None):
+                 apalache_length=None,
+                 unbounded_liveness=False,
+                 fairness_action=None,
+                 fairness_engine=ENGINE_APALACHE,
+                 strong_fairness_actions=None,
+                 weak_fairness_actions=None):
         self.engine = engine
         self.tlc_jar = tlc_jar
         self.java_cmd = java_cmd
@@ -114,7 +120,7 @@ class Config(object):
         self.max_states = int(max_states)
         self.cegar_max_iter = int(cegar_max_iter)
         # Phase 4: bounded-liveness horizon (max steps) for ``bounded_eventually``
-        # invariants, used by the CEGAR loop's ``SymbolicEngine.reach_within``.
+        # invariants, used by the re-check loop's ``SymbolicEngine.reach_within``.
         self.liveness_horizon = int(liveness_horizon)
         self.participant_bound = participant_bound
         self.env_bound = env_bound
@@ -139,6 +145,36 @@ class Config(object):
         self.apalache_java = apalache_java
         self.apalache_timeout = int(apalache_timeout)
         self.apalache_length = int(apalache_length) if apalache_length else None
+        # Phase 2 (liveness): unbounded liveness (<>Goal) is OPT-IN.  When off
+        # (the default) every liveness claim is the *bounded* reachability form
+        # (the goal is reachable within the horizon), discharged by the concrete
+        # symbolic engine and cross-checked -- never an unconditional liveness
+        # claim.  When on, the claim is the *unbounded* form ``<>Goal`` under
+        # weak fairness on the harness decision action (``fairness_action``),
+        # discharged by ``fairness_engine`` (Apalache by default) and cross-
+        # checked by TLC; the fairness formula is ALWAYS recorded on the verdict
+        # (never silent).  See rot.liveness (the dual-soundness rule, spec R2).
+        self.unbounded_liveness = bool(unbounded_liveness)
+        # The harness action on which weak fairness WF(action) is imposed when
+        # unbounded liveness is on.  ``None`` means "the harness decision
+        # action" (the action the harness uses to make its decision -- e.g.
+        # ``Decide``).  Fairness is stated on harness actions *only*; it is
+        # never imposed on the agent (adversary).
+        self.fairness_action = fairness_action
+        # The engine that discharges unbounded liveness under fairness
+        # (spec D2: Apalache primary, TLC cross-check).  One of
+        # ``ENGINE_APALACHE`` / ``ENGINE_TLC``.
+        self.fairness_engine = fairness_engine
+        # Phase 6.3: fairness beyond single-action weak.
+        # ``strong_fairness_actions`` -- strong fairness SF(a) on the named
+        # harness action(s); ``weak_fairness_actions`` -- multi-action weak
+        # fairness WF(a1) / WF(a2) / ...  Both are stated on *harness*
+        # actions only (never imposed on the agent), and the resolved
+        # formula is ALWAYS recorded on the verdict (never silent; spec
+        # R2 / D2).  ``fairness_action`` (single-action WF) remains the
+        # pre-Phase-6 default.
+        self.strong_fairness_actions = list(strong_fairness_actions or [])
+        self.weak_fairness_actions = list(weak_fairness_actions or [])
 
     # -- engine selection ----------------------------------------------------
     def tlc_jar_path(self):
@@ -262,6 +298,11 @@ class Config(object):
             "apalache_available": self.apalache_available(),
             "apalache_timeout": self.apalache_timeout,
             "apalache_length": self.apalache_length,
+            "unbounded_liveness": self.unbounded_liveness,
+            "fairness_action": self.fairness_action,
+            "fairness_engine": self.fairness_engine,
+            "strong_fairness_actions": list(self.strong_fairness_actions),
+            "weak_fairness_actions": list(self.weak_fairness_actions),
             "out_dir": self.out_dir,
             "work_dir": self.work_dir,
             "llm_enabled": self.llm_enabled,
@@ -281,7 +322,9 @@ class Config(object):
                 "work_dir", "verbose", "llm_enabled", "llm_base_url",
                 "llm_api_key_env", "llm_model", "llm_timeout", "llm_max_turns",
                 "apalache_enabled", "apalache_jar", "apalache_java",
-                "apalache_timeout", "apalache_length")
+                "apalache_timeout", "apalache_length",
+                "unbounded_liveness", "fairness_action", "fairness_engine",
+                "strong_fairness_actions", "weak_fairness_actions")
         return cls(**{k: d[k] for k in keys if k in d})
 
 

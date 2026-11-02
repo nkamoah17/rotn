@@ -242,7 +242,16 @@ class Emitter(object):
         if guard is not None and not _is_true_expr(guard):
             parts.append(self.to_tla(guard))
         for e in a.effects:
-            parts.append("%s' = %s" % (self._tla_name(e.var), self.to_tla(e.expr)))
+            rhs_tla = self.to_tla(e.expr)
+            # A compound RHS (e.g. ``a \/ b`` or ``x + 1``) must be parenthesised:
+            # inside the action body it sits in a ``/\`` (conjunction) chain, and
+            # TLC rejects an unparenthesised binary op on the right of ``' =`` as
+            # a precedence conflict between the assignment's ``\land`` and the op.
+            # (``If`` is already self-parenthesised by ``to_tla``; atomic RHS are
+            # left bare.)
+            if isinstance(e.expr, (BinOp, AllOf, AnyOf)):
+                rhs_tla = "(" + rhs_tla + ")"
+            parts.append("%s' = %s" % (self._tla_name(e.var), rhs_tla))
         if unchanged:
             parts.append("UNCHANGED << %s >>"
                          % ", ".join(self._tla_name(v) for v in unchanged))
@@ -404,6 +413,204 @@ class Emitter(object):
             f.write(self.cfg(op))
         return tla_path, cfg_path, op
 
+    # -- Phase 1: constraint-vs-property emission path (the keystone) --------
+    # A *state constraint* (well-formedness / TypeInvariant) restricts the
+    # reachable state space: it is baked into ``Init`` and ``Next`` so an
+    # ill-formed state is *dropped* (never a VIOLATED counterexample), and it
+    # is listed as ``INVARIANT`` in the ``.cfg`` -- never as a ``PROPERTY``.
+    # A *temporal property* (safety / liveness, e.g. no_deadlock) is a claim
+    # checked over behaviours and is listed as ``PROPERTY`` in the ``.cfg``.
+    def _model_needs_integers_many(self, exprs):
+        """Whether the emitted spec needs ``EXTENDS Integers``.
+
+        Generalisation of :meth:`_model_needs_integers` over a *list* of
+        expressions (the state constraints + temporal properties of a spec).
+        """
+        if any(isinstance(d, IntRange) for d in self._domain_by_name.values()):
+            return True
+        init = self.model.init() or {}
+        for e in init.values():
+            if _expr_uses_integers(e):
+                return True
+        for a in self.model.actions:
+            if a.guard is not None and _expr_uses_integers(a.guard):
+                return True
+            for eff in a.effects:
+                if _expr_uses_integers(eff.expr):
+                    return True
+        for e in exprs:
+            if e is not None and _expr_uses_integers(e):
+                return True
+        return False
+
+    def _emit_spec_module(self, constraint_pairs, property_pairs):
+        """Build the TLA+ module body (list of lines) for a spec with state
+        constraints and temporal properties.
+
+        ``constraint_pairs`` -- ``(name, expr)`` state constraints
+        (well-formedness / ``TypeInvariant``). Each is emitted as a named
+        operator AND baked into ``Init`` and ``Next`` so ill-formed states are
+        *dropped* from the reachable set. A constraint is never emitted as a
+        ``PROPERTY``.
+        ``property_pairs`` -- ``(name, expr)`` temporal properties (safety /
+        liveness). Each is emitted as a named operator (listed as ``PROPERTY``
+        in the ``.cfg``).
+        """
+        m = self.model
+        vars_line = ", ".join(self._tla_name(v) for v in self._var_names)
+        all_exprs = [e for (_n, e) in constraint_pairs] + \
+                    [e for (_n, e) in property_pairs]
+        L = []
+        L.append("---- MODULE %s ----" % self.module_name)
+        L.append("")
+        if self._model_needs_integers_many(all_exprs):
+            L.append("EXTENDS Integers")
+            L.append("")
+        # Per-variable Apalache type annotations (same form as emit()).
+        L.append("VARIABLE")
+        for i, v in enumerate(self._var_names):
+            comma = "," if i < len(self._var_names) - 1 else ""
+            L.append("  \\* @type: %s;" % self._tla_type(v))
+            L.append("  %s%s" % (self._tla_name(v), comma))
+        L.append("")
+        # Named operators: state constraints first, then temporal properties.
+        for name, expr in constraint_pairs:
+            L.append("%s ==" % self._op_name(name))
+            L.append("  %s" % self.to_tla(expr))
+            L.append("")
+        for name, expr in property_pairs:
+            L.append("%s ==" % self._op_name(name))
+            L.append("  %s" % self.to_tla(expr))
+            L.append("")
+        # Init, baked with the state constraints (drops ill-formed states).
+        L.append("Init ==")
+        init = m.init() or {}
+        if not init:
+            L.append("  TRUE")
+        else:
+            for i, (k, e) in enumerate(init.items()):
+                sep = "  " if i == 0 else "  /\\ "
+                L.append("%s%s = %s" % (sep, self._tla_name(k), self.to_tla(e)))
+        for name, expr in constraint_pairs:
+            L.append("  /\\ %s" % self._op_name(name))
+        L.append("")
+        # One operator per linearised (non-initial) action.
+        for a in m.actions:
+            aname = self._tla_name(a.name)
+            L.append("%s ==" % aname)
+            L.extend(self._action_body(a))
+            L.append("")
+        # A totalising self-loop ("busy"): terminal != deadlock (adds no new
+        # reachable states; keeps the transition relation total).
+        busy_name = "busy"
+        if busy_name in self._taken or busy_name in _RESERVED:
+            busy_name = "_busy"
+        L.append("%s ==" % busy_name)
+        L.append("  UNCHANGED << %s >>" % vars_line)
+        L.append("")
+        # Next: disjunction of all actions (+ busy), baked with the state
+        # constraints so every successor is well-formed (ill-formed dropped).
+        # The disjunction is parenthesised so ``/\`` (which binds tighter than
+        # ``\/``) applies to the whole disjunction, not just the last disjunct.
+        L.append("Next ==")
+        anames = [self._tla_name(a.name) for a in m.actions] + [busy_name]
+        if constraint_pairs:
+            L.append("  (%s)" % " \\/ ".join(anames))
+            for name, expr in constraint_pairs:
+                L.append("  /\\ %s" % self._op_name(name))
+        else:
+            for i, n in enumerate(anames):
+                sep = "  " if i == 0 else "  \\/ "
+                L.append("%s%s" % (sep, n))
+        L.append("")
+        # vars tuple + Spec (the stuttering tuple needs the explicit type
+        # annotation for Snowcat/Apalache; same as emit()).
+        L.append("\\* @type: << %s >>;"
+                 % ", ".join(self._tla_type(v) for v in self._var_names))
+        L.append("vars == << %s >>" % vars_line)
+        L.append("")
+        L.append("Spec ==")
+        L.append("  Init")
+        L.append("  /\\ [][Next]_vars")
+        L.append("")
+        # Module terminator (this TLC/SANY build expects a run of '=').
+        L.append("====")
+        return L
+
+    def emit_spec(self, constraints, properties):
+        """Emit a TLA+ module for a spec with state constraints + properties.
+
+        Phase 1 constraint-vs-property emission path (the keystone):
+
+        * ``constraints`` -- ``(name, expr)`` state constraints (well-formedness
+          / ``TypeInvariant``). Each becomes a named operator and is **baked
+          into ``Init`` and ``Next``**, so a state that violates it is *dropped*
+          from the reachable set (never a ``VIOLATED`` counterexample). A
+          constraint is listed as ``INVARIANT`` in the ``.cfg`` and is **never**
+          a ``PROPERTY``.
+        * ``properties`` -- ``(name, expr)`` temporal properties (safety /
+          liveness, e.g. ``no_deadlock``). Each becomes a named operator listed
+          as ``PROPERTY`` in the ``.cfg``.
+
+        Returns ``(module_source, constraint_ops, property_ops)`` where the
+        ``*_ops`` are the sanitised TLA+ operator names (for the ``.cfg``).
+        """
+        constraint_pairs = list(constraints or [])
+        property_pairs = list(properties or [])
+        lines = self._emit_spec_module(constraint_pairs, property_pairs)
+        src = "\n".join(lines) + "\n"
+        constraint_ops = [self._op_name(n) for (n, _e) in constraint_pairs]
+        property_ops = [self._op_name(n) for (n, _e) in property_pairs]
+        return src, constraint_ops, property_ops
+
+    def cfg_spec(self, constraint_ops, property_ops, assumptions=None):
+        """A ``.cfg`` for the constraint-vs-property spec.
+
+        State constraints are listed as ``INVARIANT`` (the state-constraint
+        mechanism -- they restrict the state space and are never checked as a
+        temporal property); temporal properties are listed as ``PROPERTY``.
+
+        ``assumptions`` -- an optional list of fairness assumptions, each a
+        TLA+ action/operator name (e.g. ``"Decide"``). Each is emitted as
+        ``ASSUME WF(<action>)`` (weak fairness on the harness decision action,
+        spec D2 / R2).  This is the *named, explicit* fairness assumption: it is
+        never silently dropped -- when supplied it is always present in the
+        ``.cfg`` the engine reads, so a liveness claim discharged under it is
+        sound and the fairness is recorded, not assumed away.
+        """
+        lines = ["SPECIFICATION Spec"]
+        for op in constraint_ops:
+            lines.append("INVARIANT %s" % op)
+        for op in property_ops:
+            lines.append("PROPERTY %s" % op)
+        for action in (assumptions or []):
+            lines.append("ASSUME WF(%s)" % action)
+        return "\n".join(lines) + "\n"
+
+    def write_spec(self, out_dir, constraints, properties, base=None,
+                   assumptions=None):
+        """Write ``<base>.tla`` and ``<base>.cfg`` for a constraints+properties
+        spec. Returns ``(tla_path, cfg_path, constraint_ops, property_ops)``.
+
+        ``assumptions`` (optional) is a list of fairness action names emitted as
+        ``ASSUME WF(<action>)`` in the ``.cfg`` (spec D2 -- never silently
+        dropped).
+        """
+        import os
+        base = base or self.module_name
+        if out_dir and not os.path.isdir(out_dir):
+            os.makedirs(out_dir)
+        prefix = os.path.join(out_dir, base) if out_dir else base
+        src, constraint_ops, property_ops = self.emit_spec(constraints, properties)
+        tla_path = prefix + ".tla"
+        cfg_path = prefix + ".cfg"
+        with open(tla_path, "w") as f:
+            f.write(src)
+        with open(cfg_path, "w") as f:
+            f.write(self.cfg_spec(constraint_ops, property_ops,
+                                  assumptions=assumptions))
+        return tla_path, cfg_path, constraint_ops, property_ops
+
 
 def _expr_uses_integers(e):
     """True if an IR expression tree uses any operator that lives in TLC's
@@ -520,6 +727,50 @@ def emit_delta(delta_ir, invariant_name, invariant_expr, module_name=None):
     return src, op, em
 
 
-__all__ = ["Emitter", "emit_delta"]
+def emit_refinement_chain(chain, implication=None, target=None):
+    """Emit the robustness-ladder refinement chain as a named-layer spec (F4).
+
+    Each rung (R0/R1/R2) is a *named layer* carrying its environment model
+    (agent posture, harness faults, fairness), and the implication argument
+    (why R2 => R1 => R0) is emitted as a comment block. This is the auditable,
+    end-to-end record of the ladder (spec F4 / T3).
+
+    ``chain`` is the list of per-rung dicts from :func:`rot.ladder.
+    refinement_chain`; ``implication`` is the dict from :func:`rot.ladder.
+    implication_argument` (optional); ``target`` is the harness name (optional).
+
+    Returns the spec text (a string).
+    """
+    lines = ["---- REFINEMENT CHAIN (robustness ladder) ----", ""]
+    if target:
+        lines.append("\\* harness : %s (the same system under test at every rung)" % target)
+    lines.append("\\* principle: %s" % (
+        (implication or {}).get("principle",
+                                "refinement is implication: same harness, weakening environment")))
+    for m in (implication or {}).get("monotone_environment", []):
+        lines.append("\\*   %s" % m)
+    if implication:
+        lines.append("\\*   F1 (safety) : %s" % implication.get("safety_F1", ""))
+        lines.append("\\*   F2 (liveness): %s" % implication.get("liveness_F2", ""))
+        lines.append("\\*   F3 (non-claim): %s" % implication.get("non_claim_F3", ""))
+    lines.append("")
+    for layer in chain:
+        env = layer.get("environment", {})
+        lines.append("LAYER %s  (level %d, %s)" % (
+            layer.get("rung", "?"), layer.get("level", -1), layer.get("label", "?")))
+        lines.append("\\*   agent posture   : buggy=%s" % env.get("buggy"))
+        faults = env.get("harness_faults") or []
+        lines.append("\\*   harness faults  : %s" % (", ".join(faults) if faults else "none"))
+        fair = env.get("fairness_actions") or []
+        lines.append("\\*   fairness        : %s" % (
+            ", ".join("WF(%s)" % a for a in fair) if fair else "none"))
+        if "ir_name" in layer:
+            lines.append("\\*   IR              : %s" % layer["ir_name"])
+        lines.append("\\*   %s" % (env.get("description", "")).strip())
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+__all__ = ["Emitter", "emit_delta", "emit_refinement_chain"]
 
 

@@ -1,0 +1,38 @@
+usage: rot [-h] [--version]
+           {check,replay,ci,demo,report,corpus,license,trace,coach,runtime,site,doctor,ladder,ab}
+           ...
+
+ROTN -- temporal policy verification engine (sound core, zero dependencies).
+
+positional arguments:
+  {check,replay,ci,demo,report,corpus,license,trace,coach,runtime,site,doctor,ladder,ab}
+    check               verify a policy; emit verdict + attack.jsonl
+    replay              re-derive a recorded attack.jsonl
+    ci                  CI gate: verdict + JUnit XML + SARIF
+    demo                the beachhead demo: rule -> attack -> proof -> coach
+                        -> attestation (one command)
+    report              the one-pager as an ATTESTATION (B3): --one-pager
+                        --trace FILE emits Markdown + HTML; --verify-trace
+                        FILE --expect HASH re-derives the trace hash (the re-
+                        verify step)
+    corpus              run the AWS Dogwood corpus
+    license             manage Caravel licenses (Phase D): verify / make /
+                        show
+    trace               emit the RTF v1 deterministic, hashable reasoning
+                        trace
+    coach               coach the agent back in bounds, *with a proof* (the
+                        CoachingArtifact: corrected policy + rationale + re-
+                        proof)
+    runtime             the runtime plane (Product 2): enforce rules on live
+                        tool calls (eval / serve)
+    site                regenerate the replay site's RTF trace data + registry
+                        (the Ship plane: a pure function of the sample
+                        policies)
+    doctor              diagnose the ROTN installation (Python, package,
+                        engines; --deep runs a real self-test)
+    ladder              ==SUPPRESS==
+    ab                  ==SUPPRESS==
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --version             show program's version number and exit

@@ -1,0 +1,124 @@
+............................................................C:\Users\jeren\Documents\KAMANU\ROTN\tests\test_attestation.py:220: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\jeren\\AppData\\Local\\Temp\\rot-report-7gx_l8i9\\one_pager.md' mode='r' encoding='utf-8'>
+  self.assertIn("Attestation", open(md, encoding="utf-8").read())
+C:\Users\jeren\Documents\KAMANU\ROTN\tests\test_attestation.py:221: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\jeren\\AppData\\Local\\Temp\\rot-report-7gx_l8i9\\one_pager.html' mode='r' encoding='utf-8'>
+  self.assertIn("<html", open(html, encoding="utf-8").read())
+C:\Users\jeren\Documents\KAMANU\ROTN\tests\test_attestation.py:224: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\jeren\\AppData\\Local\\Temp\\rot-report-7gx_l8i9\\one_pager.md' mode='r' encoding='utf-8'>
+  first_md = open(md, encoding="utf-8").read()
+C:\Users\jeren\Documents\KAMANU\ROTN\tests\test_attestation.py:229: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\jeren\\AppData\\Local\\Temp\\rot-report-7gx_l8i9\\one_pager.md' mode='r' encoding='utf-8'>
+  self.assertEqual(first_md, open(md, encoding="utf-8").read())
+.................................................................................................................................................................................................................................ERROR: --witness must be NAME=ITF_JSON (got 'no-equals-here')
+..........ss................ss.........................................................................................................................................................................................................................................................................................................................................ERROR: policy file not found: C:\Users\jeren\Documents\KAMANU\ROTN\tests\fixtures\aws_dogwood\spendcap\policies\no_such.dw
+.ERROR: policy file not found: C:\Users\jeren\Documents\KAMANU\ROTN\no_such.cedar
+.................................................................sssssssssssss........................................ss...............................................................................
+----------------------------------------------------------------------
+Ran 844 tests in 3.518s
+
+OK (skipped=19)
+==================================================================
+  rot demo --beachhead spendcap
+  SCOPE (D2): the initial demo = the spend-cap (payments)
+  parallel-fire bug + the coach. The MCP/trifecta story ships
+  with B2.3 (not part of this demo).
+==================================================================
+==================================================================
+BEAT 1 -- RULE: the spend-cap policy (policy -> model abstraction)
+==================================================================
+==========================================================================
+POLICY -> MODEL ABSTRACTION
+policy file : C:\Users\jeren\Documents\KAMANU\ROTN\tests\fixtures\aws_dogwood\spendcap\policies\spendcap-buggy.dw
+==========================================================================
+[1] RAW POLICY TEXT  (what a human wrote in Dogwood)
+      // BUGGY spend-cap policy — sums over Transfer::response rows only (settled
+      // completions). In-flight (issued, not-yet-responded) transfers are invisible
+      // to the sum, so a parallel burst of fires can overshoot the 200 cap.
+      //
+      // The one-word bug: `response` instead of `request`.
+      //
+      // Schema: Drupe namespace (alert_total_transfer_over_200 schema).
+      // TransferInput carries `amount: Long`; TransferOutput is empty.
+      // The response event carries the same `input` as its request, so
+      // `response{ input.amount: a }` is well-formed.
+      //
+      // Counterexample (parallel-fire race):
+      //   fire(amount=100) -> permit  (sum=0,  0+100<=200)
+      //   fire(amount=100) -> permit  (sum=0,  0+100<=200)   <-- response not yet arrived
+      //   fire(amount=100) -> permit  (sum=0,  0+100<=200)   <-- 3 in-flight, committed=300>200
+      //
+      // See: examples/refund_budget_settled_plus_current/policy.dw (the `response`-sum idiom),
+      //      guide/08-formal-specification.md §5.4 (temporal windows are closed/reflexive).
+      
+      @id("spendcap_buggy")
+      permit (
+          principal,
+          action == Drupe::Action::"Transfer",
+          resource
+      )
+      when temporal {
+          (sum a for (a: Long), (t: Timepoint). where (
+              formerly within 24h (Drupe::Action::"Transfer"::response{ input.amount: a } && tp(t))
+          )) <= 200
+      };
+[2] PARSED SEMANTIC FINGERPRINT  (what the .dw front-end extracted)
+      id='spendcap_buggy'  action='Transfer'  event_kind='response'  cap=200  window='24h'
+      -> selects model variant : BUGGY (response-sum)
+[3] BOUNDED IR MODEL  (what ROTN actually checks -- one source of truth)
+      completed  : [0 .. 200]     settled amount (sum of responded requests)
+      inflight   : [0 .. 4]       approved-but-unsettled (in-flight) request count
+      spend_ok.guard   : completed + 100 <= 200 and inflight < 4
+      spend_deny.guard : not (completed + 100 <= 200)
+      invariant spendcap_within_cap: completed + inflight * 100 <= 200
+[4] EXPLICIT ASSUMPTIONS  (modelled, but NOT written in the policy)
+      uniform amount : AMOUNT = 100  (every request is the same size)
+      spend cap      : CAP    = 200  (the policy limit)
+      bounded pool   : K      = 4  (max concurrent in-flight requests)
+      single service : n      = 1  (one decision plane)
+[5] CORRESPONDENCE ARGUMENT  (policy obligation -> invariant)
+      policy clause : spendcap: the sum over all requests (settled + in-flight) must not exceed the cap
+      obligation    : in-flight (issued, unsettled) requests count against the cap
+      modelled as   : spend_ok admits a request only if the cap still fits it
+      THIS VARIANT  : guard charges 'completed' only -> in-flight is invisible -> VIOLATED
+==========================================================================
+
+==================================================================
+BEAT 2 -- ATTACK: the deterministic counterexample + the K-sweep
+==================================================================
+  [PASS] buggy.dw VIOLATED (witness + attack.jsonl)           exit=1 expected=1
+==========================================================================
+  ROTN replay
+==========================================================================
+  attack    : C:\Users\jeren\AppData\Local\Temp\rotn_d5_6y574fc0\attack.jsonl
+  policy    : C:\Users\jeren\Documents\KAMANU\ROTN\tests\fixtures\aws_dogwood\spendcap\policies\spendcap-buggy.dw
+  property  : spendcap_within_cap
+  recorded  : {"completed": 0, "inflight": 3}
+  re-derived: {"completed": 0, "inflight": 3}
+  result    : REPRODUCED -- the counterexample still holds
+==========================================================================
+  [PASS] replay (the counterexample reproduces)               exit=1 expected=1
+  -- K-sweep: the pool K is the whole story (K=1 masks, K>=2 exposes)
+  [PASS] K=1 masked (buggy.dw --max-inflight 1)               exit=0 expected=0
+  [PASS] K=2 exposes (buggy.dw --max-inflight 2)              exit=1 expected=1
+==================================================================
+BEAT 3 -- PROOF: the corrected policy is safe (+ RTF manifest + hash)
+==================================================================
+  [PASS] correct.dw PROVEN (the fix is verifiably safe)       exit=0 expected=0
+  manifest  : mf-29dbb85e6c258e87
+  hash      : b3ac560c75c60b419d2e912d29049b3c709188e18299ab2ec6ec0c368ff736d3
+==================================================================
+BEAT 4 -- COACH: the runtime refusal (to_proceed + allowed_now) -- Product 2
+==================================================================
+  state       : {"completed": 0, "inflight": 2}
+  blocked     : True
+  why         : 2 in-flight requests are invisible to the settled-trace monitor
+  to-proceed  : complete 1 in-flight (or cap inflight at 1)
+  allowed_now : False
+  refusal     : f9cc5b57a4102f8d4380b097a18bbda5d6f413134a0cc7ea0311423e7c83a5b5
+==================================================================
+BEAT 5 -- ATTESTATION: the one-pager (path + hash + re-verify command)
+==================================================================
+  coverage  : 4 of 13 SAFE, 8 of 13 UNSAFE, 1 of 13 UNKNOWN (out of scope)
+  one-pager : C:\Users\jeren\AppData\Local\Temp\rotn_d5_6y574fc0\one_pager.md
+  html      : C:\Users\jeren\AppData\Local\Temp\rotn_d5_6y574fc0\one_pager.html
+  att hash  : b7f5043c55f0c614176be6c99366c20c865e25490d613e9b45c38c941c7403b4
+  re-verify : rot trace --policy C:\Users\jeren\Documents\KAMANU\ROTN\tests\fixtures\aws_dogwood\spendcap\policies\spendcap-buggy.dw --out /tmp/rotn_reverify.json && rot report --verify-trace /tmp/rotn_reverify.json --expect fdd86f08426ff494a0feceb655fda9d57c1eba7e2f1f660747582528d7b29670
+==================================================================
+DEMO OK: rule -> attack -> proof -> coach -> attestation. Single command, exit 0; the attestation hash + re-verify command are above.

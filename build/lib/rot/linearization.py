@@ -21,13 +21,15 @@ and every iteration is over an explicitly ordered list.
 Pure stdlib, Python 3.6 compatible.
 """
 
-from .ir import (T, F, Expr)
+from .ir import (T, F, Expr, Bool, Enum, IntRange)
+from .impact import _action_written_vars
 UNDEF = Expr.UNDEF
 class LinearModel(object):
     """A deterministic, ordered transition system derived from a ProtocolIR."""
 
     def __init__(self, name, variables, init_action, actions, pc_values,
-                 init_state, provenance):
+                 init_state, provenance, assumes=None,
+                 stuttering_assumption=None):
         self.name = name
         self.variables = list(variables)      # StateVar list (ordered)
         self.init_action = init_action        # Action (the is_initial action)
@@ -35,6 +37,22 @@ class LinearModel(object):
         self.pc_values = list(pc_values)      # ordered control points (str)
         self.init_state = dict(init_state)    # var -> value
         self.provenance = provenance or {}    # dict (functions/calls/messages)
+        # Phase 6.2: state constraints (TLA+ ASSUME clauses) carried over from
+        # the IR; the concrete engines prune states that do not definitely
+        # satisfy them (sound pruning).  Empty by default.
+        self.assumes = list(assumes or [])
+        # Phase 6.1: the stated stuttering assumption (stated, never silent).
+        from .ir import STUTTERING_ASSUMPTION
+        self.stuttering_assumption = (
+            STUTTERING_ASSUMPTION if stuttering_assumption is None
+            else stuttering_assumption)
+        # Constant-node reduction (GSSM §2.6, the general state space): a state
+        # variable that no transition action ever writes is a *constant node* --
+        # it can only ever hold its initial value, so it contributes a single
+        # state rather than its full domain.  Marking them shrinks the state
+        # space the naive linearized chain would otherwise carry.  This is a
+        # pure *view* over the actions -- it changes nothing the engines do.
+        self.constant_nodes = self._constant_node_names()
 
     # -- lookups -------------------------------------------------------------
     @property
@@ -53,6 +71,76 @@ class LinearModel(object):
     def init(self):
         """Return the Init effect dict (var -> value), for the Init predicate."""
         return {e.var: e.expr for e in self.init_action.effects}
+
+    # -- constant-node reduction (GSSM §2.6, the general state space) --------
+    def _constant_node_names(self):
+        """Variable names never written by any transition action.
+
+        These are the *constant nodes* (GSSM constant-awareness, §IV-3c): a
+        variable only the ``init`` action writes can only ever hold its initial
+        value, so it is a constant of the state space, not time-varying state.
+        Reuses ``rot.impact._action_written_vars`` for the write-set.
+        """
+        written = set()
+        for a in self.actions:
+            written |= _action_written_vars(a)
+        return [v.name for v in self.variables if v.name not in written]
+
+    def varying_var_names(self):
+        """Variable names written by at least one transition action."""
+        written = set()
+        for a in self.actions:
+            written |= _action_written_vars(a)
+        return [v.name for v in self.variables if v.name in written]
+
+    def domain_size(self, name):
+        """The finite cardinality of the named variable's domain (None if unknown)."""
+        sv = self.var(name)
+        d = sv.domain
+        if isinstance(d, Bool):
+            return 2
+        if isinstance(d, Enum):
+            return len(d.values)
+        if isinstance(d, IntRange):
+            return max(0, d.hi - d.lo + 1)
+        return None
+
+    def state_space(self):
+        """The state-space dimension, with and without constant-node reduction.
+
+        Returns a dict:
+
+        * ``chain``   -- the naive linearized-chain state space: the product of
+          the domain sizes of *all* state variables (the full Cartesian product;
+          an upper bound on the reachable states).
+        * ``reduced`` -- the constant-node-reduced state space: the product over
+          only the *varying* variables (a constant node contributes a factor of
+          1, since it can only ever hold its initial value).
+        * ``constant_nodes`` -- the variable names that are constant (init-only).
+        * ``n_variables`` / ``n_varying`` -- the counts.
+
+        ``reduced <= chain`` always; ``reduced < chain`` iff there is a constant
+        node with a domain of size > 1 (the 2PC fixture's Phase 2 gate).  This is
+        a pure measurement over the model -- it does not change what is verified.
+        """
+        def _product(names):
+            p = 1
+            for n in names:
+                s = self.domain_size(n)
+                if s is None:
+                    return None
+                p *= s
+            return p
+
+        all_names = [v.name for v in self.variables]
+        varying = self.varying_var_names()
+        return {
+            "chain": _product(all_names),
+            "reduced": _product(varying),
+            "constant_nodes": list(self.constant_nodes),
+            "n_variables": len(all_names),
+            "n_varying": len(varying),
+        }
 
     # -- concrete stepping ---------------------------------------------------
     def _apply_effects(self, state, effects):
@@ -160,6 +248,8 @@ def linearize(ir):
         pc_values=[a.name for a in transitions],
         init_state=init_state,
         provenance=provenance,
+        assumes=getattr(ir, "assumes", None),
+        stuttering_assumption=getattr(ir, "stuttering_assumption", None),
     )
 
 

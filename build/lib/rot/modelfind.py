@@ -295,3 +295,82 @@ class ModelFinder(object):
             node = prev_key
         steps.reverse()
         return steps
+
+
+def find_deadlock_state(ir, terminal=None, max_states=100000):
+    """A reusable "reachable stuck state" check (the deadlock discriminator).
+
+    A **stuck state** (a *deadlock*) is a reachable state in which the system
+    makes no further progress: **no non-initial action is enabled** (every
+    guard is False or UNDEF) in that state, and the state is not a legitimate
+    terminal/finished condition.
+
+    This is the precise boundary between a *deadlock* (stuck: no action is
+    enabled here, so the system cannot move, and the task is not done) and a
+    *livelock* (not stuck: some action *is* enabled and taken, but the task
+    never completes).  It is a pure, engine-agnostic helper: it builds a
+    :class:`ModelFinder` over ``ir`` and returns a witness, so it can be
+    driven by any caller (the MR gate, the CLI, or a test) without
+    re-implementing the BFS.
+
+    Parameters
+    ----------
+    ir : rot.ir.ProtocolIR
+        The transition system to explore (the general agent-harness / approval
+        model).
+    terminal : rot.ir.Expr or None
+        An optional predicate that marks *legitimate terminal* states (e.g.
+        ``done OR escalated``).  A stuck state that satisfies ``terminal`` is a
+        normal end-of-run, not a deadlock, and is skipped.  When ``None``,
+        every stuck state counts as a deadlock witness.
+    max_states : int
+        The reachable-state budget (default 100000).
+
+    Returns
+    -------
+    (bool, dict or None, list)
+        A 3-tuple:
+
+        * ``stuck`` -- True if a reachable *deadlock* (stuck, non-terminal)
+          state exists;
+        * ``witness`` -- the deadlock state dict, or ``None``;
+        * ``reachable`` -- the list of reachable states (for the caller to
+          reason about, e.g. to check whether any enabled action ever fires).
+
+    The test is *conservative*: a state is a deadlock witness only if **no**
+    non-initial action's guard is definitely True in it AND (if ``terminal``
+    is given) ``terminal`` is not definitely True in it.  A state with at
+    least one enabled action is *not* stuck (the system can still move), even
+    if it never completes -- that is the livelock case, which this helper
+    deliberately does **not** report.  It reports only the stuck/deadlock
+    half; the caller combines this with the ``TaskEndsOrEscalates`` liveness
+    verdict to distinguish deadlock (stuck) from livelock (progress without
+    completion).
+    """
+    finder = ModelFinder.from_ir(ir, max_states=max_states)
+    reachable = finder.reachable_states()
+    if not reachable:
+        return (False, None, [])
+    non_initial = [a for a in ir.actions if not getattr(a, "is_initial", False)]
+    for state in reachable:
+        any_enabled = False
+        for a in non_initial:
+            g = a.guard.eval(state)
+            if g is Expr.UNDEF:
+                continue
+            if g:
+                any_enabled = True
+                break
+        if any_enabled:
+            continue
+        # A reachable state where no non-initial action is enabled: the system
+        # is stuck here.  But a *terminal* state (task done / escalated) is a
+        # legitimate end-of-run, not a deadlock -- skip it.
+        if terminal is not None:
+            t = terminal.eval(state)
+            if t is Expr.UNDEF or t:
+                continue
+        # A non-terminal stuck state: a deadlock witness.  The caller can
+        # inspect the witness to confirm the task is still pending.
+        return (True, dict(state), reachable)
+    return (False, None, reachable)

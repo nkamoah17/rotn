@@ -47,6 +47,19 @@ PROPERTY_NAME = "spendcap_within_cap"
 #: A ``.dw`` spend-cap policy always pins a safety property.
 PROPERTY_KIND = "safety"
 
+#: Map the lowered shape (``rot.lower`` metadata ``protocol``) to the
+#: ``(family, property_name)`` the router contract and the pipeline report
+#: expect.  The four aggregate shapes all pin a "within-cap" safety invariant;
+#: the taint-egress shape pins the ``no_exfiltration`` invariant instead
+#: (the thesis's "never contact outsiders after touching confidential data").
+_SHAPE = {
+    "SPENDCAP": ("SPENDCAP", "spendcap_within_cap"),
+    "COUNT_WINDOW": ("SPENDCAP", "spendcap_within_cap"),
+    "EXISTS_SUM": ("SPENDCAP", "spendcap_within_cap"),
+    "REFUND_BUDGET": ("SPENDCAP", "spendcap_within_cap"),
+    "TAINT_EGRESS": ("TAINT_EGRESS", "no_exfiltration"),
+}
+
 
 class DwFrontendError(ValueError):
     """Raised when a ``.dw`` file cannot be lowered into a ProtocolIR."""
@@ -111,11 +124,18 @@ def build_ir(policy_path, tools_path=None, n_steps=1, max_inflight=None,
     except dw.DwParseError as exc:
         raise DwFrontendError(str(exc))
 
+    # Stamp the family / property for the *shape* the policy lowered to.  The
+    # four aggregate shapes pin a "within-cap" invariant; the taint-egress
+    # shape pins ``no_exfiltration``.  Unknown shapes default to the spend-cap
+    # contract (the original and most common shape).
+    protocol = model.metadata.get("protocol", "SPENDCAP")
+    family, property_name = _SHAPE.get(protocol,
+                                       ("SPENDCAP", PROPERTY_NAME))
     model.metadata.update({
-        "family": "SPENDCAP",
+        "family": family,
         "frontend": "dw",
         "property_kind": PROPERTY_KIND,
-        "property_name": PROPERTY_NAME,
+        "property_name": property_name,
         "policy_source": os.path.abspath(policy_path),
     })
 

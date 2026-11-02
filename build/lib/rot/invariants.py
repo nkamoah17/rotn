@@ -1,10 +1,18 @@
 # -*- coding: utf-8 -*-
-"""invariants.py -- named safety invariants for the 2PC + ZAB + PBFT vertical slice.
+"""invariants.py -- named safety invariants for the product plane.
 
-The pipeline pins ONE safety invariant at a time (the soundness core is
+The pipeline pins ONE invariant at a time (the soundness core is
 property-directed: abstraction keeps only the property's free-variable closure).
 This module is the registry of *named* invariants we can pin, so the CLI and the
 report can refer to them by a stable name rather than an ad-hoc expression.
+
+The product plane carries the policy-plane and agent-harness invariants
+(spend-cap, exfiltration, over-privilege, and the structural soundness core).
+The protocol-plane and governance-plane invariants (2PC, ZAB, PBFT, payment
+composition, approval/delegation, orchestration liveness) live in the research
+plane -- the ``rotn_research`` package (the ``rotn-research`` repository),
+which builds on this module and extends the registry
+(see ``rotn_research.invariants``).
 
 Each :class:`Invariant` carries:
 
@@ -36,22 +44,21 @@ blocking-permission rule:
 Most invariants are *safety*: the predicate must hold in **every** reachable
 state.  The ``bounded_eventually`` invariant is the first *liveness*
 invariant (``kind="liveness"``): its ``expression`` is a **goal** predicate
-that must be *reachable* within a bounded horizon, and the CEGAR loop
+that must be *reachable* within a bounded horizon, and the re-check loop
 (``rot.cegar``) dispatches it to ``SymbolicEngine.reach_within`` instead of
 a universal safety check.
 
 The expressions are built with the same ``rot.ir`` helpers the target IRs use
-(rot.twopc, rot.zab, rot.pbft), so they evaluate with the IR's own three-valued
-``Expr.eval``.
+(rot.spendcap, rot.agent_step, rot.agent_harness), so they evaluate with the
+IR's own three-valued ``Expr.eval``.
 
 Pure stdlib, Python 3.6 compatible.
 """
 
 import rot.ir as ir
-import rot.zab as zab
-import rot.payment as payment
 import rot.spendcap as spendcap
 import rot.agent_step as agent_step
+import rot.agent_harness as agent_harness
 
 
 # ---------------------------------------------------------------------------
@@ -64,9 +71,20 @@ LABEL_EVENTUALLY   = "bounded_eventually"
 
 #: Invariant kinds.  Safety predicates must hold in **every** reachable state
 #: (``SymbolicEngine.check``); liveness predicates must be **reachable**
-#: within a bounded horizon (``SymbolicEngine.reach_within``).
+#: within a bounded horizon (``SymbolicEngine.reach_within``).  A *constraint*
+#: is a state constraint (a ``TypeInvariant``-style well-formedness predicate):
+#: it is not a property to be checked -- it *restricts* the state space, so a
+#: state that violates it is **dropped** from the reachable set (never a
+#: ``VIOLATED`` counterexample).  In the TLA+ spec it is emitted as a state
+#: constraint (``INVARIANT`` in the ``.cfg``), never as a ``PROPERTY``.
 KIND_SAFETY   = "safety"
 KIND_LIVENESS = "liveness"
+KIND_CONSTRAINT = "constraint"
+
+#: The three well-formed property kinds.  ``KIND_CONSTRAINT`` is the
+#: state-constraint kind (well-formedness); the other two are temporal
+#: properties (safety / liveness).
+KINDS = (KIND_SAFETY, KIND_LIVENESS, KIND_CONSTRAINT)
 
 #: The set of labels that are strong enough to block an MR (when also pinned).
 BLOCKING_LABELS = frozenset((LABEL_INDUCTIVE, LABEL_BOUNDED, LABEL_EVENTUALLY))
@@ -97,7 +115,7 @@ class Invariant(object):
         Stable name, human text, IR predicate, and the invariant kind:
         ``"safety"`` (default -- the predicate must hold in every reachable
         state) or ``"liveness"`` (the predicate is a *goal* that must be
-        reachable within a bounded horizon; the CEGAR loop dispatches it to
+        reachable within a bounded horizon; the re-check loop dispatches it to
         ``SymbolicEngine.reach_within``).
     label : str or None
         One of :data:`LABEL_INDUCTIVE`, :data:`LABEL_BOUNDED`,
@@ -125,11 +143,19 @@ class Invariant(object):
         in-flight) must not exceed the cap").  Recorded on counterexample
         trace steps (``Verdict.trace``) so a reported violation can be tied
         back to the clause it breaks.  ``None`` when not set.
+    violation_code : str or None
+        The :data:`rot.verdicts` violation code this invariant's violation
+        carries (e.g. ``DEADLOCK`` for ``no_deadlock``).  When set, the verdict
+        layer (``rot.cegar``) stamps VIOLATED verdicts with this code instead
+        of the default
+        (``POLICY_DENIAL`` for safety / ``LIVENESS_BOUND_EXCEEDED`` for
+        liveness).  ``None`` when not set (the default applies).
     """
 
     def __init__(self, name, description, expression, kind="safety",
                  label=None, pinned=False, bound=None, n_traces=None,
-                 rung=RUNG_PROTOCOL, policy_clause=None):
+                 rung=RUNG_PROTOCOL, policy_clause=None,
+                 violation_code=None):
         if label is not None and label not in (LABEL_INDUCTIVE,
                                                LABEL_BOUNDED,
                                                LABEL_LIKELY,
@@ -151,6 +177,7 @@ class Invariant(object):
         self.n_traces = int(n_traces) if n_traces is not None else None
         self.rung = int(rung)
         self.policy_clause = policy_clause
+        self.violation_code = violation_code
 
     # -- blocking permission -------------------------------------------------
     def declared_permission(self):
@@ -209,6 +236,88 @@ class Invariant(object):
     def __repr__(self):
         return "<Invariant %s (label=%r, pinned=%r)>" % (
             self.name, self.label, self.pinned)
+
+
+# ---------------------------------------------------------------------------
+# G0: well-formedness (TypeInvariant) -- a state constraint, not a property
+# ---------------------------------------------------------------------------
+def _wf_clause(v):
+    """The well-formedness clause for one state variable, from its domain.
+
+    Returns an :class:`rot.ir.Expr` (or ``None`` for an unhandled domain).
+
+    * ``IntRange`` [lo, hi]  -> ``lo <= v <= hi`` (covers *domains* and the
+      *budget bounds* of a budget/spend variable declared ``[0, cap]``);
+    * ``Bool``               -> ``v \\in {TRUE, FALSE}`` (a *domain* check);
+    * ``Enum`` {v1, ...}     -> ``v \\in {v1, ...}`` (*label membership* when the
+      enum is a label set, *history shape* when its values are the well-formed
+      shapes of a history variable).
+    """
+    d = v.domain
+    if isinstance(d, ir.IntRange):
+        return ir.And(ir.BinOp(">=", ir.V(v.name), ir.C(d.lo)),
+                      ir.BinOp("<=", ir.V(v.name), ir.C(d.hi)))
+    if isinstance(d, ir.Bool):
+        return ir.BinOp("in", ir.V(v.name), ir.C([True, False]))
+    if isinstance(d, ir.Enum):
+        return ir.BinOp("in", ir.V(v.name), ir.C(list(d.values)))
+    return None
+
+
+def type_invariant(model):
+    """``TypeInvariant`` -- the model's well-formedness *state constraint*.
+
+    This is a **state constraint** (``kind == KIND_CONSTRAINT``), *not* a
+    temporal property: it *restricts* the reachable state space to well-formed
+    states rather than being a claim checked over behaviours. A state that
+    violates it is **dropped** from the reachable set (never a ``VIOLATED``
+    counterexample), and in the TLA+ spec it is emitted as a *constraint*
+    (baked into ``Init``/``Next`` and listed as ``INVARIANT``), never as a
+    ``PROPERTY`` (see ``rot.emitter.emit_spec``).
+
+    The predicate is the conjunction, over every declared state variable, of
+    the well-formedness clause for its domain, covering the four
+    well-formedness categories:
+
+    * **domains**         -- an ``IntRange`` variable ``v`` satisfies
+                            ``lo <= v <= hi``; a ``Bool`` variable is a boolean;
+    * **budget bounds**   -- a budget/spend variable declared ``IntRange``
+                            ``[0, cap]`` is non-negative and within the cap;
+    * **label membership** -- an ``Enum`` label variable is a declared member
+                            of its label set (``v \\in {labels}``);
+    * **history shape**   -- a history variable (an ``Enum`` whose values are
+                            the well-formed shapes) holds one of them
+                            (``v \\in {shapes}``).
+
+    Parameters
+    ----------
+    model : rot.ir.ProtocolIR
+        The protocol model whose declared state-variable domains define the
+        well-formedness predicate.
+    """
+    conjs = []
+    for v in model.variables:
+        clause = _wf_clause(v)
+        if clause is not None:
+            conjs.append(clause)
+    expr = ir.And(*conjs) if conjs else ir.T()
+    return Invariant(
+        name="type_invariant",
+        description="TypeInvariant: every state variable is well-formed in its "
+                    "declared domain (domains, budget bounds, label membership, "
+                    "history shape) -- a state constraint, not a property",
+        expression=expr,
+        kind=KIND_CONSTRAINT,
+        # A state *constraint* is not a blocking claim: it restricts the state
+        # space (ill-formed states are dropped), so it is neither pinned nor
+        # labelled as an MR-gate permission (a constraint violation is never a
+        # VIOLATED counterexample).
+        label=None,
+        pinned=False,
+        rung=RUNG_STRUCTURAL,
+        policy_clause="well-formedness: every state variable holds a well-formed "
+                      "value in its declared domain",
+    )
 
 
 def agreement(n=3):
@@ -280,163 +389,6 @@ def no_spurious_abort(n=3):
     )
 
 
-def zab_no_premature_apply(n=3):
-    """ZAB: a follower never applies an uncommitted transaction.
-
-    For every follower ``j`` and transaction ``i``:
-    ``applied(i,j) = done => committed(i) = done``.
-    This is the discriminator between the correct and buggy ZAB variants.
-    """
-    conjs = []
-    for j in range(1, n + 1):
-        for i in range(1, zab.M + 1):
-            conjs.append(ir.If(
-                ir.eq(ir.V("applied_%d_%d" % (i, j)), ir.C("done")),
-                ir.eq(ir.V("committed_%d" % i), ir.C("done")),
-                ir.T()))
-    return Invariant(
-        name="zab_no_premature_apply",
-        description="ZAB: followers never apply a tx before the leader commits it",
-        expression=ir.And(*conjs) if conjs else ir.T(),
-        kind="safety",
-        label=LABEL_BOUNDED,
-        pinned=True,
-    )
-
-
-def zab_apply_persisted(n=3):
-    """ZAB: a follower applies a transaction only if it has persisted it.
-
-    For every follower ``j`` and transaction ``i``:
-    ``applied(i,j) = done => persisted(i,j) = done``.
-    Holds in both variants (the seeded bug is *premature* apply, not
-    apply-before-persisting).
-    """
-    conjs = []
-    for j in range(1, n + 1):
-        for i in range(1, zab.M + 1):
-            conjs.append(ir.If(
-                ir.eq(ir.V("applied_%d_%d" % (i, j)), ir.C("done")),
-                ir.eq(ir.V("persisted_%d_%d" % (i, j)), ir.C("done")),
-                ir.T()))
-    return Invariant(
-        name="zab_apply_persisted",
-        description="ZAB: followers apply only what they have persisted",
-        expression=ir.And(*conjs) if conjs else ir.T(),
-        kind="safety",
-        label=LABEL_BOUNDED,
-        pinned=False,  # holds in both variants; informational, not a blocking gate
-        rung=RUNG_LOCAL,  # per-follower (actor-local) property: never blocks
-    )
-
-
-def pbft_quorum(n=3):
-    """PBFT: a node never commits a sequence for which it holds no quorum.
-
-    For every node ``i``: ``committed(i) => quorum(i)``.
-    This is the discriminator between the correct and buggy PBFT variants.
-    """
-    conjs = []
-    for i in range(1, n + 1):
-        conjs.append(ir.If(
-            ir.eq(ir.V("committed_%d" % i), ir.C(True)),
-            ir.eq(ir.V("quorum_%d" % i), ir.C(True)),
-            ir.T()))
-    return Invariant(
-        name="pbft_quorum",
-        description="PBFT: nodes commit a sequence only on a quorum certificate",
-        expression=ir.And(*conjs) if conjs else ir.T(),
-        kind="safety",
-        label=LABEL_BOUNDED,
-        pinned=True,
-    )
-
-
-def pbft_prepare_before_commit(n=3):
-    """PBFT: a node commits a sequence only if it has prepared it.
-
-    For every node ``i``: ``committed(i) => prepared(i)``.
-    Holds in both variants (the seeded bug is *premature* commit --
-    committing without a quorum certificate -- not committing-before-preparing).
-    """
-    conjs = []
-    for i in range(1, n + 1):
-        conjs.append(ir.If(
-            ir.eq(ir.V("committed_%d" % i), ir.C(True)),
-            ir.eq(ir.V("prepared_%d" % i), ir.C(True)),
-            ir.T()))
-    return Invariant(
-        name="pbft_prepare_before_commit",
-        description="PBFT: nodes commit a sequence only after preparing it",
-        expression=ir.And(*conjs) if conjs else ir.T(),
-        kind="safety",
-        label=LABEL_BOUNDED,
-        pinned=False,  # holds in both variants; informational, not a blocking gate
-        rung=RUNG_LOCAL,  # per-node (actor-local) property: never blocks
-    )
-
-
-def no_double_charge(n=1):
-    """Payment (client + payment services): an order is never charged twice.
-
-    Cross-service property over the *composed* IR: the client's order state
-    and the payment service's charge counter must jointly guarantee
-    ``charges <= 1`` (idempotent charging).  This is the discriminator
-    between the correct and buggy payment variants, and -- because it spans
-    two services -- it lives on the :data:`RUNG_E2E` rung: it may carry a
-    blocking label and pinning, and a violation may block the merge request.
-    """
-    return Invariant(
-        name="no_double_charge",
-        description="payment: an order is never charged more than once "
-                    "(idempotent charging across client + payment services)",
-        expression=payment.no_double_charge_property(),
-        kind="safety",
-        label=LABEL_BOUNDED,
-        pinned=True,
-        rung=RUNG_E2E,  # cross-service (composition plane) property
-    )
-
-
-def charge_requires_order(n=1):
-    """Payment (client + payment services): the payment service never charges
-    an order the client never placed (``charges >= 1 => ordered``).
-
-    Cross-service, but holds in both variants (the seeded bug is a re-issued
-    charge on a *placed* order, not a charge with no order) -- a
-    discriminator property that must not be a vacuous PASS.
-    """
-    return Invariant(
-        name="charge_requires_order",
-        description="payment: the payment service never charges an order the "
-                    "client never placed",
-        expression=payment.charge_requires_order_property(),
-        kind="safety",
-        label=LABEL_BOUNDED,
-        pinned=False,  # holds in both variants; informational, not a blocking gate
-        rung=RUNG_E2E,  # cross-service (composition plane) property
-    )
-
-
-def settle_requires_charge(n=1):
-    """Payment: a payment is settled only after it has been charged
-    (``settled => charges >= 1``).
-
-    Involves only the payment service's own state, so it is an actor-local
-    (single-service) property on the :data:`RUNG_LOCAL` rung: even when
-    pinned, the assurance ladder caps its gate permission at WARN.
-    """
-    return Invariant(
-        name="settle_requires_charge",
-        description="payment: a payment is settled only after it has been charged",
-        expression=payment.settle_requires_charge_property(),
-        kind="safety",
-        label=LABEL_BOUNDED,
-        pinned=False,  # holds in both variants; informational, not a blocking gate
-        rung=RUNG_LOCAL,  # payment-service-local property: never blocks
-    )
-
-
 def spendcap_within_cap(n=1):
     """Spendcap: settled + in-flight amount never exceeds the cap.
 
@@ -464,6 +416,35 @@ def spendcap_within_cap(n=1):
         rung=RUNG_PROTOCOL,  # decision-plane property: blocking-eligible
         policy_clause="spendcap: the sum over all requests (settled + in-flight) "
                       "must not exceed the cap",
+    )
+
+
+def no_exfiltration(n=1):
+    """AgentHarness: private data never reaches an unapproved channel.
+
+    ``NOT exfiltrated`` in every reachable state of the exfiltration
+    agent-harness IR.  The agent is a *nondeterministic actor* that may attempt
+    any tool in its catalog; only the harness's policy decision (the guard on
+    ``send_unapproved``) can stop an exfiltration.  This is the structural,
+    provable half of the thesis's ``NoExfiltration`` rule -- a correct policy
+    makes it unreachable (PROVEN), a buggy one leaves it reachable (VIOLATED,
+    witness = the exfiltration path).
+
+    ``n`` is accepted for registry compatibility (the slice is single-actor).
+    Single-actor (the agent) property on the :data:`RUNG_PROTOCOL` rung (the
+    agent's decision plane): pinned, :data:`LABEL_BOUNDED`, a blocking gate.
+    """
+    return Invariant(
+        name="no_exfiltration",
+        description="agent-harness: private data never reaches an unapproved "
+                    "channel (NOT exfiltrated in every reachable state)",
+        expression=agent_harness.no_exfiltration_property(),
+        kind=KIND_SAFETY,
+        label=LABEL_BOUNDED,
+        pinned=True,
+        rung=RUNG_PROTOCOL,  # the agent's decision plane: a blocking gate
+        policy_clause="exfiltration: sending while holding private data must "
+                      "be denied by the harness policy",
     )
 
 
@@ -498,7 +479,7 @@ def bounded_eventually(n=1, name="bounded_eventually", description=None,
     linear model reaches a state where ``decision != "idle"``.  This is the
     first *liveness* invariant (``kind="liveness"``): its ``expression`` is
     a **goal** predicate, not a universal safety predicate, so it is
-    evaluated differently by the CEGAR loop (``rot.cegar``), which dispatches
+    evaluated differently by the re-check loop (``rot.cegar``), which dispatches
     it to ``SymbolicEngine.reach_within`` over the linear model:
 
         REACHED     -> the goal is reachable within the horizon: PROVEN
@@ -524,6 +505,34 @@ def bounded_eventually(n=1, name="bounded_eventually", description=None,
         pinned=True,
     )
 
+# ---------------------------------------------------------------------------
+# G6: over-privileged tool bind (rot.agent_harness)
+# ---------------------------------------------------------------------------
+def no_over_privileged_tool(n=1):
+    """No over-privileged tool (G6 bind, model-checked over-grant).
+
+    The agent never takes a tool the harness *permits* but the task does not
+    *require* (``NOT took_unneeded`` in every reachable state).  The correct
+    policy denies the unneeded tool (the property holds); the buggy policy
+    over-grants it, so the model checker refutes the property with a witness
+    (the state where the over-privileged tool was taken).
+
+    :data:`RUNG_E2E` rung: pinned, :data:`LABEL_BOUNDED`, a blocking gate.
+    """
+    return Invariant(
+        name="no_over_privileged_tool",
+        description="over-privilege: the agent never takes a tool the harness "
+                    "permits but the task does not require (no over-grant)",
+        expression=agent_harness.no_over_privileged_tool_property(),
+        kind=KIND_SAFETY,
+        label=LABEL_BOUNDED,
+        pinned=True,
+        rung=RUNG_E2E,
+        policy_clause="over-privilege: the harness must not permit a tool "
+                      "whose effect is reachable but never needed by any "
+                      "task-completing path",
+    )
+
 
 _REGISTRY = {
     "agreement": agreement,
@@ -531,26 +540,20 @@ _REGISTRY = {
     "bounded_eventually": bounded_eventually,
     "validity": validity,
     "no_spurious_abort": no_spurious_abort,
-    "zab_no_premature_apply": zab_no_premature_apply,
-    "zab_apply_persisted": zab_apply_persisted,
-    "pbft_quorum": pbft_quorum,
-    "pbft_prepare_before_commit": pbft_prepare_before_commit,
-    "no_double_charge": no_double_charge,
-    "charge_requires_order": charge_requires_order,
-    "settle_requires_charge": settle_requires_charge,
     "spendcap_within_cap": spendcap_within_cap,
+    "no_exfiltration": no_exfiltration,
+    # G6: over-privileged tool bind
+    "no_over_privileged_tool": no_over_privileged_tool,
 }
 
 
 def names():
-    """Stable names of all registered invariants (ordered)."""
-    return ["agreement", "policy_conformance", "bounded_eventually",
-            "validity", "no_spurious_abort",
-            "zab_no_premature_apply", "zab_apply_persisted",
-            "pbft_quorum", "pbft_prepare_before_commit",
-            "no_double_charge", "charge_requires_order",
-            "settle_requires_charge",
-            "spendcap_within_cap"]
+    """Stable names of all registered invariants (ordered).
+
+    Dynamic: includes any research kinds added via :func:`register`
+    (e.g. ZAB/PBFT/payment/approval from ``rotn_research``).
+    """
+    return sorted(_REGISTRY)
 
 
 def get(name, n=3):
@@ -560,6 +563,19 @@ def get(name, n=3):
     return _REGISTRY[name](n)
 
 
+def register(name, factory):
+    """Register an invariant kind under ``name`` (extension point).
+
+    Research packages (``rotn_research``) use this to add their invariant
+    kinds (e.g. ZAB/PBFT/payment/approval) to the shared registry without
+    the product importing any research module.  The product never needs to
+    know these names; they resolve only once the research package has been
+    imported (which re-registers them here).
+    """
+    _REGISTRY[name] = factory
+    return factory
+
+
 def default(n=3):
     """The invariant the 2PC vertical slice pins by default: agreement."""
     return agreement(n)
@@ -567,15 +583,14 @@ def default(n=3):
 
 __all__ = ["Invariant",
            "LABEL_INDUCTIVE", "LABEL_BOUNDED", "LABEL_LIKELY", "LABEL_EVENTUALLY",
-           "KIND_SAFETY", "KIND_LIVENESS",
+           "KIND_SAFETY", "KIND_LIVENESS", "KIND_CONSTRAINT", "KINDS",
            "BLOCKING_LABELS",
            "PERM_ALERT", "PERM_WARN", "PERM_BLOCK",
            "RUNG_STRUCTURAL", "RUNG_LOCAL", "RUNG_PROTOCOL", "RUNG_E2E",
            "RUNG_ENV",
            "ALL_RUNGS", "RUNG_CEILING", "PERMISSION_NAMES",
-           "agreement", "policy_conformance", "bounded_eventually", "validity", "no_spurious_abort",
-           "zab_no_premature_apply", "zab_apply_persisted",
-           "pbft_quorum", "pbft_prepare_before_commit",
-           "no_double_charge", "charge_requires_order",
-           "settle_requires_charge", "spendcap_within_cap",
-           "names", "get", "default"]
+           "type_invariant", "agreement", "policy_conformance",
+           "bounded_eventually", "validity", "no_spurious_abort",
+           "spendcap_within_cap", "no_exfiltration",
+           "no_over_privileged_tool",
+           "names", "get", "register", "default"]

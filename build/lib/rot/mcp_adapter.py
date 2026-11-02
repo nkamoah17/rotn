@@ -36,12 +36,20 @@ model needed), so the report covers the full Cedar-AR vocabulary:
     allowed ∩ denied != ∅                    contradictions          error
     action/tool not referenced by the other  unreachable rules       warning
 
+Every finding is also mapped to the controls it touches -- **SOC 2** (AICPA
+TSC, CC6 = Logical & Physical Access) and **AIUC** (Caravel AI Usage Control,
+*autonomy*) -- via :mod:`rot.compliance`. The mapping is attached to each
+finding (``controls``) and summarised in the report (``compliance``), so the
+``--json`` artifact is directly consumable by a SOC 2 / AIUC audit. The AIUC
+control set is Caravel-defined and **swappable** (see ``docs/compliance.md``).
+
 Pure stdlib, Python 3.6 compatible.
 """
 
 import hashlib
 import json
 
+import rot.compliance as compliance
 import rot.ir as ir
 from rot.trifecta import audit, PROVEN, VIOLATED, UNKNOWN
 
@@ -52,7 +60,12 @@ __all__ = [
     "FINDING_OVERLY_PERMISSIVE",
     "FINDING_OVERLY_RESTRICTIVE",
     "FINDING_INEFFECTIVE",
+    "FINDING_DEADLOCK",
+    "FINDING_LIVELOCK",
+    "FINDING_OVER_PRIVILEGED",
     "ALL_FINDINGS",
+    "BINDS",
+    "bind_finding_for",
     # Severities.
     "SEVERITY_ERROR",
     "SEVERITY_WARNING",
@@ -77,6 +90,10 @@ FINDING_UNREACHABLE_RULES = "unreachable rules"
 FINDING_OVERLY_PERMISSIVE = "Overly Permissive"
 FINDING_OVERLY_RESTRICTIVE = "Overly Restrictive"
 FINDING_INEFFECTIVE = "Ineffective"
+# G6 binds (liveness + privilege), added to the Cedar-AR findings vocabulary.
+FINDING_DEADLOCK = "deadlock"
+FINDING_LIVELOCK = "livelock"
+FINDING_OVER_PRIVILEGED = "over-privileged tool"
 
 #: The full Cedar-AR findings vocabulary, in a stable (documented) order.
 ALL_FINDINGS = (
@@ -85,6 +102,9 @@ ALL_FINDINGS = (
     FINDING_OVERLY_PERMISSIVE,
     FINDING_OVERLY_RESTRICTIVE,
     FINDING_INEFFECTIVE,
+    FINDING_DEADLOCK,
+    FINDING_LIVELOCK,
+    FINDING_OVER_PRIVILEGED,
 )
 
 # Severity levels (a finding is either a hard error or a warning).
@@ -124,7 +144,94 @@ _FINDING_EXPLANATION = {
         "a policy action or a catalog tool is not referenced by the other: "
         "the rule can never fire"
     ),
+    FINDING_DEADLOCK: (
+        "the system reaches a stuck circular-wait state (no action enabled) "
+        "and the task never terminates: a deadlock"
+    ),
+    FINDING_LIVELOCK: (
+        "the task never completes or escalates even though the system keeps "
+        "making progress: a livelock"
+    ),
+    FINDING_OVER_PRIVILEGED: (
+        "the harness permits a tool the task does not require, so the agent "
+        "can take an over-privileged action (an over-grant)"
+    ),
 }
+
+
+# ---------------------------------------------------------------------------
+# The "binds" table (Product 1: "finds attack paths, binds and bypasses")
+# ---------------------------------------------------------------------------
+#: The Cedar-AR "binds" ROTN detects, each mapped to the ROTN property that
+#: detects it and the registry target that *demonstrates* the violation.  This
+#: is the "finds ... binds" claim made real: every row is backed by a property
+#: that the model checker verifies (PROVEN on the correct target, VIOLATED on
+#: the buggy target) and, where applicable, a reusable stuck-state check
+#: (:func:`rot.modelfind.find_deadlock_state`) that separates a *deadlock*
+#: (stuck) from a *livelock* (progressing but never terminating).
+BINDS = {
+    "contradiction": {
+        "finding": FINDING_CONTRADICTIONS,
+        "property": "policy_conformance",
+        "detect": "structural_findings: allowed ∩ denied ≠ ∅",
+        "target": None,
+    },
+    "unreachable rule": {
+        "finding": FINDING_UNREACHABLE_RULES,
+        "property": "policy_conformance",
+        "detect": "structural_findings: a tool not referenced by the policy",
+        "target": None,
+    },
+    "deadlock": {
+        "finding": FINDING_DEADLOCK,
+        "property": "no_deadlock / task_ends_or_escalates",
+        "detect": ("no_deadlock VIOLATED (circular wait reachable) OR a stuck "
+                   "state via find_deadlock_state (no action enabled)"),
+        "target": "deadlock-buggy",
+    },
+    "livelock": {
+        "finding": FINDING_LIVELOCK,
+        "property": "task_ends_or_escalates",
+        "detect": ("task_ends_or_escalates VIOLATED (never ends) AND NOT stuck "
+                   "(find_deadlock_state finds no stuck state)"),
+        "target": "livelock-buggy",
+    },
+    "over-privileged tool": {
+        "finding": FINDING_OVER_PRIVILEGED,
+        "property": "no_over_privileged_tool",
+        "detect": "no_over_privileged_tool VIOLATED (over-grant witness)",
+        "target": "overpriv-buggy",
+    },
+}
+
+#: Direct map: a ROTN property name -> the Cedar-AR finding it binds.
+_PROPERTY_TO_FINDING = {
+    "no_deadlock": FINDING_DEADLOCK,
+    "task_ends_or_escalates": FINDING_LIVELOCK,
+    "no_over_privileged_tool": FINDING_OVER_PRIVILEGED,
+    "policy_conformance": FINDING_CONTRADICTIONS,
+}
+
+
+def bind_finding_for(property_name):
+    """Map a ROTN property name to the Cedar-AR finding it binds.
+
+    This is the "binds" half of the Product 1 claim: given a property the
+    model checker verifies, return the Cedar-AR finding name it corresponds
+    to (e.g. ``no_over_privileged_tool`` -> ``over-privileged tool``).
+
+    Parameters
+    ----------
+    property_name : str
+        A ROTN property name (e.g. ``"no_deadlock"``).
+
+    Returns
+    -------
+    str or None
+        The Cedar-AR finding name, or ``None`` if the property does not bind
+        a finding.
+    """
+    return _PROPERTY_TO_FINDING.get(property_name)
 
 
 def _json_default(obj):
@@ -221,6 +328,8 @@ class Finding(object):
             "facet": self.facet,
             "severity": self.severity,
             "property": self.property_name,
+            "controls": compliance.controls_for(self.finding,
+                                                self.property_name),
             "message": self.message,
             "witness": self.witness,
             "evidence": self.evidence,
@@ -248,14 +357,22 @@ class McpFindingsReport(object):
         The Cedar-AR findings (structural + facet-derived), in a stable order.
     any_unknown : bool
         True if any facet was ``UNKNOWN`` (bounded search did not complete).
+    behavioral : BehavioralVerdict or None
+        The *behavioral* (temporal) audit of the manifest's safety property over
+        the adversarial agent's tool-call sequences (Phase B, B2.5 -- G8): the
+        hard guarantees proven / the attack path witnessed / the lethal-trifecta
+        risk flagged.  ``None`` when the behavioral audit was not run.
     """
 
-    def __init__(self, policy, tools, facets, findings, any_unknown=False):
+    def __init__(self, policy, tools, facets, findings, any_unknown=False,
+                 note="", behavioral=None):
         self.policy = policy
         self.tools = list(tools or [])
         self.facets = facets
         self.findings = list(findings)
         self.any_unknown = bool(any_unknown)
+        self.note = note
+        self.behavioral = behavioral
 
     # -- queries -----------------------------------------------------------
     def has_findings(self):
@@ -269,10 +386,19 @@ class McpFindingsReport(object):
         return [f for f in self.findings if f.severity == severity]
 
     def result(self):
-        """``"proven"`` / ``"violated"`` / ``"unknown"`` (the gate outcome)."""
+        """``"proven"`` / ``"violated"`` / ``"unknown"`` (the gate outcome).
+
+        The gate is the structural findings (the hard guarantees) *or* the
+        behavioral verdict (a safety net: a behavioral violation is a block even
+        if the structural check missed it; a behavioral ``unknown`` is
+        OUT_OF_SCOPE).
+        """
         if self.has_findings():
             return "violated"
-        if self.any_unknown:
+        b = self.behavioral
+        if b is not None and b.is_violated():
+            return "violated"
+        if self.any_unknown or (b is not None and b.is_unknown()):
             return "unknown"
         return "proven"
 
@@ -285,7 +411,10 @@ class McpFindingsReport(object):
         """
         if self.has_findings():
             return 1
-        if self.any_unknown:
+        b = self.behavioral
+        if b is not None and b.is_violated():
+            return 1
+        if self.any_unknown or (b is not None and b.is_unknown()):
             return 2
         return 0
 
@@ -294,17 +423,24 @@ class McpFindingsReport(object):
         by_finding = {}
         for f in self.findings:
             by_finding[f.finding] = by_finding.get(f.finding, 0) + 1
+        behavioral = None
+        if self.behavioral is not None:
+            behavioral = self.behavioral.to_dict()
         return {
             "schema": REPORT_SCHEMA,
             "policy": self.policy,
             "tools": self.tools,
             "facets": self.facets,
+            "behavioral": behavioral,
             "findings": [f.to_dict() for f in self.findings],
+            "compliance": compliance.compliance_section(self.findings,
+                                                        self.result()),
             "summary": {
                 "total_findings": len(self.findings),
                 "by_finding": by_finding,
                 "any_unknown": self.any_unknown,
                 "result": self.result(),
+                "note": self.note,
             },
         }
 
@@ -431,7 +567,8 @@ def _skipped_facets(reason):
     }
 
 
-def audit_mcp(allowed, denied, tools=None, horizon=12, max_states=200000):
+def audit_mcp(allowed, denied, tools=None, horizon=12, max_states=200000,
+              budget=None):
     """Run the Trifecta audit and map it to the Cedar-AR findings vocabulary.
 
     This is the single entry point for the ``rot check --mcp`` adoption
@@ -462,6 +599,22 @@ def audit_mcp(allowed, denied, tools=None, horizon=12, max_states=200000):
     allowed = list(allowed)
     denied = list(denied)
     tool_names = _tool_names(tools)
+
+    # Tier gating (Phase D): a license budget may cap the bounded-search depth
+    # (``max_states`` / ``horizon``) and the tool-catalog scope (``max_tools``).
+    # An out-of-scope catalog is reported as UNKNOWN (exit 2), never silent.
+    note = ""
+    if budget is not None:
+        # The budget is a *cap*: it can only lower the search depth, never raise
+        # it. An explicit --liveness-horizon / --depth can only go lower.
+        max_states = min(max_states, budget.max_states)
+        horizon = min(horizon, budget.max_horizon)
+        if (budget.max_tools is not None
+                and len(tool_names) > budget.max_tools):
+            note = ("tool catalog has %d tools, exceeding the tier cap of %d; "
+                    "audit is out of scope"
+                    % (len(tool_names), budget.max_tools))
+
     policy_info = {
         "allowed": sorted(set(allowed)),
         "denied": sorted(set(denied)),
@@ -480,6 +633,7 @@ def audit_mcp(allowed, denied, tools=None, horizon=12, max_states=200000):
             facets=_skipped_facets("the policy is contradictory"),
             findings=findings,
             any_unknown=False,
+            note=note,
         )
 
     # 3. Build the policy and run the three-facet (temporal) audit.
@@ -497,6 +651,8 @@ def audit_mcp(allowed, denied, tools=None, horizon=12, max_states=200000):
     any_unknown = (result.safety.is_unknown()
                    or result.liveness.is_unknown()
                    or result.conformance.is_unknown())
+    if note:
+        any_unknown = True
 
     return McpFindingsReport(
         policy=policy_info,
@@ -504,12 +660,258 @@ def audit_mcp(allowed, denied, tools=None, horizon=12, max_states=200000):
         facets=facets,
         findings=findings,
         any_unknown=any_unknown,
+        note=note,
+    )
+
+# ---------------------------------------------------------------------------
+# MCP Manifest v1 (Phase B, B2): field/tenant structural checks
+# ---------------------------------------------------------------------------
+
+def _field_tenant(field):
+    """The tenant a field is namespaced under, or ``None`` if it is global.
+
+    A field namespaced under a tenant uses the same ``tenant:<id>`` namespace
+    as ``tenant_scope`` (e.g. ``tenant:acme.account.balance``). A field with
+    no such prefix (e.g. ``account.balance``) is *global* (shared data) and
+    belongs to no tenant, so it is never a cross-tenant read.
+    """
+    if isinstance(field, str) and field.startswith("tenant:"):
+        rest = field[len("tenant:"):]
+        dot = rest.find(".")
+        return "tenant:" + (rest[:dot] if dot >= 0 else rest)
+    return None
+
+
+def _is_cross_tenant(field, scope):
+    """True if reading ``field`` is *outside* the tool's ``scope``.
+
+    A global field (no tenant namespace) is never cross-tenant. A
+    tenant-namespaced field is cross-tenant unless its tenant is exactly the
+    tool's effective ``scope`` (a ``None`` scope means the tool is not bound
+    to any tenant, so a tenant-namespaced read is out of scope).
+    """
+    ft = _field_tenant(field)
+    if ft is None:
+        return False
+    return ft != scope
+
+
+def _manifest_hash(manifest):
+    """A deterministic SHA-256 over the manifest's canonical dict."""
+    import hashlib
+    canonical = json.dumps(manifest.to_dict(), sort_keys=True,
+                           default=_json_default)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def manifest_findings(manifest):
+    """Cedar-AR structural findings for an MCP Manifest v1.
+
+    Two checks, both **Overly Permissive**:
+
+    * **field permission** -- a tool's ``write_fields`` must be a subset of
+      the manifest's ``allowed_write_fields`` (the tenant's write set).
+      ``write_fields ⊄ allowed_write_fields`` -> Overly Permissive. (An
+      empty/absent write set permits no writes -- fail-closed.)
+    * **tenant isolation** -- a tool's ``read_fields`` must stay within its
+      (effective) ``tenant_scope``. A read field namespaced under a *different*
+      tenant is a cross-tenant read -> Overly Permissive.
+
+    Parameters
+    ----------
+    manifest : rot.mcp_manifest.McpManifest
+        A validated manifest (see :mod:`rot.mcp_manifest`).
+
+    Returns
+    -------
+    list[Finding]
+        The findings in a stable order (tools in manifest order; field
+        permission before tenant isolation per tool).
+    """
+    findings = []
+    allowed_write = set(manifest.allowed_write_fields)
+
+    for tool in manifest.tools:
+        scope = manifest.effective_tenant_scope(tool)
+
+        # 1. Field permission: write_fields must be a subset of the write set.
+        over_write = sorted(set(tool.write_fields) - allowed_write)
+        if over_write:
+            findings.append(Finding(
+                finding=FINDING_OVERLY_PERMISSIVE,
+                facet="policy",
+                severity=SEVERITY_ERROR,
+                property_name="field_write_permission",
+                message=("tool %r writes field(s) %s not in the tenant's "
+                         "allowed write set %s"
+                         % (tool.name, over_write, sorted(allowed_write))),
+                witness={
+                    "tool": tool.name,
+                    "write_fields": list(tool.write_fields),
+                    "allowed_write_fields": sorted(allowed_write),
+                    "over_permission": over_write,
+                },
+                evidence={"check": "write_fields ⊆ allowed_write_fields"},
+            ))
+
+        # 2. Tenant isolation: read_fields must stay within tenant_scope.
+        cross = sorted(f for f in tool.read_fields
+                       if _is_cross_tenant(f, scope))
+        if cross:
+            findings.append(Finding(
+                finding=FINDING_OVERLY_PERMISSIVE,
+                facet="policy",
+                severity=SEVERITY_ERROR,
+                property_name="tenant_read_isolation",
+                message=("tool %r reads cross-tenant field(s) %s outside its "
+                         "tenant_scope %r"
+                         % (tool.name, cross, scope)),
+                witness={
+                    "tool": tool.name,
+                    "read_fields": list(tool.read_fields),
+                    "tenant_scope": scope,
+                    "cross_tenant_fields": cross,
+                },
+                evidence={"check": "read_fields within tenant_scope"},
+            ))
+
+    return findings
+
+
+def audit_manifest(manifest, budget=None, max_states=200000,
+                   run_behavioral=True):
+    """Run the MCP Manifest v1 audit (Phase B, B2 + B2.5).
+
+    The **structural** checks (field permission + tenant isolation) are the
+    per-tool declaration checks (B2). The **behavioral** audit (B2.5, closes
+    gap G8) is a model-check of the manifest's safety property over the
+    *adversarial agent's tool-call sequences* -- the same "fully compromised
+    model, only the harness can stop it" stance as the spend-cap engine --
+    producing a witness (the attack path), the explored state space, and the
+    lethal-trifecta risk flag.  The behavioral verdict is attached to the report
+    and factored into the gate (a behavioral violation blocks; a behavioral
+    ``unknown`` is OUT_OF_SCOPE).
+
+    Parameters
+    ----------
+    manifest : rot.mcp_manifest.McpManifest
+        A validated manifest (see :mod:`rot.mcp_manifest`).
+    budget : rot.license.DepthBudget, optional
+        A tier budget (Phase D). When present, ``max_tenant_scopes`` caps the
+        number of distinct tenant scopes the audit may reason about; exceeding
+        it marks the audit out of scope (UNKNOWN / exit 2).
+    max_states : int, optional
+        The state budget for the behavioral model-check (fail-closed floor; a
+        truncated search is an honest ``unknown``).
+    run_behavioral : bool, optional
+        Run the behavioral (temporal) audit (default True). Set False to run the
+        structural checks only.
+
+    Returns
+    -------
+    McpFindingsReport
+        The findings report, with the behavioral verdict attached.
+    """
+    findings = manifest_findings(manifest)
+
+    # Tier gating (Phase D): cap the number of distinct tenant scopes.
+    note = ""
+    if budget is not None and budget.max_tenant_scopes is not None:
+        tenants = set()
+        if manifest.tenant_scope:
+            tenants.add(manifest.tenant_scope)
+        for tool in manifest.tools:
+            for field in list(tool.read_fields) + list(tool.write_fields):
+                t = _field_tenant(field)
+                if t:
+                    tenants.add(t)
+        if len(tenants) > budget.max_tenant_scopes:
+            note = ("manifest references %d tenant scopes, exceeding the tier "
+                    "cap of %d; audit is out of scope"
+                    % (len(tenants), budget.max_tenant_scopes))
+
+    # The behavioral (temporal) audit -- the G8 fix.  Lazy import: mcp_behavioral
+    # imports the field helpers from this module, so a module-level import would
+    # be a cycle.
+    behavioral = None
+    if run_behavioral and not note:
+        try:
+            import rot.commercial.mcp_behavioral as mcp_behavioral
+        except ImportError:
+            # Paid layer not installed -> structural audit only (already
+            # surfaced via the "behavioral audit skipped" facets note below).
+            behavioral = None
+        else:
+            behavioral = mcp_behavioral.behavioral_audit(
+                manifest, max_states=max_states)
+
+    policy_info = {
+        "server": manifest.server,
+        "version": manifest.version,
+        "tenant_scope": manifest.tenant_scope,
+        "allowed_write_fields": sorted(manifest.allowed_write_fields),
+        "hash": _manifest_hash(manifest),
+    }
+    return McpFindingsReport(
+        policy=policy_info,
+        tools=manifest.tool_names(),
+        facets=_skipped_facets(
+            "manifest audit: structural findings + behavioral model"
+            if behavioral is not None
+            else "manifest audit is structural (behavioral audit skipped)"),
+        findings=findings,
+        any_unknown=bool(note),
+        note=note,
+        behavioral=behavioral,
     )
 
 
 # ---------------------------------------------------------------------------
 # Human-readable (blog-ready) rendering
 # ---------------------------------------------------------------------------
+
+def _render_behavioral(report):
+    """Render the behavioral (temporal) verdict section (Phase B, B2.5 -- G8).
+
+    Returns a list of lines.  The behavioral verdict is the model-check of the
+    manifest's safety property over the adversarial agent's tool-call sequences:
+    the status (PROVEN / VIOLATED / UNKNOWN), the witness (the attack path), the
+    lethal-trifecta risk (a warning), and the explored state space.  When the
+    behavioral audit was not run, it renders a single honest note.
+    """
+    lines = ["behavioral audit (adversarial agent, tool-call sequences):"]
+    b = getattr(report, "behavioral", None)
+    if b is None:
+        lines.append("  (not run -- structural declaration checks only)")
+        lines.append("")
+        return lines
+    if b.is_proven():
+        lines.append("  status : PROVEN -- the property holds in all %d "
+                     "reachable states" % b.n_states)
+    elif b.is_violated():
+        lines.append("  status : VIOLATED -- a reachable tool-call sequence "
+                     "breaks the property")
+        if b.path:
+            lines.append("  attack : %s" % " -> ".join(b.path))
+        if b.witness:
+            w = json.dumps(b.witness, sort_keys=True)
+            if len(w) > 160:
+                w = w[:157] + "..."
+            lines.append("  witness: %s" % w)
+        lines.append("  broken : %s" % ", ".join(b.properties))
+    else:
+        lines.append("  status : UNKNOWN -- the state budget was exhausted "
+                     "before the reachable space drained (not a proof)")
+    if b.trifecta:
+        lines.append("  risk   : LETHAL TRIFECTA -- the agent can hold the "
+                     "tenant's private data AND reach an outbound channel "
+                     "(flag, per the thesis; not a hard violation)")
+    else:
+        lines.append("  risk   : no lethal-trifecta configuration reachable")
+    lines.append("")
+    return lines
+
+
 def render_narrative(report):
     """Render a human-readable (blog-ready) narrative of the report.
 
@@ -520,16 +922,34 @@ def render_narrative(report):
     lines = []
     lines.append("ROTN MCP findings  (Cedar-AR vocabulary, temporal proof)")
     lines.append("=" * 52)
-    lines.append("policy   allowed=%s" % (report.policy.get("allowed", []),))
-    lines.append("         denied=%s" % (report.policy.get("denied", []),))
+    policy = report.policy or {}
+    is_manifest = ("allowed" not in policy and "denied" not in policy)
+    if is_manifest:
+        # A manifest report (Phase B, B2) carries manifest provenance.
+        lines.append("manifest server=%s  version=%s"
+                     % (policy.get("server"), policy.get("version")))
+        lines.append("         tenant_scope=%s  allowed_write_fields=%s"
+                     % (policy.get("tenant_scope"),
+                        policy.get("allowed_write_fields", [])))
+    else:
+        lines.append("policy   allowed=%s" % (policy.get("allowed", []),))
+        lines.append("         denied=%s" % (policy.get("denied", []),))
     if report.tools:
         lines.append("tools    %s" % ", ".join(report.tools))
     lines.append("")
+
+    # The behavioral (temporal) verdict -- the G8 fix.  Printed in both the
+    # PASS and BLOCK cases: it is the model-check over the adversarial agent's
+    # tool-call sequences, the witness (attack path), and the trifecta risk.
+    lines.extend(_render_behavioral(report))
 
     if not report.has_findings():
         if report.any_unknown:
             lines.append("RESULT: OUT_OF_SCOPE -- the bounded search did not "
                          "complete; no definite finding, but not a proof")
+        elif is_manifest:
+            lines.append("RESULT: PASS -- field and tenant structural checks "
+                         "clean; no Cedar-AR findings")
         else:
             lines.append("RESULT: PASS -- all three facets proven; no "
                          "Cedar-AR findings")
@@ -544,6 +964,9 @@ def render_narrative(report):
         lines.append("[%s] %s" % (f.severity.upper(), f.finding))
         lines.append("    facet: %s   property: %s"
                      % (f.facet, f.property_name))
+        lines.append("    controls: %s"
+                     % ", ".join(compliance.controls_for(
+                         f.finding, f.property_name)))
         lines.append("    %s" % f.message)
         if f.witness is not None:
             witness_json = json.dumps(f.witness, sort_keys=True,

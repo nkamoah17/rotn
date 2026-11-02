@@ -80,14 +80,33 @@ class Manifest(object):
     overall:
         Dict ``{"all_proven", "any_violated", "result"}`` where ``result`` is
         one of ``"proven" | "violated" | "unknown"``.
+    advisories:
+        Optional list of loud, non-fatal advisory codes (e.g.
+        ``MASKED_AT_LOW_K`` from :mod:`rot.verdicts`) recording a *bound* that
+        produced the verdict.  They do not change ``overall``; they make the
+        bound visible so a bounded ``PROVEN`` is never a silent
+        false-negative.  Defaults to ``[]``.
+
+    The hashable body **always** carries a ``bounded_caveat`` (C4: "prove" vs
+    bounded): the verdict is a bounded model-checking result and the bound is
+    stated right next to it (see :meth:`_body`).  It is derived from
+    ``environment`` so it is deterministic and covered by ``manifest_id``.
     """
 
-    def __init__(self, policy, environment, verdicts, witness, overall):
+    def __init__(self, policy, environment, verdicts, witness, overall,
+                 advisories=None):
         self.policy = policy
         self.environment = environment
         self.verdicts = verdicts
         self.witness = witness
         self.overall = overall
+        # Loud, non-fatal advisory codes (e.g. MASKED_AT_LOW_K).  These record
+        # a *bound* that produced the verdict (e.g. a K too small to express
+        # the minimal overshoot) so a bounded PROVEN is never a *silent*
+        # false-negative.  They do not change ``overall`` -- they make the
+        # bound visible.  Part of the hashable body so the manifest_id covers
+        # them.
+        self.advisories = list(advisories or [])
         # The manifest_id is the SHA-256 over the canonical body (everything
         # EXCEPT the manifest_id itself), so it is self-consistent by
         # construction and independent of serialization order.
@@ -95,14 +114,21 @@ class Manifest(object):
 
     def _body(self):
         """The hashable body (no manifest_id). Key order is irrelevant -- the
-        canonical serializer sorts keys."""
+        canonical serializer sorts keys.
+
+        ``bounded_caveat`` is **always** present (C4: "prove" vs bounded): the
+        verdict is a bounded model-checking result and the bound is stated
+        right next to it, so a ``PROVEN`` is never read as unbounded.
+        """
         return {
             "schema": SCHEMA,
             "policy": self.policy,
             "environment": self.environment,
+            "bounded_caveat": _bounded_caveat(self.environment),
             "verdicts": self.verdicts,
             "witness": self.witness,
             "overall": self.overall,
+            "advisories": self.advisories,
         }
 
     def to_dict(self):
@@ -139,6 +165,30 @@ def _overall_result(result):
     return "unknown"
 
 
+def _bounded_caveat(environment):
+    """The bounded caveat, **always** carried on the manifest (C4).
+
+    A `PROVEN` manifest is sound *within the explored bound*; it is a bounded
+    model-checking result, not an unbounded theorem-proof. A budget cap can
+    yield `UNKNOWN` but never a false `PROVEN`. Rendered from the environment
+    bounds (``max_states`` / ``n_states`` / ``horizon``) so the bound is always
+    stated next to the verdict. Deterministic for a given environment.
+    """
+    env = environment or {}
+    parts = []
+    if env.get("max_states") is not None:
+        parts.append("state space <= %d states" % env["max_states"])
+    if env.get("n_states") is not None:
+        parts.append("%d states explored" % env["n_states"])
+    if env.get("horizon") is not None:
+        parts.append("liveness horizon B = %d" % env["horizon"])
+    bound = ", ".join(parts) if parts else "the declared bound"
+    return ("A `PROVEN` verdict is sound *within the explored bound* (%s); it "
+            "is a bounded model-checking result, not an unbounded "
+            "theorem-proof. A budget cap can yield `UNKNOWN` but never a "
+            "false `PROVEN`." % bound)
+
+
 def _primary_witness(result):
     """The first non-None facet witness (safety -> liveness -> conformance)."""
     for facet in (result.safety, result.liveness, result.conformance):
@@ -147,12 +197,17 @@ def _primary_witness(result):
     return None
 
 
-def build_manifest(policy, buggy=False, horizon=12, max_states=200000):
+def build_manifest(policy, buggy=False, horizon=12, max_states=200000,
+                   advisories=None):
     """Run the trifecta audit and wrap the result in a deterministic manifest.
 
     Parameters mirror :func:`rot.trifecta.audit` so the manifest is a pure
-    function of ``(policy, buggy, horizon, max_states)`` -- the same inputs
-    always yield the same manifest (and hence the same ``manifest_id``).
+    function of ``(policy, buggy, horizon, max_states, advisories)`` -- the
+    same inputs always yield the same manifest (and hence the same
+    ``manifest_id``).  ``advisories`` is an optional list of loud, non-fatal
+    advisory codes (e.g. ``MASKED_AT_LOW_K``) recording a bound that produced
+    the verdict; it defaults to ``[]`` (the agent-step audit has no K bound to
+    mask, so no advisory fires there).
     """
     from rot import trifecta
 
@@ -183,7 +238,7 @@ def build_manifest(policy, buggy=False, horizon=12, max_states=200000):
     }
 
     return Manifest(policy_dict, environment, verdicts,
-                    _primary_witness(result), overall)
+                    _primary_witness(result), overall, advisories=advisories)
 
 
 def verify(policy, buggy=False, horizon=12, max_states=200000,

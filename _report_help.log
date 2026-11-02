@@ -1,0 +1,22 @@
+usage: rot report [-h] [--one-pager] [--trace FILE] [--verify-trace FILE]
+                  [--expect HASH] [--out DIR] [--md PATH] [--html PATH]
+                  [--corpus-matrix FILE] [--quiet]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --one-pager           derive the attestation from the RTF v1 trace (the
+                        underwriter's view)
+  --trace FILE          the RTF v1 trace JSON (the source of truth)
+  --verify-trace FILE   re-derive this trace's canonical body hash (the re-
+                        verify step; the attestation's expected hash is
+                        compared against it)
+  --expect HASH         the expected trace hash (from the attestation's re-
+                        verify block); a mismatch means STALE (exit 1)
+  --out DIR             output dir for one_pager.md / one_pager.html [default:
+                        <repo>/out/report]
+  --md PATH             Markdown output path [default: <out>/one_pager.md]
+  --html PATH           HTML output path [default: <out>/one_pager.html]
+  --corpus-matrix FILE  the rot corpus matrix JSON (D4: attach the corpus
+                        coverage metric, N of M SAFE/UNSAFE/UNKNOWN, to the
+                        attestation)
+  --quiet               suppress the human summary
