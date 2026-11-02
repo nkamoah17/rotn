@@ -55,6 +55,15 @@ jobs:
       - name: Test suite (no Java, no Z3)
         run: python -m unittest discover -s tests -v
 
+      - name: Site smoke (rule -> attack -> proof -> coach + attestation)
+        # The site (site/) is a zero-dependency plain-JS bundle; its smoke
+        # tests run under Node with a browser stub (no browser needed) and
+        # pin the E-section acceptance: the four-beat arc, the two climaxes,
+        # the attestation body, and the hash-pinned share URL (E1-E4).
+        run: |
+          node site/smoke_app.js
+          node site/smoke_h.js
+
       - name: 60-second CLI smoke (expected exit codes)
         run: |
           set -e

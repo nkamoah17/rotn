@@ -39,27 +39,47 @@ top-level SHA-256) that replays as an **interactive proof** on GitHub Pages.
 The site (`site/`) is a zero-framework, zero-build, zero-CDN presentation of
 that single artifact — it renders the trace and adds **no verification logic**.
 
-A replay page shows, as applicable to the trace:
+A replay page is a **narrative, not a dashboard**: it walks the four beats
+**rule → attack → proof → coach**, with the two climaxes the arc is built
+around:
 
-- **Verdict hero** — PROVEN / VIOLATED / UNKNOWN with the pinned invariant,
-  budget tier, horizon, and the trace hash (re-verifiable byte-for-byte).
-- **State-space / manifest graph** (Cytoscape, vendored) — the counterexample
-  attack path, with an **animated replay** that lights it step by step so the
-  in-flight amount visibly grows past the cap at the crossing moment.
-- **Audit timeline** — the ordered, colour-coded steps; for spend-cap traces a
-  **spend-cap chart** (in-flight exposure vs. cap, crossing highlighted) and the
-  **decision tree** (guard + per-step admit/deny checks).
-- **Narration** — the engine-generated, blog-ready plain-English narrative.
-- **Findings & controls** — Cedar-AR findings with severity, evidence, and
-  their SOC 2 / AIUC control chips.
-- **Compliance** — the SOC 2 / AIUC controls touched, with the evidence linking
-  each control to the findings that triggered it.
-- **Coaching** — the CoachingArtifact (Rule + Proof + Coach): Detect → Explain
-  → Correct → Re-check → Close, green when the correction re-proved, amber when
-  it did not.
-- **Compare + K-sweep** — buggy vs. correct side by side, with an animated
-  **K-sweep** over the concurrency bound `K` (`--max-inflight`) the verdict
-  depends on (`K=1` masks the race; `K≥2` exposes it).
+- **Beat 1 — RULE** — the policy as written (or the MCP manifest), with the
+  exact bounds the proof holds under (AMOUNT / CAP / K / window / policy hash),
+  and the buggy-vs-corrected variant.
+- **Beat 2 — ATTACK** — the counterexample in the state space (Cytoscape graph,
+  animated replay lighting the attack path step by step), the spend-cap chart
+  (in-flight exposure vs. cap at the crossing), the audit timeline and decision
+  tree, and **CLIMAX 1: the K-sweep** over the concurrency bound `K`
+  (`--max-inflight`) the verdict depends on — `K=1` masks the race, `K≥2`
+  exposes it.
+- **Beat 3 — PROOF** — what the engine discharged, under what bounds (states
+  explored, horizon, engines, policy hash), re-derivable byte-for-byte, with
+  the buggy/corrected pair at this K.
+- **Beat 4 — COACH** — the hero: the **blocked call → five-field refusal**
+  (`blocked`, `rule`, `why`, `to_proceed`, `allowed_now`), with
+  **CLIMAX 2: `to_proceed`** — the enabling condition computed from the guard's
+  currently-false conditions — then the repair (Detect → Explain → Correct →
+  Re-check → Close), **discharged by proof** when the corrected policy
+  re-proves.
+
+Two more views render the **same trace data**:
+
+- **Attestation** (`#/attestation/<id>`, also `?view=attestation`) — the B3
+  one-pager for the underwriter: scope, assumptions (coverage conditions),
+  out-of-scope, counterexample, SOC 2 / AIUC controls, the **bounded caveat**,
+  the **Defensible claim / What we do NOT claim** section, the re-verify
+  command + expected hash, and the artifact hierarchy
+  (**RTF v1 = source of truth → one-pager = underwriter view → site = demo
+  view**).
+- **Compare** (`#/compare/<left>/<right>`) — buggy vs. correct side by side
+  with the K-sweep table and the manifest hashes.
+
+The page is **shareable as a hash-pinned URL**: the hero's
+*Export attestation* button (and the attestation's Share row) copy a link of
+the form `#/attestation/<id>?h=<sha256>` — **the link is the attestation**. On
+load the pin is verified against the trace: a match renders
+*HASH PIN VERIFIED*; a mismatch renders *HASH MISMATCH — STALE or TAMPERED*,
+never silently trusted.
 
 The design system (`site/app/style.css`) is hand-written CSS with light / dark
 / **high-contrast** themes, a responsive layout, and accessibility hooks
@@ -817,18 +837,22 @@ docs/               # agent-mode.md, phase3-eval.md (Step 3.7),
                     # novelty.md (B.3), corpus-eval.md (B.2),
                     # compliance.md (Phase C, SOC 2 / AIUC control map)
 site/                 # the hosted replay site (Ship plane) -- zero framework / build / CDN
-  index.html          # landing + gallery; #/replay/<id> replay page
+  index.html          # landing + gallery; #/replay/<id> arc, #/attestation/<id>, #/compare
   404.html            # not-found page
-  app/app.js          # boot, hash routing, gallery, verdict hero, replay assembly
+  app/app.js          # boot, hash routing, gallery, the four-beat arc (E2),
+                      #   the attestation view (E3) + hash-pinned share URL (E4)
   app/graph.js        # state-space / manifest graph (Cytoscape) + animated attack-path replay
   app/timeline.js     # audit timeline (colour-coded steps)
   app/narration.js    # blog-ready narration transcript
   app/findings.js     # findings & SOC 2 / AIUC control chips
   app/compliance.js   # compliance panel (controls + evidence)
-  app/coach.js        # CoachingArtifact panel (Detect -> Explain -> Correct -> Re-check -> Close)
-  app/compare.js      # compare mode + animated K-sweep (max-inflight bound)
+  app/coach.js        # the hero (E1): blocked call -> five-field refusal ->
+                      #   to_proceed (climax 2) -> repair, discharged by proof
+  app/compare.js      # compare mode + the K-sweep (climax 1, max-inflight bound)
   app/spendcap.js     # spend-cap chart + decision tree
   app/style.css       # design system (light / dark / high-contrast, responsive, a11y)
+  smoke_app.js        # Node smoke test for the arc + attestation (CI-gated)
+  smoke_h.js          # Node smoke test for compliance / compare / coach (CI-gated)
   vendor/cytoscape.min.js  # vendored Cytoscape (no CDN)
   data/*.trace.json   # RTF v1 traces (source of truth)
   data/traces.js      # deterministic offline registry (rot site / rot/sitegen.py)

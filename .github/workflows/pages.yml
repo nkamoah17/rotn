@@ -71,6 +71,15 @@ jobs:
           echo "trace files: $count"
           test "$count" -eq 10
 
+      - name: Site smoke (the four-beat arc + hash-pinned attestation)
+        # Gate every deploy: the E-section acceptance (E1-E4) must hold in
+        # the bundle that goes live -- beats, both climaxes, attestation
+        # body, and the hash-pinned share URL.
+        run: |
+          set -e
+          node site/smoke_app.js
+          node site/smoke_h.js
+
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:

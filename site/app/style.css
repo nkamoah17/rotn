@@ -633,3 +633,182 @@ a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-vis
   }
   .btn, .hash-copy, .graph-controls button { border: 1px solid CanvasText; }
 }
+
+/* ============================================================================
+   E — the four-beat arc (rule -> attack -> proof -> coach) + attestation
+   ========================================================================== */
+
+/* ---------------- the beats (E2) ---------------- */
+
+.arc-lede { margin: 4px 0 10px; font-size: 14px; color: var(--muted); }
+
+.beat {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  margin-top: 18px;
+  overflow: hidden;
+}
+.beat-head {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: linear-gradient(180deg, var(--accent-softer), transparent);
+}
+.beat-n {
+  flex: 0 0 auto;
+  width: 34px; height: 34px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 15px; font-weight: 700;
+  color: var(--accent-strong); background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+}
+.beat-head h2 { margin: 0; font-size: 17px; letter-spacing: .3px; }
+.beat-tag {
+  display: inline-block; vertical-align: 1px;
+  font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+  color: var(--accent-strong); background: var(--accent-soft);
+  border: 1px solid var(--accent-line); border-radius: 999px;
+  padding: 2px 9px; margin-left: 6px;
+}
+.beat-sub { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.beat-body { padding: 16px 20px 18px; }
+.beat-h { margin: 18px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+.beat-body .graph-box, .beat-body #rot-spendcap, .beat-body #rot-timeline, .beat-body #rot-coach, .beat-body #rot-narration { margin: 0 0 14px; }
+.beat-body > :last-child { margin-bottom: 0; }
+
+/* ---------------- the climaxes ---------------- */
+
+.climax { margin: 6px 0 14px; }
+.climax-tag {
+  display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .8px;
+  text-transform: uppercase; color: var(--ink);
+  background: var(--amber-bg); border: 1px solid var(--unknown-line);
+  border-radius: 999px; padding: 3px 10px; margin-bottom: 10px;
+}
+.climax-1 { border-left: 3px solid var(--amber); padding-left: 12px; }
+.climax-2 { border-left: 3px solid var(--proven); padding-left: 12px; }
+.climax-2 .climax-tag {
+  background: var(--proven-bg); border-color: var(--proven-line); color: var(--proven);
+}
+
+/* ---------------- beat 1: the rule ---------------- */
+
+.rule-card { display: grid; gap: 10px; }
+.rule-card .policy-card {
+  display: grid; grid-template-columns: max-content 1fr;
+  gap: 4px 18px; margin: 0; font-size: 13.5px;
+  background: var(--panel-2); border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm); padding: 12px 16px;
+}
+.rule-card .policy-card dt { color: var(--muted); font-weight: 600; }
+.rule-card .policy-card dd { margin: 0; font-weight: 600; }
+.rule-card .policy-card dd.mono { font-family: var(--mono); font-size: 12.5px; word-break: break-all; }
+.rule-variant { margin: 0; }
+.chip-buggy { background: var(--violated-bg); border-color: var(--violated-line); color: var(--violated); font-weight: 700; }
+.chip-fix { background: var(--proven-bg); border-color: var(--proven-line); color: var(--proven); font-weight: 700; }
+
+/* ---------------- beat 3: the proof ---------------- */
+
+.proof-facts {
+  display: grid; grid-template-columns: max-content 1fr;
+  gap: 4px 18px; margin: 0 0 12px; font-size: 13.5px;
+  background: var(--panel-2); border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm); padding: 12px 16px;
+}
+.proof-facts dt { color: var(--muted); font-weight: 600; }
+.proof-facts dd { margin: 0; font-family: var(--mono); font-size: 12.5px; word-break: break-all; }
+.proof-cross { margin: 10px 0 0; font-size: 13.5px; line-height: 1.55; }
+.proof-cross code { font-size: 12px; }
+
+/* ---------------- beat 4: the coach idle ---------------- */
+
+.coach-idle {
+  font-size: 13.5px; line-height: 1.6; color: var(--muted);
+  background: var(--panel-2); border: 1px dashed var(--line);
+  border-radius: var(--radius-sm); padding: 14px 16px;
+}
+.coach-idle code { font-family: var(--mono); font-size: 12px; }
+
+/* ---------------- the attestation view (E3) ---------------- */
+
+.att-pin {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 16px; padding: 12px 16px;
+  border-radius: var(--radius-sm); font-size: 13.5px; line-height: 1.5;
+}
+.att-pin-icon { font-size: 16px; }
+.att-pin-ok { background: var(--proven-bg); border: 1px solid var(--proven-line); color: var(--proven); }
+.att-pin-bad { background: var(--violated-bg); border: 1px solid var(--violated-line); color: var(--violated); }
+
+.att-hero {
+  margin-top: 16px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow-md);
+  padding: 20px 24px;
+}
+.att-hero .att-verdict {
+  display: inline-block; font-size: 13px; font-weight: 800; letter-spacing: 1px;
+  text-transform: uppercase; padding: 4px 12px; border-radius: 999px;
+  margin-bottom: 10px;
+}
+.att-hero .v-proven { background: var(--proven-bg); color: var(--proven); border: 1px solid var(--proven-line); }
+.att-hero .v-violated { background: var(--violated-bg); color: var(--violated); border: 1px solid var(--violated-line); }
+.att-hero .v-unknown { background: var(--unknown-bg); color: var(--unknown); border: 1px solid var(--unknown-line); }
+.att-hero h1 { margin: 0 0 8px; font-size: 22px; }
+.att-kicker { font-size: 12px; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; }
+.att-hashline { margin: 6px 0; font-size: 13px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.att-hashline code { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+.att-version { margin: 4px 0 0; font-size: 12.5px; color: var(--muted); }
+
+.att-sec {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow-sm);
+  padding: 16px 20px; margin-top: 14px;
+}
+.att-sec h2 { margin: 0 0 10px; font-size: 14px; letter-spacing: .4px; }
+.att-list { margin: 0 0 8px; padding-left: 20px; font-size: 13.5px; line-height: 1.6; }
+.att-note { font-size: 12.5px; margin: 4px 0 0; }
+.att-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 0 0 6px; }
+.att-table th, .att-table td { border: 1px solid var(--line-soft); padding: 7px 12px; text-align: left; vertical-align: top; }
+.att-table th { background: var(--panel-2); color: var(--muted); font-weight: 600; white-space: nowrap; }
+.att-table th.mono { font-family: var(--mono); font-size: 12px; }
+.att-caveat { border-left: 3px solid var(--amber); }
+.att-reverify .att-cmd {
+  font-family: var(--mono); font-size: 12px; line-height: 1.5;
+  background: var(--code-bg); color: var(--code-ink);
+  border: 1px solid var(--line-soft); border-radius: var(--radius-sm);
+  padding: 10px 14px; margin: 0 0 8px; overflow-x: auto; white-space: pre;
+}
+.att-share-row { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; margin-top: 8px; }
+.att-share-input {
+  flex: 1 1 320px; min-width: 0;
+  font-family: var(--mono); font-size: 12px;
+  background: var(--panel-2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 9px 12px;
+}
+.att-share { flex: 0 0 auto; }
+.att-foot { margin: 22px 0 8px; text-align: center; font-size: 12px; }
+
+/* ---------------- the hero's attestation CTA (E3/E4) ---------------- */
+
+.hero-att { margin-top: 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.hero-att .btn { flex: 0 0 auto; }
+.hero-att .att-share-line { font-size: 12px; color: var(--muted); }
+.hero-att .att-share-line code { font-family: var(--mono); font-size: 11px; }
+
+@media (max-width: 560px) {
+  .beat-head { flex-direction: column; gap: 8px; }
+  .rule-card .policy-card, .proof-facts { grid-template-columns: 1fr; }
+  .rule-card .policy-card dt, .proof-facts dt { margin-top: 6px; }
+  .att-share-row { flex-direction: column; }
+}
+
+@media (forced-colors: active) {
+  .att-pin-ok, .att-pin-bad, .climax-tag, .beat-tag, .att-verdict, .att-caveat,
+  .chip-buggy, .chip-fix {
+    border: 1px solid CanvasText;
+  }
+}

@@ -226,10 +226,10 @@ window.ROT_TRACES = {
       ],
       "tenant_scope": "tenant:acme"
     },
-    "hash": "e3d1c76dfa9d8fa081717919c576ccc4aed2d651c230073a0d8bce78cb86b203",
+    "hash": "1dbc7813443ce44cdf0ab245dfae3bdcd9054292cb4a5ae58aeb80dc35c6a430",
     "horizon": 12,
     "manifest_id": "mf-61c0c11ae7156e0d",
-    "narration": "ROTN MCP findings  (Cedar-AR vocabulary, temporal proof)\n====================================================\nmanifest server=caravel-agent-tools  version=1.0.0\n         tenant_scope=tenant:acme  allowed_write_fields=['account.balance']\ntools    leaky_balance\n\nRESULT: BLOCK -- 2 Cedar-AR finding(s)\n\n[ERROR] Overly Permissive\n    facet: policy   property: field_write_permission\n    controls: CC6.1, AIUC-1\n    tool 'leaky_balance' writes field(s) ['account.ssn'] not in the tenant's allowed write set ['account.balance']\n    witness: {\"allowed_write_fields\": [\"account.balance\"], \"over_permission\": [\"account.ssn\"], \"tool\": \"leaky_balance\", \"write_fields\": [\"account.balance\", \"account.ssn\"]}\n\n[ERROR] Overly Permissive\n    facet: policy   property: tenant_read_isolation\n    controls: CC6.3, AIUC-1\n    tool 'leaky_balance' reads cross-tenant field(s) ['tenant:globex.account.balance'] outside its tenant_scope 'tenant:acme'\n    witness: {\"cross_tenant_fields\": [\"tenant:globex.account.balance\"], \"read_fields\": [\"tenant:acme.account.balance\", \"tenant:globex.account.balance\"], \"tenant_scope\": \"...\n",
+    "narration": "ROTN MCP findings  (Cedar-AR vocabulary, temporal proof)\n====================================================\nmanifest server=caravel-agent-tools  version=1.0.0\n         tenant_scope=tenant:acme  allowed_write_fields=['account.balance']\ntools    leaky_balance\n\nbehavioral audit (adversarial agent, tool-call sequences):\n  (not run -- structural declaration checks only)\n\nRESULT: BLOCK -- 2 Cedar-AR finding(s)\n\n[ERROR] Overly Permissive\n    facet: policy   property: field_write_permission\n    controls: CC6.1, AIUC-1\n    tool 'leaky_balance' writes field(s) ['account.ssn'] not in the tenant's allowed write set ['account.balance']\n    witness: {\"allowed_write_fields\": [\"account.balance\"], \"over_permission\": [\"account.ssn\"], \"tool\": \"leaky_balance\", \"write_fields\": [\"account.balance\", \"account.ssn\"]}\n\n[ERROR] Overly Permissive\n    facet: policy   property: tenant_read_isolation\n    controls: CC6.3, AIUC-1\n    tool 'leaky_balance' reads cross-tenant field(s) ['tenant:globex.account.balance'] outside its tenant_scope 'tenant:acme'\n    witness: {\"cross_tenant_fields\": [\"tenant:globex.account.balance\"], \"read_fields\": [\"tenant:acme.account.balance\", \"tenant:globex.account.balance\"], \"tenant_scope\": \"...\n",
     "policy": {
       "allowed_write_fields": [
         "account.balance"
@@ -382,10 +382,10 @@ window.ROT_TRACES = {
       ],
       "tenant_scope": "tenant:acme"
     },
-    "hash": "b8b8ce4dd3578f1bd481b2e8d55d32d29e21b74d58decb673202c397ae96f05d",
+    "hash": "fe8f789899876e573f63f0c1fc3e0eaf89c39a79ceeca67877e2b7a83bf884b3",
     "horizon": 12,
     "manifest_id": "mf-b3886e274afb2fe1",
-    "narration": "ROTN MCP findings  (Cedar-AR vocabulary, temporal proof)\n====================================================\nmanifest server=caravel-agent-tools  version=1.0.0\n         tenant_scope=tenant:acme  allowed_write_fields=['account.balance']\ntools    get_balance, update_balance\n\nRESULT: PASS -- field and tenant structural checks clean; no Cedar-AR findings\n\nCedar-AR findings: none",
+    "narration": "ROTN MCP findings  (Cedar-AR vocabulary, temporal proof)\n====================================================\nmanifest server=caravel-agent-tools  version=1.0.0\n         tenant_scope=tenant:acme  allowed_write_fields=['account.balance']\ntools    get_balance, update_balance\n\nbehavioral audit (adversarial agent, tool-call sequences):\n  status : PROVEN -- the property holds in all 3 reachable states\n  risk   : LETHAL TRIFECTA -- the agent can hold the tenant's private data AND reach an outbound channel (flag, per the thesis; not a hard violation)\n\nRESULT: PASS -- field and tenant structural checks clean; no Cedar-AR findings\n\nCedar-AR findings: none",
     "policy": {
       "allowed_write_fields": [
         "account.balance"
@@ -497,7 +497,7 @@ window.ROT_TRACES = {
           "inflight": 3
         }
       },
-      "hash": "29661bc5d10a563eea18f76c1d6d47dcbc88b9d7f88b2b60b1d3c950dad7cc02",
+      "hash": "92c2cbe7f7b12944b7d1a4d9ea905b5c0331473d83cdfd00d1d74f4061621839",
       "policy": {
         "action": "Transfer",
         "amount": 100,
@@ -515,7 +515,23 @@ window.ROT_TRACES = {
       },
       "rot_version": "0.1.0",
       "schema": "caravel.coach/v1",
-      "status": "closed"
+      "status": "closed",
+      "to_proceed": {
+        "action": "spend_ok",
+        "blocked": true,
+        "blockers": [
+          "not (completed + inflight * 100 + 100 <= 200)"
+        ],
+        "conditions": [
+          "completed + inflight * 100 + 100 <= 200"
+        ],
+        "explanation": "to proceed with 'spend_ok' from state {'completed': 0, 'inflight': 3}, the guard's currently-false condition(s) must hold: completed + inflight * 100 + 100 <= 200",
+        "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 4",
+        "state": {
+          "completed": 0,
+          "inflight": 3
+        }
+      }
     },
     "compliance": {
       "controls": {
@@ -675,7 +691,7 @@ window.ROT_TRACES = {
         "s0_3"
       ]
     },
-    "hash": "773d9bc71c4b3afa87489dfb5a2807482db73ea699d86edb2f14717dd3d7d203",
+    "hash": "75b3ba0790e33476ed18b934e5089f9b496875b83c7582bc86b2854258a1ee80",
     "horizon": 12,
     "manifest_id": "mf-4227160622359a2c",
     "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 3 * 100 = 300 -- past the cap of 200. The counterexample is {'completed': 0, 'inflight': 3}. (20 reachable states explored.)",
@@ -1149,7 +1165,7 @@ window.ROT_TRACES = {
           "inflight": 2
         }
       },
-      "hash": "525ad5c723798e98383264e421f47fded3a19ec6e99773b51f209e9dd8fc2101",
+      "hash": "e4098e1ab5ba718a0f289edaca8337c88c2d84d75a33d67ad51eeef6c9af9490",
       "policy": {
         "action": "Transfer",
         "amount": 100,
@@ -1167,7 +1183,25 @@ window.ROT_TRACES = {
       },
       "rot_version": "0.1.0",
       "schema": "caravel.coach/v1",
-      "status": "closed"
+      "status": "closed",
+      "to_proceed": {
+        "action": "spend_ok",
+        "blocked": true,
+        "blockers": [
+          "not (completed + inflight * 100 + 100 <= 200)",
+          "not (inflight < 2)"
+        ],
+        "conditions": [
+          "completed + inflight * 100 + 100 <= 200",
+          "inflight < 2"
+        ],
+        "explanation": "to proceed with 'spend_ok' from state {'completed': 100, 'inflight': 2}, the guard's currently-false condition(s) must hold: completed + inflight * 100 + 100 <= 200; inflight < 2",
+        "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 2",
+        "state": {
+          "completed": 100,
+          "inflight": 2
+        }
+      }
     },
     "compliance": {
       "controls": {
@@ -1360,7 +1394,7 @@ window.ROT_TRACES = {
         "s100_2"
       ]
     },
-    "hash": "f6615440100573995b5b81d56db5c1db2c006acc2da966618bd32db29be5ee03",
+    "hash": "9343c837fd3b9efe98155c9d79afd07f925fbab1c36d03f8d80c991ef2939277",
     "horizon": 12,
     "manifest_id": "mf-1030049f3b5c2797",
     "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 2 * 100 = 200 -- past the cap of 200. The counterexample is {'completed': 100, 'inflight': 2}. (9 reachable states explored.)",
@@ -1614,7 +1648,7 @@ window.ROT_TRACES = {
           "inflight": 3
         }
       },
-      "hash": "d19933b9ccbbabf7dca334e51cabb6e1a0040334e0eab17f1396dc2b57821951",
+      "hash": "1cb5984d886a8466a97d6b2dd26294e71580df9b3f749f94a826c713080c258d",
       "policy": {
         "action": "Transfer",
         "amount": 100,
@@ -1632,7 +1666,25 @@ window.ROT_TRACES = {
       },
       "rot_version": "0.1.0",
       "schema": "caravel.coach/v1",
-      "status": "closed"
+      "status": "closed",
+      "to_proceed": {
+        "action": "spend_ok",
+        "blocked": true,
+        "blockers": [
+          "not (completed + inflight * 100 + 100 <= 200)",
+          "not (inflight < 3)"
+        ],
+        "conditions": [
+          "completed + inflight * 100 + 100 <= 200",
+          "inflight < 3"
+        ],
+        "explanation": "to proceed with 'spend_ok' from state {'completed': 0, 'inflight': 3}, the guard's currently-false condition(s) must hold: completed + inflight * 100 + 100 <= 200; inflight < 3",
+        "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 3",
+        "state": {
+          "completed": 0,
+          "inflight": 3
+        }
+      }
     },
     "compliance": {
       "controls": {
@@ -1792,7 +1844,7 @@ window.ROT_TRACES = {
         "s0_3"
       ]
     },
-    "hash": "82bb6a771e2fdd831bda7bea4433294d3752fec8041ec86a23ad548aa14173e1",
+    "hash": "64317d8cc0af9523513aa2880df4a7bc0c3d933c74b0e2d6c31428cb9ce3f205",
     "horizon": 12,
     "manifest_id": "mf-ba311c76ea6f5884",
     "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 3 * 100 = 300 -- past the cap of 200. The counterexample is {'completed': 0, 'inflight': 3}. (14 reachable states explored.)",

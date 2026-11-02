@@ -98,6 +98,58 @@ check("gallery: >= 10 trace cards", (viewEl.innerHTML.match(/trace-card/g) || []
   check("replay: VIOLATED verdict shown", viewEl.innerHTML.indexOf("VIOLATED") >= 0);
   check("replay: state-space graph panel", viewEl.innerHTML.indexOf("rot-graph") >= 0);
 
+  // E2: the narrative arc (rule -> attack -> proof -> coach), not a dashboard.
+  check("E2: arc lede present", viewEl.innerHTML.indexOf("arc-lede") >= 0);
+  ["rule", "attack", "proof", "coach"].forEach(function (b) {
+    check("E2: beat section " + b, viewEl.innerHTML.indexOf('id="beat-' + b + '"') >= 0);
+  });
+  check("E2: climax 1 tagged (K-sweep)", viewEl.innerHTML.indexOf("climax 1: the K-sweep") >= 0);
+  check("E2: climax 2 tagged (to_proceed)", viewEl.innerHTML.indexOf("climax 2: to_proceed") >= 0);
+  check("E2: coach panel mount point (the hero)", viewEl.innerHTML.indexOf('id="rot-coach"') >= 0);
+
+  // E4: the hero carries the hash-pinned attestation link.
+  const reg = global.window.ROT_TRACES || {};
+  const buggyHash = reg["spendcap-buggy"] && reg["spendcap-buggy"].hash;
+  check("E4: hero 'Export attestation' CTA", viewEl.innerHTML.indexOf("Export attestation") >= 0);
+  check("E4: attestation URL hash-pinned",
+    !!buggyHash && viewEl.innerHTML.indexOf("#/attestation/spendcap-buggy?h=" + buggyHash) >= 0);
+
+  // E3 + E4: attestation view from the same trace data, pin verified.
+  global.location.hash = "#/attestation/spendcap-buggy?h=" + buggyHash;
+  fireHashchange();
+  await nextTick();
+  check("E3: attestation hero present", viewEl.innerHTML.indexOf("att-hero") >= 0);
+  check("E4: hash pin VERIFIED banner", viewEl.innerHTML.indexOf("HASH PIN VERIFIED") >= 0);
+  check("E3: scope section", viewEl.innerHTML.indexOf(">Scope<") >= 0);
+  check("E3: coverage conditions", viewEl.innerHTML.indexOf("Assumptions (coverage conditions)") >= 0);
+  check("E3: out of scope stated", viewEl.innerHTML.indexOf("Out of scope") >= 0);
+  check("E3: bounded caveat", viewEl.innerHTML.indexOf("Bounded caveat") >= 0);
+  check("E3: defensible claim (the moat)", viewEl.innerHTML.indexOf("Defensible claim") >= 0);
+  check("E3: what we do NOT claim", viewEl.innerHTML.indexOf("What we do NOT claim") >= 0);
+  check("E3: re-verify command + expected hash",
+    viewEl.innerHTML.indexOf("Re-verify (byte-for-byte)") >= 0 &&
+    viewEl.innerHTML.indexOf("expected hash") >= 0);
+  check("E3: artifact hierarchy stated once", viewEl.innerHTML.indexOf("Artifact hierarchy") >= 0);
+  check("E3: share row with the hash-pinned URL",
+    viewEl.innerHTML.indexOf("att-share-input") >= 0 &&
+    viewEl.innerHTML.indexOf("?h=" + buggyHash) >= 0);
+
+  // E4: a WRONG pin must be flagged STALE, never silently trusted.
+  global.location.hash = "#/attestation/spendcap-buggy?h=deadbeef";
+  fireHashchange();
+  await nextTick();
+  check("E4: wrong pin -> HASH MISMATCH banner", viewEl.innerHTML.indexOf("HASH MISMATCH") >= 0);
+  check("E4: mismatch flagged STALE", viewEl.innerHTML.indexOf("STALE") >= 0);
+
+  // E3: ?view=attestation on the page URL (no hash) renders the beachhead attestation.
+  global.location.hash = "";
+  global.location.search = "?view=attestation";
+  fireHashchange();
+  await nextTick();
+  check("E3: ?view=attestation renders the attestation",
+    viewEl.innerHTML.indexOf("att-hero") >= 0 && viewEl.innerHTML.indexOf("Attestation") >= 0);
+  global.location.search = "";
+
   // Navigate to an unknown replay -> not-found state.
   global.location.hash = "#/replay/does-not-exist";
   fireHashchange();

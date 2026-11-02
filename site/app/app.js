@@ -1,15 +1,26 @@
-/* ROTN replay site -- core: boot, hash routing, gallery, replay (Phase F).
+/* ROTN replay site -- core: boot, hash routing, gallery, the four-beat
+ * replay arc, and the attestation view (E2/E3/E4).
  *
  * No framework, no build step, no CDN:
- *   - hash routing:   #/            -> landing + gallery
- *                     #/replay/<id> -> replay page (verdict hero + panels)
+ *   - hash routing:   #/                    -> landing + gallery
+ *                     #/replay/<id>         -> replay: RULE -> ATTACK ->
+ *                                              PROOF -> COACH (the arc; the
+ *                                              K-sweep and to_proceed are the
+ *                                              two climaxes)
+ *                     #/compare/<a>/<b>     -> side-by-side + K-sweep
+ *                     #/attestation/<id>?h= -> the B3 attestation (one-pager)
+ *                                              from the SAME trace data; the
+ *                                              ?h=<sha256> pin in the URL is
+ *                                              verified against the trace --
+ *                                              the link IS the attestation
  *   - trace loading:  fetch('data/<id>.trace.json') when served over HTTP
  *                     (GitHub Pages), with the generated registry
  *                     data/traces.js (window.ROT_TRACES) as the offline
  *                     file:// fallback (where browsers block local fetch).
  *
  * The RTF v1 trace is the single data contract (see rot/trace.py); this
- * module renders it and adds no verification logic.
+ * module renders it and adds no verification logic. The attestation view is
+ * the JS twin of rot/attestation.py (same fields, same bounded discipline).
  */
 (function () {
   "use strict";
@@ -95,6 +106,123 @@
       ? " --max-inflight " + t.policy.max_inflight
       : "";
     return "rot trace " + flag + " " + (src || def) + k + " --out site/data/" + id + ".trace.json";
+  };
+
+  /* ---------------- E4: the shareable, hash-pinned URL ----------------
+   *
+   * The link IS the attestation: it carries the trace's SHA-256 in the URL
+   * (?h=<hash>), and the attestation view verifies that pin against the
+   * trace data before rendering. A mismatch (tampered policy, changed engine)
+   * is flagged STALE, never silently re-proven.
+   */
+
+  function pageBase() {
+    if (typeof location.href === "string" && location.href) {
+      return location.href.split("#")[0].split("?")[0];
+    }
+    return "";
+  }
+
+  ROT.shareURL = function (t, id) {
+    return "#/attestation/" + id + (t && t.hash ? "?h=" + t.hash : "");
+  };
+  ROT.shareLink = function (t, id) {
+    return pageBase() + ROT.shareURL(t, id);
+  };
+
+  /* ---------------- E3: the attestation body (B3, JS twin) ----------------
+   *
+   * A pure function of the trace -- the same fields rot/attestation.py
+   * derives (scope, coverage conditions, out-of-scope, controls, bounded
+   * caveat, version, re-verify), so the site's one-pager and the CLI's
+   * agree on what an attestation contains. No verification logic.
+   */
+
+  ROT.attestationBody = function (t, id) {
+    var policy = t.policy || {};
+    var source = t.source || {};
+    var prov = t.provenance || {};
+    var compliance = t.compliance || {};
+    var verdict = t.verdict;
+    var policyHash = (source && source.hash) || prov.policy_hash || null;
+    var nStates = prov.n_states != null ? prov.n_states : null;
+    var amount = policy.amount != null ? policy.amount : null;
+    var cap = policy.cap != null ? policy.cap : null;
+    var maxInflight = policy.max_inflight != null ? policy.max_inflight : null;
+    var buggy = !!policy.buggy;
+
+    var scope = { property: policy.property || null, kind: policy.kind || null };
+    if (amount != null) { scope.amount = amount; }
+    if (cap != null) { scope.cap = cap; }
+    if (maxInflight != null) { scope.max_inflight = maxInflight; }
+    if (policy.server) { scope.server = policy.server; }
+    if (policy.tenant_scope) { scope.tenant_scope = policy.tenant_scope; }
+    scope.verdict = verdict;
+
+    var conds = [];
+    if (amount != null) { conds.push("AMOUNT = " + amount + " (per-request spend)"); }
+    if (cap != null) { conds.push("CAP = " + cap + " (the spend cap)"); }
+    if (maxInflight != null) {
+      conds.push("bounded pool: max_inflight = " + maxInflight +
+        " (the reachable state space is bounded)");
+    }
+    if (buggy) {
+      conds.push("K >= 2 (a burst of parallel fires exposes the bug; " +
+        "K = 1 masks it under settled-only accounting)");
+    }
+    if (nStates != null) {
+      conds.push("reachable state space explored: n_states = " + nStates);
+    }
+
+    var touched = (compliance && compliance.controls_touched) || [];
+    var soc2 = [], aiuc = [];
+    for (var i = 0; i < touched.length; i++) {
+      if (touched[i].indexOf("CC") === 0) { soc2.push(touched[i]); }
+      if (touched[i].indexOf("AIUC") === 0) { aiuc.push(touched[i]); }
+    }
+
+    var rotVersion = t.rot_version || "?";
+    return {
+      schema: "caravel.attestation/v1",
+      artifact_hierarchy: [
+        { artifact: "RTF v1 trace", schema: "caravel.rtf/v1",
+          role: "source of truth (hash-pinned)" },
+        { artifact: "one-pager", schema: "caravel.attestation/v1",
+          role: "underwriter view (a pure function of the trace)" },
+        { artifact: "site", schema: "site/data",
+          role: "demo view (interactive; renders the same trace data)" }
+      ],
+      verdict: verdict,
+      source_trace: { schema: t.schema, manifest_id: t.manifest_id, hash: t.hash },
+      version: {
+        policy_hash: policyHash,
+        engine_version: rotVersion,
+        engines: t.engines || [],
+        id: (policyHash ? String(policyHash).slice(0, 16) : "unknown") + "+" + rotVersion
+      },
+      scope: scope,
+      coverage_conditions: conds,
+      out_of_scope: [
+        "liveness (task completion) -- this is a SAFETY property; liveness is bounded only by the horizon",
+        "other invariant kinds (approval ordering, information-flow) -- not in this trace",
+        "state space beyond the reachable set explored (n_states = " +
+          (nStates != null ? nStates : "unknown") + ")"
+      ],
+      counterexample: t.counterexample || null,
+      controls: { soc2: soc2, aiuc: aiuc, labels: (compliance && compliance.controls) || {} },
+      bounded_caveat: (nStates != null
+        ? "This is a BOUNDED proof: it holds over the reachable state space explored (n_states = " +
+          nStates + "). It is not an unbounded theorem -- a larger pool or a longer horizon would require a re-issue of this attestation."
+        : "This is a BOUNDED proof over the state space the engine explored. It is not an unbounded theorem -- a larger bound would require a re-issue of this attestation."),
+      claims: {
+        defensible: "ROTN does NOT claim to compile arbitrary policy text into an equivalent model. It lowers the spend-cap policy class (aggregate-over-events + cap) to a bounded transition system by a mechanical derivation from the parsed policy -- parameterized on amount / cap / pool -- and verifies it with independent engines. The policy<->model correspondence is CHECKED, not argued.",
+        not_claimed: "No arbitrary-policy compilation. Every verdict is BOUNDED: it holds over the explored state space, not over all possible states."
+      },
+      reverify: {
+        command: id ? ROT.reverifyCommand(id, t) : null,
+        expected_hash: t.hash
+      }
+    };
   };
 
   /* ---------------- views ---------------- */
@@ -272,6 +400,18 @@
           "</div>"
         );
       })(),
+      (function () {
+        var link = ROT.shareLink(t, id);
+        return (
+          '<div class="hero-att">' +
+          '<span class="rv-label">Attestation</span>' +
+          '<a class="btn btn-att" href="' + esc(ROT.shareURL(t, id)) + '">' +
+          "\u2713 Export attestation \u2192</a>" +
+          '<button type="button" class="btn copy-btn att-share" ' +
+          'data-copy-text="' + esc(link) + '">Copy share URL (hash-pinned)</button>' +
+          "</div>"
+        );
+      })(),
       "  </div>",
       "</section>"
     ].join("\n");
@@ -289,63 +429,220 @@
     return null;
   }
 
-  function replayHTML(id, t, v) {
-    var spendcap = isSpendcap(t);
-    var graphSub = spendcap
-      ? "nodes = states (in-flight / settled) \u00b7 edges = the counterexample step path \u00b7 " +
-        '<span class="hl-note">red = counterexample \u00b7 orange = replay step</span>'
-      : "nodes = states (tools, fields) \u00b7 edges = actions (reads, writes) \u00b7 " +
-        '<span class="hl-note">red = counterexample</span>';
-    var parts = [
-      '<nav class="crumbs" aria-label="Breadcrumb"><a href="#/">gallery</a> / <span>' + esc(id) + "</span></nav>",
-      heroHTML(id, t, v),
-      '<section class="panel" aria-label="State-space graph">',
-      "  <div class=\"panel-head\"><h2>State-space graph</h2>" +
-        '<p class="panel-sub">' + graphSub + "</p></div>",
-      '  <div id="rot-graph" class="graph-box"></div>',
-      "</section>"
-    ];
-    if (spendcap) {
-      parts.push(
-        '<section class="panel" aria-label="Spend-cap timeline">',
-        "  <div class=\"panel-head\"><h2>Spend-cap</h2>" +
-          '<p class="panel-sub">G2 \u00b7 cumulative spend vs the cap, with the crossing moment highlighted</p></div>',
-        '  <div id="rot-spendcap"></div>',
-        "</section>"
-      );
-    }
-    if (t.coaching && t.coaching.schema) {
-      parts.push(
-        '<section class="panel" aria-label="Coaching">',
-        "  <div class=\"panel-head\"><h2>Coaching</h2>" +
-          '<p class="panel-sub">the third leg of the triad \u00b7 the agent is coached back in bounds, *with a proof* (detect \u2192 explain \u2192 correct \u2192 re-check \u2192 close)</p></div>',
-        '  <div id="rot-coach"></div>',
-        "</section>"
-      );
-    }
-    parts.push(
-      '<section class="panels-2" aria-label="Timeline and narration">',
-      '  <div class="panel">',
-      "    <div class=\"panel-head\"><h2>Audit timeline</h2></div>",
-      '    <div id="rot-timeline"></div>',
-      "  </div>",
-      '  <div class="panel">',
-      "    <div class=\"panel-head\"><h2>Narration</h2></div>",
-      '    <div id="rot-narration"></div>',
-      "  </div>",
-      "</section>",
-      '<section class="panel" aria-label="Findings and controls">',
-      "  <div class=\"panel-head\"><h2>Findings &amp; controls</h2>" +
-        '<p class="panel-sub">Cedar-AR findings mapped to SOC 2 / AIUC controls</p></div>',
-      '  <div id="rot-findings"></div>',
-      "</section>",
-      '<section class="panel" aria-label="Compliance">',
-      "  <div class=\"panel-head\"><h2>Compliance</h2>" +
-        '<p class="panel-sub">SOC 2 / AIUC controls touched by this audit, with the evidence that links each to its findings</p></div>',
-      '  <div id="rot-compliance"></div>',
+  /* ---------------- E2: the four-beat arc (rule -> attack -> proof -> coach)
+   *
+   * The replay page is a narrative, not a dashboard:
+   *
+   *   BEAT 1 RULE    -- the policy as written (bounds, fields, hash)
+   *   BEAT 2 ATTACK  -- the counterexample in the state space, the cap
+   *                     crossing, and the K-sweep (CLIMAX 1)
+   *   BEAT 3 PROOF   -- what the engine discharged, under what bounds, and
+   *                     the buggy/corrected pair
+   *   BEAT 4 COACH   -- blocked call -> five-field refusal -> to_proceed
+   *                     (CLIMAX 2) -> the repair, discharged by proof
+   *
+   * Every beat renders from the SAME RTF v1 trace; the attestation view
+   * (E3) is a pure function of it.
+   */
+
+  function beat(n, title, tag, sub, body) {
+    return (
+      '<section class="beat" id="beat-' + n + '" aria-label="' + esc(title) + '">' +
+      '<header class="beat-head">' +
+      '<span class="beat-n" aria-hidden="true">' + n + "</span>" +
+      "<div>" +
+      "<h2>" + esc(title) +
+      (tag ? ' <span class="beat-tag">' + tag + "</span>" : "") +
+      "</h2>" +
+      (sub ? '<p class="beat-sub">' + sub + "</p>" : "") +
+      "</div>" +
+      "</header>" +
+      '<div class="beat-body">' + body + "</div>" +
       "</section>"
     );
+  }
+
+  /* BEAT 1 -- the rule as written (spend-cap policy or MCP manifest). */
+  function ruleBeat(t) {
+    var p = t.policy || {};
+    var src = t.source || {};
+    var rows = [];
+    function row(label, val, mono) {
+      if (val == null || val === "") { return ""; }
+      return '<dt>' + esc(label) + '</dt><dd class="' + (mono ? "mono" : "") + '">' +
+        esc(val) + "</dd>";
+    }
+    if (p.server) {
+      rows.push(row("server", p.server));
+      rows.push(row("version", p.version));
+      rows.push(row("tenant scope", p.tenant_scope, true));
+      rows.push(row("allowed write fields", (p.allowed_write_fields || []).join(", "), true));
+    } else {
+      rows.push(row("property", p.property, true));
+      rows.push(row("kind", p.kind));
+      rows.push(row("event_kind", p.event_kind, true));
+      rows.push(row("AMOUNT", p.amount));
+      rows.push(row("CAP", p.cap));
+      rows.push(row("K (max in-flight)", p.max_inflight));
+      rows.push(row("window", p.window));
+    }
+    rows.push(row("policy hash", (src.hash || p.hash), true));
+    var variant = p.buggy
+      ? '<span class="chip chip-buggy">BUGGY variant &mdash; settled-trace accounting</span>'
+      : (p.max_inflight != null
+        ? '<span class="chip chip-fix">CORRECTED variant &mdash; in-flight-trace accounting</span>'
+        : "");
+    var constraints = (window.ROT.ROTCompare && t.constraints && t.constraints.length)
+      ? '<h4 class="beat-h">constraints</h4>' + ROT.ROTCompare.constraintsHTML(t)
+      : "";
+    return (
+      '<div class="rule-card">' +
+      '<dl class="policy-card">' + rows.join("") + "</dl>" +
+      (variant ? '<div class="rule-variant">' + variant + "</div>" : "") +
+      constraints +
+      "</div>"
+    );
+  }
+
+  /* BEAT 2 -- the attack: state space, counterexample path, cap crossing,
+   * and (spend-cap) the K-sweep: CLIMAX 1. */
+  function attackBeat(t) {
+    var spend = isSpendcap(t);
+    var parts = [];
+    parts.push('<div id="rot-graph" class="graph-box"></div>');
+    if (spend) {
+      parts.push('<div id="rot-spendcap"></div>');
+    }
+    parts.push('<div id="rot-timeline"></div>');
+    if (spend && window.ROT.ROTCompare) {
+      var series = ROT.ROTCompare.ksweepSeries();
+      parts.push(
+        '<div class="climax climax-1" id="rot-sweep">' +
+        '<div class="climax-tag">CLIMAX 1 &mdash; the K-sweep</div>' +
+        ROT.ROTCompare.sweepHTML(series) +
+        "</div>"
+      );
+    }
     return parts.join("\n");
+  }
+
+  /* BEAT 3 -- the proof: bounded, re-derivable, and the buggy/corrected pair. */
+  function proofBeat(id, t) {
+    var parts = [];
+    if (window.ROT.ROTCompare) {
+      var pair = ROT.ROTCompare.pairAt(t);
+      if (pair) {
+        parts.push('<h4 class="beat-h">buggy vs corrected &mdash; at this K</h4>');
+        parts.push(ROT.ROTCompare.columnsHTML(pair));
+      }
+    }
+    var prov = t.provenance || {};
+    var facts = [];
+    function f(label, val) {
+      if (val == null || val === "") { return; }
+      facts.push('<dt>' + esc(label) + "</dt><dd>" + esc(val) + "</dd>");
+    }
+    f("engines", (t.engines || []).join(" \u00b7 "));
+    f("states explored (bounded)", prov.n_states != null ? prov.n_states : null);
+    f("horizon", t.horizon != null ? t.horizon : null);
+    f("horizon complete", prov.horizon_complete == null ? null : (prov.horizon_complete ? "yes" : "no"));
+    f("policy hash", prov.policy_hash || (t.source && t.source.hash));
+    if (facts.length) {
+      parts.push('<h4 class="beat-h">provenance (bounded)</h4>');
+      parts.push('<dl class="proof-facts">' + facts.join("") + "</dl>");
+    }
+    if (t.policy && t.policy.max_inflight != null) {
+      var buggy = !!t.policy.buggy;
+      var otherId = buggy ? String(id).replace("-buggy", "-correct")
+                          : String(id).replace("-correct", "-buggy");
+      parts.push(
+        '<p class="proof-cross">' +
+        (buggy
+          ? "This policy is VIOLATED &mdash; its proof is the <strong>corrected variant</strong>: " +
+            '<a href="#/replay/' + esc(otherId) + '"><code>' + esc(otherId) + "</code></a>, " +
+            "and the coach in beat 4 re-proves the repair."
+          : "This policy is PROVEN &mdash; the attack lives in the <strong>buggy variant</strong>: " +
+            '<a href="#/replay/' + esc(otherId) + '"><code>' + esc(otherId) + "</code></a>, " +
+            "where the coach in beat 4 is the hero.") +
+        "</p>"
+      );
+    }
+    if (!parts.length) { parts.push('<p class="muted">No provenance recorded in this trace.</p>'); }
+    return parts.join("\n");
+  }
+
+  /* BEAT 4 -- the coach: blocked call -> refusal -> to_proceed (CLIMAX 2).
+   * The coach panel (coach.js) is the hero when the trace carries coaching;
+   * the idle note is rendered here so the beat is never empty. */
+  function coachIdleHTML(id, t) {
+    if (t.policy && t.policy.server) {
+      return (
+        '<div class="coach-idle"><p>The coach is the hero of the spend-cap arc: a ' +
+        "blocked call, a five-field refusal, and the computed " +
+        "<code class=\"mono\">to_proceed</code>. The MCP / lethal-trifecta " +
+        "rule &rarr; attack &rarr; proof arc (and its coach) ships with B2.3 " +
+        "&mdash; stated scope, not a gap in this page.</p></div>"
+      );
+    }
+    var buggyId = String(id).replace(/-correct/g, "-buggy");
+    return (
+      '<div class="coach-idle"><p>The coach is idle here: this policy is proven, ' +
+      "so there is no blocked call and <code class=\"mono\">to_proceed</code> is " +
+      "never issued. The coach is the hero of the <strong>buggy variant</strong> " +
+      '(<a href="#/replay/' + esc(buggyId) + '">' + esc(buggyId) + "</a>), where a " +
+      "parallel burst is blocked and the coach hands back the computed enabling " +
+      "condition.</p></div>"
+    );
+  }
+
+  function coachBeat(id, t) {
+    var parts = [];
+    if (t.coaching && t.coaching.schema) {
+      parts.push(
+        '<div class="climax climax-2"><div class="climax-tag">CLIMAX 2 &mdash; to_proceed</div></div>'
+      );
+      parts.push('<div id="rot-coach"></div>');
+    } else {
+      parts.push(coachIdleHTML(id, t));
+    }
+    if (t.narration) {
+      parts.push('<h4 class="beat-h">narration</h4>');
+      parts.push('<div id="rot-narration"></div>');
+    }
+    return parts.join("\n");
+  }
+
+  function replayHTML(id, t, v) {
+    var spend = isSpendcap(t);
+    return [
+      '<nav class="crumbs" aria-label="Breadcrumb"><a href="#/">gallery</a> / <span>' + esc(id) + "</span></nav>",
+      heroHTML(id, t, v),
+      '<p class="arc-lede">This page walks four beats: <strong>RULE</strong> &rarr; ' +
+        "<strong>ATTACK</strong> (the K-sweep &mdash; climax 1) &rarr; <strong>PROOF</strong> " +
+        "&rarr; <strong>COACH</strong> (<code class=\"mono\">to_proceed</code> &mdash; climax 2).",
+      beat("rule", "RULE", "the rule as written",
+        spend
+          ? "The spend-cap policy, with the exact bounds the proof holds under."
+          : "The MCP manifest: which server, which tenant scope, which writes are permitted.",
+        ruleBeat(t)),
+      beat("attack", "ATTACK", spend ? "climax 1: the K-sweep" : "the counterexample path",
+        spend
+          ? "The counterexample in the state space, the cap crossing, and the K-sweep that exposes the concurrency bound."
+          : "The counterexample path through the state space.",
+        attackBeat(t)),
+      beat("proof", "PROOF", "bounded, re-derivable",
+        "What the engine discharged, under what bounds, and how to re-derive it byte-for-byte.",
+        proofBeat(id, t)),
+      beat("coach", "COACH", "climax 2: to_proceed",
+        "The blocked call, the five-field refusal, and the computed enabling condition &mdash; the repair discharged by proof.",
+        coachBeat(id, t)),
+      '<section class="panel evidence" aria-label="Evidence and controls">',
+      "  <div class=\"panel-head\"><h2>Evidence &amp; controls</h2>" +
+        '<p class="panel-sub">findings mapped to SOC 2 / AIUC controls &mdash; the underwriter&rsquo;s evidence</p></div>',
+      '  <div id="rot-findings"></div>',
+      '  <div id="rot-compliance"></div>',
+      "</section>"
+    ].join("\n");
   }
 
   function renderReplay(id) {
@@ -360,13 +657,24 @@
       }
       var v = ROT.verdictInfo(t.verdict);
       view.innerHTML = replayHTML(id, t, v);
-      if (ROT.ROTGraph) { ROT.ROTGraph.mount(document.getElementById("rot-graph"), t); }
-      if (ROT.ROTSpendcap) { ROT.ROTSpendcap.mount(document.getElementById("rot-spendcap"), t); }
-      if (ROT.ROTCoach) { ROT.ROTCoach.mount(document.getElementById("rot-coach"), t); }
-      if (ROT.ROTTimeline) { ROT.ROTTimeline.mount(document.getElementById("rot-timeline"), t); }
-      if (ROT.ROTNarration) { ROT.ROTNarration.mount(document.getElementById("rot-narration"), t); }
-      if (ROT.ROTFindings) { ROT.ROTFindings.mount(document.getElementById("rot-findings"), t); }
-      if (ROT.ROTCompliance) { ROT.ROTCompliance.mount(document.getElementById("rot-compliance"), t); }
+      var graphEl = document.getElementById("rot-graph");
+      if (graphEl && ROT.ROTGraph) { ROT.ROTGraph.mount(graphEl, t); }
+      var spendEl = document.getElementById("rot-spendcap");
+      if (spendEl && ROT.ROTSpendcap) { ROT.ROTSpendcap.mount(spendEl, t); }
+      var tlEl = document.getElementById("rot-timeline");
+      if (tlEl && ROT.ROTTimeline) { ROT.ROTTimeline.mount(tlEl, t); }
+      var coachEl = document.getElementById("rot-coach");
+      if (coachEl && ROT.ROTCoach) { ROT.ROTCoach.mount(coachEl, t, id); }
+      var narrEl = document.getElementById("rot-narration");
+      if (narrEl && ROT.ROTNarration) { ROT.ROTNarration.mount(narrEl, t); }
+      var findEl = document.getElementById("rot-findings");
+      if (findEl && ROT.ROTFindings) { ROT.ROTFindings.mount(findEl, t); }
+      var compEl = document.getElementById("rot-compliance");
+      if (compEl && ROT.ROTCompliance) { ROT.ROTCompliance.mount(compEl, t); }
+      if (window.ROT.ROTCompare) {
+        var sweepEl = document.getElementById("rot-sweep");
+        if (sweepEl) { ROT.ROTCompare.bindSweep(sweepEl, ROT.ROTCompare.ksweepSeries()); }
+      }
       bindCopyButtons(view);
       focusMain();
     }).catch(function () {
@@ -408,6 +716,168 @@
       });
     }).catch(function () { fail(); });
   }
+  /* ---------------- E3: the attestation view (B3 one-pager from the trace)
+   *
+   * #/attestation/<id> renders the B3 attestation from the SAME trace data
+   * the replay page uses. The body is a pure function of the trace
+   * (ROT.attestationBody) -- the same fields rot/attestation.py derives.
+   * When the URL carries a hash pin (?h=<sha256>) -- the shareable,
+   * hash-pinned link (E4) -- the pin is verified against the trace before
+   * anything is trusted; a mismatch is flagged STALE, never re-proven.
+   */
+
+  function attestationHTML(id, t, pin) {
+    var b = ROT.attestationBody(t, id);
+    var v = ROT.verdictInfo(t.verdict);
+    var pinned = !!(pin && t.hash);
+    var match = pinned
+      ? (String(pin).toLowerCase() === String(t.hash).toLowerCase())
+      : null;
+    var parts = [];
+
+    parts.push(
+      '<nav class="crumbs" aria-label="Breadcrumb"><a href="#/">gallery</a> / ' +
+      '<a href="#/replay/' + esc(id) + '">replay</a> / <span>attestation</span></nav>'
+    );
+
+    if (pinned && match) {
+      parts.push(
+        '<div class="att-pin att-pin-ok" role="status">' +
+        '<span class="att-pin-icon" aria-hidden="true">\u2713</span> ' +
+        "<strong>HASH PIN VERIFIED</strong> &mdash; the hash in this URL matches the trace " +
+        "byte-for-byte. This link <em>is</em> the attestation."
+      );
+    } else if (pinned) {
+      parts.push(
+        '<div class="att-pin att-pin-bad" role="alert">' +
+        '<span class="att-pin-icon" aria-hidden="true">\u26A0</span> ' +
+        "<strong>HASH MISMATCH</strong> &mdash; the hash in this URL does not match the trace. " +
+        "STALE or TAMPERED: re-issue the attestation; do not trust this pin."
+      );
+    }
+
+    parts.push(
+      '<section class="att-hero v-' + v.cls + '">' +
+      '<div class="att-verdict">' + v.label + '</div>' +
+      '<div class="att-id">' +
+      '<div class="att-kicker">caravel.attestation/v1 &middot; ' + esc(t.manifest_id || id) + "</div>" +
+      "<h1>Attestation &mdash; " + esc(id) + "</h1>" +
+      '<p class="att-hashline">trace SHA-256 <code class="mono">' + esc(t.hash || "\u2014") + "</code> " +
+      '<button type="button" class="btn copy-btn" data-copy-text="' + esc(t.hash || "") + '">copy</button></p>' +
+      '<p class="att-version">version ' + esc(b.version.id) + " &middot; engines " +
+      esc((b.version.engines || []).join(" \u00b7 ") || "\u2014") + "</p>" +
+      "</div>" +
+      "</section>"
+    );
+
+    function sec(title, inner) {
+      return '<section class="att-sec"><h2>' + esc(title) + "</h2>" + inner + "</section>";
+    }
+    function list(items) {
+      return '<ul class="att-list">' +
+        items.map(function (x) { return "<li>" + x + "</li>"; }).join("") +
+        "</ul>";
+    }
+
+    var scopeRows = [];
+    Object.keys(b.scope).forEach(function (k) {
+      var val = b.scope[k];
+      if (val == null) { return; }
+      scopeRows.push("<tr><th>" + esc(k) + "</th><td>" + esc(val) + "</td></tr>");
+    });
+    parts.push(sec("Scope", '<table class="att-table">' + scopeRows.join("") + "</table>"));
+
+    parts.push(sec("Assumptions (coverage conditions)",
+      list(b.coverage_conditions.map(esc)) +
+      '<p class="muted att-note">A bounded proof is only as good as its bounds: ' +
+      "these are the conditions under which the verdict holds.</p>"));
+
+    parts.push(sec("Out of scope (stated, not implied)", list(b.out_of_scope.map(esc))));
+
+    if (b.counterexample) {
+      var ce = b.counterexample;
+      var ceTxt = [];
+      if (ce.completed != null) { ceTxt.push("completed=" + ce.completed); }
+      if (ce.inflight != null) { ceTxt.push("inflight=" + ce.inflight); }
+      if (ce.steps) { ceTxt.push(ce.steps.length + " step(s)"); }
+      parts.push(sec("Counterexample", '<p class="mono">' + esc(ceTxt.join(" \u00b7 ")) + "</p>"));
+    }
+
+    var cLabels = b.controls.labels || {};
+    var ctrlRows = b.controls.soc2.concat(b.controls.aiuc).map(function (c) {
+      return '<tr><th class="mono">' + esc(c) + "</th><td>" + esc(cLabels[c] || "") + "</td></tr>";
+    });
+    parts.push(sec("Controls touched (SOC 2 / AIUC)",
+      ctrlRows.length
+        ? '<table class="att-table">' + ctrlRows.join("") + "</table>"
+        : '<p class="muted">No control mapping recorded in this trace.</p>'));
+
+    parts.push(
+      '<section class="att-sec att-caveat"><h2>Bounded caveat</h2><p>' +
+      esc(b.bounded_caveat) + "</p></section>"
+    );
+
+    parts.push(sec("Defensible claim", "<p>" + esc(b.claims.defensible) + "</p>"));
+    parts.push(sec("What we do NOT claim", "<p>" + esc(b.claims.not_claimed) + "</p>"));
+
+    parts.push(
+      '<section class="att-sec att-reverify"><h2>Re-verify (byte-for-byte)</h2>' +
+      '<pre class="mono att-cmd">' + esc(b.reverify.command || "") + "</pre>" +
+      '<p class="att-hashline">expected hash <code class="mono">' +
+      esc(b.reverify.expected_hash || "\u2014") + "</code> " +
+      '<button type="button" class="btn copy-btn" data-copy-text="' +
+      esc(b.reverify.expected_hash || "") + '">copy hash</button></p>' +
+      "</section>"
+    );
+
+    var hier = b.artifact_hierarchy.map(function (h) {
+      return "<tr><th>" + esc(h.artifact) + "</th><td>" + esc(h.role) + "</td></tr>";
+    }).join("");
+    parts.push(sec("Artifact hierarchy", '<table class="att-table">' + hier + "</table>"));
+
+    var share = ROT.shareLink(t, id);
+    parts.push(
+      '<section class="att-sec att-share"><h2>Share</h2>' +
+      '<p class="muted">One URL, hash in the URL &mdash; the link <em>is</em> the attestation. ' +
+      "The receiving side re-verifies the pin against the trace before trusting anything.</p>" +
+      '<div class="att-share-row">' +
+      '<input class="mono att-share-input" readonly value="' + esc(share) + '" ' +
+      'onfocus="this.select()" aria-label="Share URL (hash-pinned)">' +
+      '<button type="button" class="btn copy-btn att-share" data-copy-text="' + esc(share) +
+      '">Copy share URL</button>' +
+      "</div>" +
+      "</section>"
+    );
+
+    parts.push(
+      '<footer class="att-foot">' +
+      '<p class="muted">caravel.attestation/v1 &middot; RTF v1 = source of truth (hash-pinned) ' +
+      "&rarr; one-pager = underwriter view &rarr; site = demo view.</p>" +
+      "</footer>"
+    );
+
+    return parts.join("\n");
+  }
+
+  function renderAttestation(id, pin) {
+    var view = document.getElementById("view");
+    if (!view) { return; }
+    showLoading(view, "Loading attestation for " + id + "\u2026");
+    ROT.loadTrace(id).then(function (t) {
+      if (!t) {
+        view.innerHTML = notFoundHTML(id);
+        focusMain();
+        return;
+      }
+      view.innerHTML = attestationHTML(id, t, pin);
+      bindCopyButtons(view);
+      focusMain();
+    }).catch(function () {
+      view.innerHTML = notFoundHTML(id);
+      focusMain();
+    });
+  }
+
   /* ---------------- copy-to-clipboard (works over file://) ---------------- */
 
   function copyText(text, btn) {
@@ -456,10 +926,42 @@
     }
   }
 
-  /* ---------------- router ---------------- */
+  /* ---------------- router ----------------
+   *
+   * #/attestation/<id>?h=<sha256> carries the hash PIN in the URL itself
+   * (E4): the link is the attestation, and the pin is verified against the
+   * trace when the view renders. ?view=attestation on the page URL (E3)
+   * renders the beachhead attestation from the same trace data.
+   */
+
+  function parseQuery() {
+    var out = {};
+    var qs = (typeof location.search === "string" ? location.search : "").replace(/^\?/, "");
+    if (!qs) { return out; }
+    qs.split("&").forEach(function (kv) {
+      var i = kv.indexOf("=");
+      var k = i >= 0 ? kv.slice(0, i) : kv;
+      var val = i >= 0 ? kv.slice(i + 1) : "";
+      try { out[decodeURIComponent(k)] = decodeURIComponent(val); } catch (e) {}
+    });
+    return out;
+  }
+
+  function parsePin(qs) {
+    var i = qs.indexOf("h=");
+    if (i < 0) { return null; }
+    var val = qs.slice(i + 2).split("&")[0];
+    try { return decodeURIComponent(val); } catch (e) { return val; }
+  }
 
   function parseHash() {
     var h = (location.hash || "").replace(/^#\/?/, "");
+    var pin = null;
+    var qi = h.indexOf("?");
+    if (qi >= 0) {
+      pin = parsePin(h.slice(qi + 1));
+      h = h.slice(0, qi);
+    }
     var m = h.match(/^replay\/([^/]+)\/?$/);
     if (m) { return { view: "replay", id: decodeURIComponent(m[1]) }; }
     var c = h.match(/^compare\/([^/]+)\/([^/]+)\/?$/);
@@ -468,7 +970,15 @@
                left: decodeURIComponent(c[1]),
                right: decodeURIComponent(c[2]) };
     }
-    if (!h) { return { view: "gallery" }; }
+    var a = h.match(/^attestation\/([^/]+)\/?$/);
+    if (a) { return { view: "attestation", id: decodeURIComponent(a[1]), pin: pin }; }
+    if (!h) {
+      var q = parseQuery();
+      if (q.view === "attestation") {
+        return { view: "attestation", id: "spendcap-buggy", pin: q.h || null };
+      }
+      return { view: "gallery" };
+    }
     return { view: "notfound", raw: h };
   }
 
@@ -478,6 +988,8 @@
       renderReplay(r.id);            // manages focus on completion
     } else if (r.view === "compare") {
       renderCompare(r.left, r.right); // manages focus on completion
+    } else if (r.view === "attestation") {
+      renderAttestation(r.id, r.pin); // manages focus on completion
     } else if (r.view === "gallery") {
       renderGallery();
       focusMain();

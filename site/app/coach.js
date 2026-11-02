@@ -1,15 +1,20 @@
-/* ROTN replay site -- Coaching panel (the third leg of the triad).
+/* ROTN replay site -- coach panel (E1: the coach is the HERO).
  *
- * Renders the CoachingArtifact (``caravel.coach/v1``): the 5-step loop
- * (Detect -> Explain -> Correct -> Re-check -> Close) that coaches a buggy
- * spend-cap back in bounds, *with a proof*. Only shown for traces that carry
- * a ``coaching`` section -- a violated spend-cap policy for which the
- * correction was (or was not) re-proven safe.
+ * The coach is the centerpiece of the arc (beat 4 / the 2nd climax), and the
+ * panel is re-sequenced around it:
  *
- * Pure HTML, no framework, no build step -- consistent with the rest of the
- * site. The panel is fail-closed in its presentation: a ``closed`` coaching
- * (correction re-proven) reads green; an ``open`` coaching (correction did not
- * re-prove) reads amber and is explicitly labelled "NOT discharged".
+ *   blocked call  ->  the 5-field refusal  ->  to_proceed  ->  allowed_now
+ *
+ * The five-step loop (detect -> explain -> correct -> re-check -> close) is
+ * the *repair and re-proof that discharges the coaching* -- supporting
+ * evidence for the refusal, not the headline.
+ *
+ * Data source: ``trace.coaching`` (the CoachingArtifact embedded in the RTF v1
+ * trace). The 5-field refusal is assembled from ``coaching.to_proceed`` (the
+ * computed enabling condition) + ``coaching.policy`` + ``coaching.explain`` --
+ * the exact shape the runtime emits (``blocked`` / ``rule`` / ``why`` /
+ * ``to_proceed`` / ``allowed_now``). Pure rendering: no verification logic is
+ * added here.
  */
 (function () {
   "use strict";
@@ -49,10 +54,81 @@
     );
   }
 
-  function coachPanel(trace) {
-    var c = trace.coaching;
-    var closed = (c.status === "closed");
+  /* ---------------- E1: the hero (blocked -> refusal -> to_proceed) --------- */
+
+  /* The blocked call card: which action, in which state, under which guard. */
+  function blockedCallHTML(c) {
+    var tp = c.to_proceed || {};
+    var st = tp.state || {};
+    var stateTxt = Object.keys(st).sort().map(function (k) {
+      return k + " = " + st[k];
+    }).join(",  ");
+    var action = tp.action || ((c.policy || {}).action || "");
+    return (
+      '<div class="coach-blocked">' +
+      '<div class="cb-head">' +
+      '<span class="cb-action mono">' + esc(action) + "</span>" +
+      '<span class="cb-verdict">BLOCKED</span>' +
+      "</div>" +
+      '<div class="cb-state">state &nbsp;<span class="mono">' +
+      (stateTxt ? esc(stateTxt) : "\u2014") + "</span></div>" +
+      (tp.guard
+        ? '<div class="cb-guard">guard <code class="mono">' + esc(tp.guard) + "</code></div>"
+        : "") +
+      "</div>"
+    );
+  }
+
+  function refusalRow(key, content) {
+    return '<tr><th class="rf-key">' + esc(key) + "</th><td>" + content + "</td></tr>";
+  }
+
+  /* The 5-field refusal -- the exact shape the runtime emits, assembled from
+   * the coaching data (the same decision, read from the trace). */
+  function refusalHTML(c) {
+    var tp = c.to_proceed || {};
     var p = c.policy || {};
+    var explain = c.explain || {};
+    var rule = p.policy_id || p.action || "policy";
+    if (p.action) {
+      rule += " \u00B7 action <code class=\"mono\">" + esc(p.action) + "</code>";
+    }
+    var conds = (tp.conditions || []).join("  &&  ");
+    return (
+      '<table class="refusal-table">' +
+      refusalRow("blocked", '<span class="rf-true">TRUE</span>') +
+      refusalRow("rule", rule) +
+      refusalRow("why", esc(explain.rationale || "\u2014")) +
+      refusalRow("to_proceed", '<code class="mono rf-cond">' + esc(conds || "\u2014") + "</code>") +
+      refusalRow("allowed_now", '<span class="rf-false">FALSE</span>') +
+      "</table>"
+    );
+  }
+
+  /* The to_proceed hero -- the 2nd climax of the arc. */
+  function tpHeroHTML(c) {
+    var tp = c.to_proceed || {};
+    var conds = tp.conditions || [];
+    return (
+      '<div class="tp-hero">' +
+      '<div class="tp-kicker">TO PROCEED &mdash; the computed enabling condition</div>' +
+      '<div class="tp-conds">' +
+      conds.map(function (x) {
+        return '<code class="mono tp-cond">' + esc(x) + "</code>";
+      }).join("") +
+      "</div>" +
+      (tp.explanation ? '<p class="tp-explain">' + esc(tp.explanation) + "</p>" : "") +
+      '<div class="tp-allowed">allowed_now = <strong>FALSE</strong> &mdash; the call is not ' +
+      "allowed as-is. It becomes allowed exactly when the condition above holds: the " +
+      "enabling condition is read straight from the guard (the spec) at this state, " +
+      "not hand-written.</div>" +
+      "</div>"
+    );
+  }
+
+  /* The 5-step loop: the repair + re-proof that discharges the coaching. */
+  function stepsHTML(c) {
+    var closed = (c.status === "closed");
     var detect = c.detect || {};
     var explain = c.explain || {};
     var correct = c.correct || {};
@@ -88,19 +164,7 @@
       )
     ].join("");
 
-    var badge = closed
-      ? '<span class="coach-badge coach-badge-closed"><span class="coach-badge-icon" aria-hidden="true">\u2713</span>CLOSED &middot; discharged by proof</span>'
-      : '<span class="coach-badge coach-badge-open"><span class="coach-badge-icon" aria-hidden="true">\u26A0</span>OPEN &middot; NOT discharged (fail-closed)</span>';
-
     return (
-      '<h3 class="coach-h">Coaching &mdash; coach + proof</h3>' +
-      '<p class="muted coach-sub">' + esc(c.schema || "") +
-      " &middot; K=" + (p.max_inflight != null ? p.max_inflight : "?") +
-      " &middot; AMOUNT=" + (p.amount != null ? p.amount : "?") +
-      " &middot; CAP=" + (p.cap != null ? p.cap : "?") +
-      " &middot; W=" + (p.window != null ? p.window : "?") +
-      ' &middot; SHA-256 <code class="mono">' + esc((c.hash || "").slice(0, 16)) + "&hellip;</code></p>" +
-      '<div class="coach-status">' + badge + "</div>" +
       '<table class="coach-table">' +
       "<thead><tr><th>#</th><th>step</th><th>record</th></tr></thead>" +
       "<tbody>" + rows + "</tbody>" +
@@ -108,8 +172,38 @@
     );
   }
 
-  ROTCoach.mount = function (container, trace) {
+  /* The coach idle state (no blocked call) is the replay page's job (E2); the
+   * panel itself only renders when the trace carries a coaching artifact. */
+  ROTCoach.mount = function (container, trace, id) {
     if (!container || !hasCoach(trace)) { return; }
-    container.innerHTML = coachPanel(trace);
+    var c = trace.coaching;
+    var closed = (c.status === "closed");
+    var hasTp = !!(c.to_proceed && (c.to_proceed.conditions || []).length);
+    var p = c.policy || {};
+    var badge = closed
+      ? '<span class="coach-badge coach-badge-closed"><span class="coach-badge-icon" aria-hidden="true">\u2713</span>CLOSED &middot; discharged by proof</span>'
+      : '<span class="coach-badge coach-badge-open"><span class="coach-badge-icon" aria-hidden="true">\u26A0</span>OPEN &middot; NOT discharged (fail-closed)</span>';
+
+    var html = [];
+    html.push('<h3 class="coach-h">The coach &mdash; blocked call, refusal, the way back to allowed</h3>');
+    html.push('<p class="muted coach-sub">' + esc(c.schema || "") +
+      " &middot; K=" + (p.max_inflight != null ? p.max_inflight : "?") +
+      " &middot; AMOUNT=" + (p.amount != null ? p.amount : "?") +
+      " &middot; CAP=" + (p.cap != null ? p.cap : "?") +
+      " &middot; W=" + (p.window != null ? p.window : "?") +
+      ' &middot; SHA-256 <code class="mono">' + esc((c.hash || "").slice(0, 16)) + "&hellip;</code></p>");
+    html.push('<div class="coach-status">' + badge + "</div>");
+    if (hasTp) {
+      html.push(blockedCallHTML(c));
+      html.push('<h4 class="coach-refusal-h">The refusal &mdash; the exact five-field shape</h4>');
+      html.push(refusalHTML(c));
+      html.push(tpHeroHTML(c));
+      html.push('<details class="coach-repair"><summary>Repair &amp; re-proof &mdash; how the coaching is discharged (the 5-step loop)</summary>');
+      html.push(stepsHTML(c));
+      html.push("</details>");
+    } else {
+      html.push(stepsHTML(c));
+    }
+    container.innerHTML = html.join("\n");
   };
 })();
