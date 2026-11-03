@@ -33,7 +33,7 @@ _REPO_ROOT = os.path.dirname(_TESTS_DIR)
 # technical report whenever the suite size changes (this test enforces it).
 # NOTE: this count INCLUDES this file's single test case (843 + 1).
 # The 80 service-plane (Product 2: LangChain / MCP gateway / fleet-aggregate)
-# tests live in the paid layer under rot/commercial/tests/ and are NOT counted
+# tests live in the commercial layer under rot/commercial/tests/ and are NOT counted
 # here -- the free core suite is what this test pins.
 PINNED_SUITE_COUNT = 844
 

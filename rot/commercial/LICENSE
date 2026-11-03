@@ -1,11 +1,12 @@
 Server Side Public License, version 1 (SSPL-1.0) / Commercial
 ================================================================
 
-This file and the software it governs -- the ``rotn-commercial`` paid layer
+This file and the software it governs -- the ``rotn-commercial`` layer
 (``rot.commercial``: the Product 2 runtime coach **as a service**, the LangChain
 adapter, the MCP ``tools/call`` gateway, the fleet near-miss aggregate, the G8
-behavioral audit, and the Lethal-Trifecta risk surface) -- are **NOT** part of
-the Apache-2.0 core.  They are distributed under the **Server Side Public
+behavioral audit, and the Lethal-Trifecta risk surface) -- is **source-available
+in this repo** (the code is here for you to read and use) but is licensed
+**separately** from the Apache-2.0 core, under the **Server Side Public
 License, version 1 (SSPL-1.0)** and/or a **commercial license** issued by
 CARAVEL.
 
@@ -16,11 +17,12 @@ class, the deterministic counterexample, the tests, the one-pager generator,
 and the CI gate) is **Apache-2.0** (see the top-level ``LICENSE``): the proof
 is open, that is the credibility wedge.
 
-This **paid** layer is the value.  It is licensed so that a competitor who
-offers a **hosted clone** of this layer must either (a) comply with the SSPL --
-which requires offering the complete source of the *entire* hosted service
-stack -- or (b) buy a commercial license from CARAVEL.  This is the legal
-deterrent on the specific "hosted clone of my paid layer" threat.
+This commercial layer is **source-available**: the code is right here in the
+repo, free to read, use, and self-host.  It is licensed under SSPL-1.0 so that
+a competitor who offers a **hosted clone** of this layer must either (a) comply
+with the SSPL -- which requires offering the complete source of the *entire*
+hosted service stack -- or (b) buy a commercial license from CARAVEL.  That is
+the legal deterrent on the specific "hosted clone of this layer" threat.
 
 What SSPL-1.0 adds over the core
 --------------------------------

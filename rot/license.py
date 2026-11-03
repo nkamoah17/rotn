@@ -1,24 +1,25 @@
 # -*- coding: utf-8 -*-
-"""license.py -- Caravel tier gating: license model + DepthBudget (Phase D).
+"""license.py -- DepthBudget (full-strength) + optional signed self-bounds.
 
-This module implements **Phase D (tier gating)** of the ``caravel/rot-verify``
-productization plan. It adds *no engine logic*: tiering is "cap the
-bounded-search budget," which plugs directly into the existing
-``UNKNOWN``-on-budget-exhaustion behavior of the three engines.
+ROTN is **full-strength for everyone**: there is no paid/free budget split and
+no local license gate. The depth budget (``max_states``, ``max_horizon``,
+``max_tools``, ``max_tenant_scopes``) is always the generous
+:data:`FREE_LIMITS`; a bounded search that exceeds them is reported as an
+honest ``UNKNOWN``, never silently truncated.
 
-* **D1. License model** -- a zero-dependency, stdlib-only (``hmac`` +
-  ``hashlib``) HMAC-SHA256 signed license (schema ``caravel.license/v1``).
-* **D2. DepthBudget** -- the resolved depth budget
-  (``max_states``, ``max_horizon``, ``max_tools``, ``max_tenant_scopes``)
-  computed from *license -> action input -> free defaults*.
-* **D3. GitHub-Action input** -- ``tier`` + ``depth`` inputs; when
-  ``tier: free`` the action caps ``depth`` to the free maximum.
-* **D4. Tests** -- see ``tests/test_license.py``.
+The module also carries a zero-dependency, stdlib-only (``hmac`` + ``hashlib``)
+HMAC-SHA256 signed-bounds format (schema ``caravel.license/v1``) that a *user*
+may use to impose **tighter** bounds on themselves (a self-limiting cap, not a
+monetization gate). It is **fail-closed** and -- crucially -- has **no public
+default key**: without a signing key a license cannot be issued or verified, so
+no one can forge a "paid" license.
 
-The license is **fail-closed**: a tampered (bad HMAC), expired, or malformed
-license is *rejected* (``LicenseError``), never silently downgraded.
+* :class:`DepthBudget` -- the resolved depth budget.
+* :func:`resolve_budget` -- full-strength by default; honors an optional
+  validated license (highest authority) and an optional ``depth`` cap.
+* Tests -- see ``tests/test_license.py``.
 
-Pure stdlib, Python 3.6 compatible.
+Pure stdlib.
 """
 
 import datetime
@@ -29,7 +30,7 @@ import os
 
 __all__ = [
     "SCHEMA", "TIERS", "LIMIT_KEYS", "FREE_LIMITS", "PAID_LIMITS",
-    "DEFAULT_KEY", "HMAC_PREFIX", "KEY_ENV",
+    "HMAC_PREFIX", "KEY_ENV",
     "LicenseError", "License", "DepthBudget",
     "canonical_body", "sign", "verify_signature",
     "make_license", "load_license", "check_license",
@@ -45,33 +46,27 @@ TIERS = ("free", "paid")
 #: The depth-limit keys (stable order).
 LIMIT_KEYS = ("max_states", "max_horizon", "max_tools", "max_tenant_scopes")
 
-#: The free-tier depth limits (D2). Fail-closed defaults: a bounded search
-#: that exceeds them is reported as ``UNKNOWN``.
+#: The depth limits. ROTN is full-strength for everyone: this is the default
+#: (and only) budget, so there is no paid/free split. A bounded search that
+#: exceeds them is reported as an honest ``UNKNOWN``, never silently truncated.
 FREE_LIMITS = {
-    "max_states": 1000,
-    "max_horizon": 4,
-    "max_tools": 5,
-    "max_tenant_scopes": 1,
-}
-
-#: The paid-tier depth limits (generous defaults for the action-input path).
-PAID_LIMITS = {
     "max_states": 1000000,
     "max_horizon": 12,
     "max_tools": 100,
     "max_tenant_scopes": 10,
 }
 
-#: The demo Caravel key. In production this is a *secret* held by the Caravel
-#: backend; for the zero-deps demo it is a well-known placeholder, overridable
-#: via the ``CARAVEL_LICENSE_KEY`` environment variable or the ``--key`` CLI
-#: option. Never ship a real key in source.
-DEFAULT_KEY = "caravel-demo-key-v1"
+#: ``PAID_LIMITS`` is a backward-compatible alias for :data:`FREE_LIMITS`.
+#: There is no budget privilege for a "paid" tier: the engine is full-strength
+#: for everyone (see ``docs/licensing.md``).
+PAID_LIMITS = dict(FREE_LIMITS)
 
 #: The HMAC field prefix (identifies the algorithm).
 HMAC_PREFIX = "hmac-sha256:"
 
-#: Environment variable that overrides the demo key.
+#: Environment variable that provides a license signing key. When unset, no
+#: license can be issued or verified (fail-closed): there is **no public
+#: default key**, so a "paid" license cannot be forged.
 KEY_ENV = "CARAVEL_LICENSE_KEY"
 
 
@@ -80,8 +75,13 @@ class LicenseError(ValueError):
 
 
 def key_from_env():
-    """The Caravel key: ``$CARAVEL_LICENSE_KEY`` if set, else the demo key."""
-    return os.environ.get(KEY_ENV) or DEFAULT_KEY
+    """The signing key: ``$CARAVEL_LICENSE_KEY`` if set, else ``None``.
+
+    There is no public default key. Without a key, signing/verification is
+    simply unavailable (fail-closed) -- which is exactly what prevents a
+    "paid" license from being forged. An empty value is treated as unset.
+    """
+    return os.environ.get(KEY_ENV) or None
 
 
 # ---------------------------------------------------------------------------
@@ -412,7 +412,8 @@ class DepthBudget(object):
         The maximum tenant-scope count for the manifest audit (out-of-scope
         beyond this is reported as ``UNKNOWN``).
     source : str
-        Where the budget came from: ``"license"``, ``"action"``, or ``"free"``.
+        Where the budget came from: ``"license"`` (a supplied license) or
+        ``"free"`` (the full-strength defaults).
     """
 
     __slots__ = ("max_states", "max_horizon", "max_tools",
@@ -438,7 +439,7 @@ class DepthBudget(object):
 
     @classmethod
     def free(cls):
-        """The free-tier budget (the fail-closed defaults)."""
+        """The full-strength default budget (everyone gets this)."""
         return cls.from_limits(FREE_LIMITS, "free")
 
     def to_dict(self):
@@ -458,39 +459,31 @@ class DepthBudget(object):
 
 
 def resolve_budget(license=None, tier=None, depth=None):
-    """Compute the effective :class:`DepthBudget` (D2/D3).
+    """Compute the effective :class:`DepthBudget`.
 
-    Resolution order: **license -> action input -> free defaults**.
+    ROTN is **full-strength for everyone**: the default budget is always the
+    generous :data:`FREE_LIMITS`. There is no paid/free split and no ``tier``
+    privilege.
 
     Parameters
     ----------
     license : rot.license.License or None
-        A validated license (highest authority). When given, its limits are
-        used verbatim.
+        A validated license. When given (highest authority), its limits are
+        used verbatim -- a user may impose *tighter* bounds on themselves.
     tier : str or None
-        The GitHub-Action tier input (``free`` or ``paid``). Used when no
-        license is present.
+        Accepted for backward compatibility; **ignored** (no budget privilege).
     depth : int or None
-        The GitHub-Action ``depth`` input (a ``max_states`` override). When
-        ``tier`` is ``free`` it is capped to the free maximum; when ``tier``
-        is ``paid`` it is used as-is.
+        An optional user-set ``max_states`` bound (may only lower the budget).
 
     Returns
     -------
     DepthBudget
     """
-    # 1. License (highest authority).
+    # 1. License (highest authority): a user may self-limit their budget.
     if license is not None:
         return DepthBudget.from_limits(license.limits, "license")
-    # 2. Action input (tier + depth).
-    if tier in TIERS:
-        base = dict(FREE_LIMITS if tier == "free" else PAID_LIMITS)
-        if depth is not None:
-            base["max_states"] = int(depth)
-        if tier == "free":
-            # D3: the action caps depth to the free max when tier: free.
-            base["max_states"] = min(base["max_states"],
-                                    FREE_LIMITS["max_states"])
-        return DepthBudget.from_limits(base, "action")
-    # 3. Free defaults.
-    return DepthBudget.free()
+    # 2. Full-strength defaults (everyone gets the same budget).
+    base = dict(FREE_LIMITS)
+    if depth is not None:
+        base["max_states"] = min(int(base["max_states"]), int(depth))
+    return DepthBudget.from_limits(base, "free")

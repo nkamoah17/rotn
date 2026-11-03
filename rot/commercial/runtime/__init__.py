@@ -13,7 +13,7 @@ stays in the **core** (:mod:`rot.runtime`, Apache-2.0).  This package is the
                                                fleet near-miss learning (B5).
 
 All three import the core via absolute :mod:`rot.runtime` paths, so the
-dependency is one-directional (paid -> core) and the core stays importable
+dependency is one-directional (commercial -> core) and the core stays importable
 with this package absent.  Requires the ``rotn-commercial`` distribution.
 """
 

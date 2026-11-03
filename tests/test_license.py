@@ -1,19 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Tests for the Caravel tier-gating license model in :mod:`rot.license`.
+"""Tests for the Caravel license model in :mod:`rot.license`.
 
-This is the Phase D (tier gating) test suite (D4). It covers:
+ROTN is full-strength for everyone: there is no free/paid budget split. This
+suite covers:
 
   * **D1. License model** -- HMAC-SHA256 signing/verification round-trip,
     tamper rejection, wrong-key rejection, expiry (fail-closed), and the
     ``License`` value object (``from_dict`` / ``to_dict`` / ``is_expired``).
   * **D2. DepthBudget** -- the resolved budget (``free`` / ``from_limits`` /
     ``to_dict``) and the ``resolve_budget`` precedence
-    (license -> action input -> free defaults), including the D3 rule that a
-    ``depth`` input is capped to the free maximum when ``tier: free``.
-  * **D3. Tier gating end-to-end** -- a catalog that exceeds the free tier
-    cap (``max_tools`` / ``max_tenant_scopes``) is reported ``UNKNOWN``
-    (exit 2) on the free tier while the paid tier produces a verdict,
-    demonstrating the "cap the bounded-search budget" contract.
+    (license -> depth bound -> full-strength defaults), including the rule that
+    a ``depth`` input is a user-set bound that may only lower the budget, and
+    that a "paid" tier confers no privilege (``PAID_LIMITS == FREE_LIMITS``).
+  * **D3. Full-strength end-to-end** -- a catalog is in scope and proven on
+    every tier, while a tight license still caps the budget (the license is
+    the highest authority).
 
 Pure stdlib, Python 3.6 compatible.
 
@@ -363,37 +364,43 @@ class DepthBudgetTests(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class ResolveBudgetTests(unittest.TestCase):
-    def test_no_input_free_defaults(self):
+    def test_no_input_full_strength(self):
         b = lic.resolve_budget()
         self.assertEqual(b.source, "free")
         self.assertEqual(b.max_states, lic.FREE_LIMITS["max_states"])
         self.assertEqual(b.max_tools, lic.FREE_LIMITS["max_tools"])
 
-    def test_tier_free(self):
+    def test_tier_free_is_full_strength(self):
         b = lic.resolve_budget(tier="free")
-        self.assertEqual(b.source, "action")
+        self.assertEqual(b.source, "free")
         self.assertEqual(b.max_states, lic.FREE_LIMITS["max_states"])
         self.assertEqual(b.max_tools, lic.FREE_LIMITS["max_tools"])
 
-    def test_tier_paid(self):
+    def test_tier_paid_grants_no_privilege(self):
+        # SECURITY: a "paid" tier confers no budget privilege -- everyone is
+        # full-strength. The "paid" path no longer unlocks a larger budget.
         b = lic.resolve_budget(tier="paid")
-        self.assertEqual(b.source, "action")
-        self.assertEqual(b.max_states, lic.PAID_LIMITS["max_states"])
-        self.assertEqual(b.max_tools, lic.PAID_LIMITS["max_tools"])
-
-    def test_depth_free_capped(self):
-        # D3: a depth input is capped to the free maximum when tier: free.
-        b = lic.resolve_budget(tier="free", depth=2000)
+        self.assertEqual(b.source, "free")
         self.assertEqual(b.max_states, lic.FREE_LIMITS["max_states"])
+        self.assertEqual(b.max_tools, lic.FREE_LIMITS["max_tools"])
 
-    def test_depth_paid_as_is(self):
-        # A depth input is used as-is when tier: paid.
+    def test_paid_limits_are_an_alias_of_free_limits(self):
+        # There is no budget split: paid == free.
+        self.assertEqual(lic.PAID_LIMITS, lic.FREE_LIMITS)
+
+    def test_depth_caps_max_states(self):
+        # --depth is a user-set bound: it may only lower the budget.
+        b = lic.resolve_budget(depth=2000)
+        self.assertEqual(b.max_states, 2000)
+        # A depth larger than the budget leaves the budget unchanged.
+        b2 = lic.resolve_budget(depth=10 ** 9)
+        self.assertEqual(b2.max_states, lic.FREE_LIMITS["max_states"])
+
+    def test_depth_applies_regardless_of_tier(self):
         b = lic.resolve_budget(tier="paid", depth=3)
         self.assertEqual(b.max_states, 3)
-
-    def test_depth_paid_large(self):
-        b = lic.resolve_budget(tier="paid", depth=999)
-        self.assertEqual(b.max_states, 999)
+        b2 = lic.resolve_budget(tier="paid", depth=999)
+        self.assertEqual(b2.max_states, 999)
 
     def test_unknown_tier_free_defaults(self):
         b = lic.resolve_budget(tier="gold")
@@ -423,40 +430,32 @@ class ResolveBudgetTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# D3. Tier gating end-to-end (free -> UNKNOWN, paid -> verdict)
+# End-to-end: the full-strength budget proves a catalog; a tight license caps it
 # ---------------------------------------------------------------------------
 
 class EndToEndTests(unittest.TestCase):
     def _six_tool_catalog(self):
         return ["tool_%d" % i for i in range(6)]
 
-    def test_free_tier_out_of_scope_paid_tier_verdict(self):
-        # A 6-tool catalog exceeds the free tier cap (max_tools=5) ->
-        # UNKNOWN (exit 2). The paid tier (max_tools=100) proves it ->
-        # PROVEN (exit 0). The policy governs exactly the six catalog tools
-        # (3 allowed, 3 denied) so the structural check is clean.
+    def test_full_strength_proves_six_tool_catalog(self):
+        # Everyone is full-strength (max_tools=100), so a 6-tool catalog is in
+        # scope and PROVEN -- no matter which "tier" is requested. The policy
+        # governs exactly the six catalog tools (3 allowed, 3 denied).
         catalog = self._six_tool_catalog()
         allowed, denied = catalog[:3], catalog[3:]
 
-        free = lic.resolve_budget(tier="free")
-        paid = lic.resolve_budget(tier="paid")
-
-        r_free = mcp.audit_mcp(allowed, denied, tools=catalog, budget=free)
-        self.assertEqual(r_free.result(), "unknown")
-        self.assertEqual(r_free.exit_code(), 2)
-        self.assertTrue(r_free.any_unknown)
-        self.assertIn("tool catalog", r_free.note)
-
-        r_paid = mcp.audit_mcp(allowed, denied, tools=catalog, budget=paid)
-        self.assertEqual(r_paid.result(), "proven")
-        self.assertEqual(r_paid.exit_code(), 0)
-        self.assertFalse(r_paid.any_unknown)
-        self.assertEqual(r_paid.note, "")
+        for tier in ("free", "paid"):
+            budget = lic.resolve_budget(tier=tier)
+            r = mcp.audit_mcp(allowed, denied, tools=catalog, budget=budget)
+            self.assertEqual(r.result(), "proven", tier)
+            self.assertEqual(r.exit_code(), 0, tier)
+            self.assertFalse(r.any_unknown, tier)
+            self.assertEqual(r.note, "", tier)
 
     def test_free_tier_within_scope(self):
-        # A 3-tool catalog is within the free tier cap (max_tools=5) ->
-        # PROVEN (exit 0) even on the free tier. The policy governs exactly
-        # the three catalog tools (2 allowed, 1 denied).
+        # A 3-tool catalog is well within the full-strength cap (max_tools=100)
+        # -> PROVEN (exit 0). The policy governs exactly the three catalog
+        # tools (2 allowed, 1 denied).
         catalog = ["tool_0", "tool_1", "tool_2"]
         allowed, denied = catalog[:2], catalog[2:]
 
@@ -468,8 +467,9 @@ class EndToEndTests(unittest.TestCase):
 
     def test_license_budget_caps_tools(self):
         # A license with a tight max_tools cap (3) makes a 6-tool catalog
-        # out of scope (UNKNOWN), while the paid tier proves it. The policy
-        # governs exactly the six catalog tools (3 allowed, 3 denied).
+        # out of scope (UNKNOWN) -- the license is the highest authority and
+        # can cap the full-strength budget. The policy governs exactly the
+        # six catalog tools (3 allowed, 3 denied).
         limits = {"max_states": 1000000, "max_horizon": 12,
                   "max_tools": 3, "max_tenant_scopes": 10}
         body = lic.make_license("acme", "paid", limits=limits, key=KEY)
@@ -500,24 +500,18 @@ class EndToEndTests(unittest.TestCase):
             "tools": tools,
         })
 
-    def test_manifest_tenant_scope_cap(self):
-        # A manifest with 3 distinct tenant scopes exceeds the free tier cap
-        # (max_tenant_scopes=1) -> out of scope (any_unknown). The paid tier
-        # (max_tenant_scopes=10) is in scope.
+    def test_manifest_tenant_scope_in_scope(self):
+        # Everyone is full-strength (max_tenant_scopes=10), so a manifest with
+        # 3 distinct tenant scopes is in scope -- no "tier" is out of scope.
         manifest = self._multi_tenant_manifest(3)
-        free = lic.resolve_budget(tier="free")
-        paid = lic.resolve_budget(tier="paid")
-
-        r_free = mcp.audit_manifest(manifest, budget=free)
-        self.assertTrue(r_free.any_unknown)
-        self.assertIn("tenant scopes", r_free.note)
-
-        r_paid = mcp.audit_manifest(manifest, budget=paid)
-        self.assertFalse(r_paid.any_unknown)
-        self.assertEqual(r_paid.note, "")
+        for tier in ("free", "paid"):
+            budget = lic.resolve_budget(tier=tier)
+            r = mcp.audit_manifest(manifest, budget=budget)
+            self.assertFalse(r.any_unknown, tier)
+            self.assertEqual(r.note, "", tier)
 
     def test_manifest_within_tenant_scope(self):
-        # A manifest with a single tenant scope is in scope on the free tier.
+        # A manifest with a single tenant scope is in scope (full-strength).
         manifest = self._multi_tenant_manifest(1)
         free = lic.resolve_budget(tier="free")
         r = mcp.audit_manifest(manifest, budget=free)
@@ -530,14 +524,6 @@ class EndToEndTests(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class KeyFromEnvTests(unittest.TestCase):
-    def test_default_key(self):
-        saved = os.environ.pop(lic.KEY_ENV, None)
-        try:
-            self.assertEqual(lic.key_from_env(), lic.DEFAULT_KEY)
-        finally:
-            if saved is not None:
-                os.environ[lic.KEY_ENV] = saved
-
     def test_env_override(self):
         saved = os.environ.get(lic.KEY_ENV)
         os.environ[lic.KEY_ENV] = "env-override-key"
@@ -549,11 +535,20 @@ class KeyFromEnvTests(unittest.TestCase):
             else:
                 os.environ[lic.KEY_ENV] = saved
 
-    def test_env_empty_falls_back(self):
+    def test_unset_returns_none(self):
+        # No public default key: with the env var unset, there is no key.
+        saved = os.environ.pop(lic.KEY_ENV, None)
+        try:
+            self.assertIsNone(lic.key_from_env())
+        finally:
+            if saved is not None:
+                os.environ[lic.KEY_ENV] = saved
+
+    def test_empty_env_is_treated_as_unset(self):
         saved = os.environ.get(lic.KEY_ENV)
         os.environ[lic.KEY_ENV] = ""
         try:
-            self.assertEqual(lic.key_from_env(), lic.DEFAULT_KEY)
+            self.assertIsNone(lic.key_from_env())
         finally:
             if saved is None:
                 os.environ.pop(lic.KEY_ENV, None)

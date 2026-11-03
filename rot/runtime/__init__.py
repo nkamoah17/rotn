@@ -60,11 +60,11 @@ from .ledger import (
     DecisionLedger,
 )
 # The *service* plane (B3 LangChain adapter, B4 MCP gateway, B5 fleet
-# aggregate) lives in the **paid** layer ``rot.commercial.runtime``
+# aggregate) lives in the **commercial** layer ``rot.commercial.runtime``
 # (SSPL / commercial -- see ``rot/commercial/LICENSE``).  The core keeps the
 # deterministic decision (:class:`RuntimeGuard`), the canonical rules, the
 # hashable refusal shape, and the append-only ledger -- the credibility wedge,
-# all pure stdlib, importable and runnable without the paid layer.
+# all pure stdlib, importable and runnable without the commercial layer.
 #
 #   from rot.commercial.runtime import langchain, mcp, aggregate
 #   (requires the ``rotn-commercial`` distribution)

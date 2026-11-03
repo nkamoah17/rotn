@@ -309,7 +309,7 @@ class AggregateTests(unittest.TestCase):
 # The CLI (rot coach --aggregate)
 # ---------------------------------------------------------------------------
 class CoachAggregateCliTests(unittest.TestCase):
-    """``rot coach --aggregate``: the fleet-learning CLI exit codes (paid)."""
+    """``rot coach --aggregate``: the fleet-learning CLI exit codes (commercial)."""
 
     def _run(self, *argv):
         proc = subprocess.run(

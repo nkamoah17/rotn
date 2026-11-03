@@ -1,18 +1,18 @@
-<p align="center">
+﻿<p align="center">
   <img src="assets/caravel_logo.jpeg" alt="Caravel" width="160"/>
 </p>
 
-<h1 align="center">ROTN — Regression-detection Oracle via Trace Non-emptiness</h1>
+<h1 align="center">ROTN â€” Regression-detection Oracle via Trace Non-emptiness</h1>
 
-> **CARAVEL** — *Agents are replacing the software that used to enforce our rules. We make the rules explicit, prove the policy holds even when the model attempts to break it, and coach the agent back in bounds when it does.*
+> **CARAVEL** â€” *Agents are replacing the software that used to enforce our rules. We make the rules explicit, prove the policy holds even when the model attempts to break it, and coach the agent back in bounds when it does.*
 
-**ROTN** (R**o**gression-detection **O**racle via **T**race **N**on-emptiness) is a small, fully offline, **Python 3.6-compatible**, pure-stdlib verification platform for **agent tool policies**, led by the **spend-cap parallel-fire bug**: a payments policy that settles spend only against *settled* responses, so a parallel burst of in-flight requests overshoots the cap — invisible to a per-request monitor. ROTN checks a policy against a named invariant (`policy_conformance` safety, `policy_permits_request` non-vacuity, `bounded_eventually` bounded liveness within horizon B) with **three independent engines (SMT/Z3 + TLC + policy-direct)**, an **Apalache-ITF** trace engine that *refutes* a buggy policy (replays its counterexample) but **never proves** the corrected one, and a **bounded re-check** loop — on `unknown`, re-run the engine under a hard cap; that is bounded re-checking, *not* counterexample-guided abstraction refinement. Every target ships a *correct* variant (the invariant holds) and a *seeded-buggy* variant (the invariant is violated); the pipeline must discriminate them and, for the buggy one, hand back a **concrete, IR-feasible counterexample**. The protocol plane (2PC / ZAB / PBFT / Payment) is in the research repo (`rotn-research`), not this build.
+**ROTN** (R**o**gression-detection **O**racle via **T**race **N**on-emptiness) is a small, fully offline, **Python 3.6-compatible**, pure-stdlib verification platform for **agent tool policies**, led by the **spend-cap parallel-fire bug**: a payments policy that settles spend only against *settled* responses, so a parallel burst of in-flight requests overshoots the cap â€” invisible to a per-request monitor. ROTN checks a policy against a named invariant (`policy_conformance` safety, `policy_permits_request` non-vacuity, `bounded_eventually` bounded liveness within horizon B) with **three independent engines (SMT/Z3 + TLC + policy-direct)**, an **Apalache-ITF** trace engine that *refutes* a buggy policy (replays its counterexample) but **never proves** the corrected one, and a **bounded re-check** loop â€” on `unknown`, re-run the engine under a hard cap; that is bounded re-checking, *not* counterexample-guided abstraction refinement. Every target ships a *correct* variant (the invariant holds) and a *seeded-buggy* variant (the invariant is violated); the pipeline must discriminate them and, for the buggy one, hand back a **concrete, IR-feasible counterexample**. The protocol plane (2PC / ZAB / PBFT / Payment) is in the research repo (`rotn-research`), not this build.
 
 It is organised in verification planes over one sound core:
 
 1. **Policy plane (Agent Mode).** The autonomous agent's `AgentStep` model is checked against a **Cedar** (`.cedar`) or **Dogwood** (`.json`) policy: `policy_conformance` (safety), `policy_permits_request` (non-vacuity), `bounded_eventually` (bounded liveness within horizon B). The beachhead is the **spend-cap parallel-fire bug** (Plane B below).
 2. **Runtime coach.** `rot runtime eval` decides one live tool call against the *same guard* the offline engine proved safe; a denial is a computed remediation (`to_proceed`), not a log line.
-3. **Two audit planes (different depth guarantees).** **Plane A** — structural + *behavioral* (MCP manifest / Cedar / Dogwood `.json`) — is the Trifecta audit mapped to **SOC 2 CC6** + **AIUC-1** (autonomy). The MCP-manifest audit is *behavioral* (gap G8): the manifest's safety property is **model-checked over the adversarial agent's tool-call sequences** — not just a declaration check — and the lethal-trifecta exfiltration risk is flagged (see `docs/manifest-format.md` §7). **Plane B** — deep temporal/concurrency (Dogwood `.dw` spend-cap) — is the cross-check proof (SMT/Z3 + TLC + policy-direct) that prevents spend-cap bypass, and carries the **CoachingArtifact** (Rule + Proof + **Coach**) that discharges **AIUC-1**. See `docs/architecture.md` §1A.
+3. **Two audit planes (different depth guarantees).** **Plane A** â€” structural + *behavioral* (MCP manifest / Cedar / Dogwood `.json`) â€” is the Trifecta audit mapped to **SOC 2 CC6** + **AIUC-1** (autonomy). The MCP-manifest audit is *behavioral* (gap G8): the manifest's safety property is **model-checked over the adversarial agent's tool-call sequences** â€” not just a declaration check â€” and the lethal-trifecta exfiltration risk is flagged (see `docs/manifest-format.md` Â§7). **Plane B** â€” deep temporal/concurrency (Dogwood `.dw` spend-cap) â€” is the cross-check proof (SMT/Z3 + TLC + policy-direct) that prevents spend-cap bypass, and carries the **CoachingArtifact** (Rule + Proof + **Coach**) that discharges **AIUC-1**. See `docs/architecture.md` Â§1A.
 4. **Protocol plane (research).** The 2PC / ZAB / PBFT / Payment protocol targets and their composition / merge-request-gate / refinement machinery live in the **research repo** (`rotn-research`), which extends this registry; they are not part of the product build.
 
 ```
@@ -34,64 +34,64 @@ deterministic, so the whole pipeline runs in a bare Python environment.
 ## Hosted replay
 
 Every `rot check` run emits a **deterministic, hashed trace** (`trace.json`,
-**RTF v1** — a pure function of the manifest + budget + horizon, pinned by a
+**RTF v1** â€” a pure function of the manifest + budget + horizon, pinned by a
 top-level SHA-256) that replays as an **interactive proof** on GitHub Pages.
 The site (`site/`) is a zero-framework, zero-build, zero-CDN presentation of
-that single artifact — it renders the trace and adds **no verification logic**.
+that single artifact â€” it renders the trace and adds **no verification logic**.
 
 A replay page is a **narrative, not a dashboard**: it walks the four beats
-**rule → attack → proof → coach**, with the two climaxes the arc is built
+**rule â†’ attack â†’ proof â†’ coach**, with the two climaxes the arc is built
 around:
 
-- **Beat 1 — RULE** — the policy as written (or the MCP manifest), with the
+- **Beat 1 â€” RULE** â€” the policy as written (or the MCP manifest), with the
   exact bounds the proof holds under (AMOUNT / CAP / K / window / policy hash),
   and the buggy-vs-corrected variant.
-- **Beat 2 — ATTACK** — the counterexample in the state space (Cytoscape graph,
+- **Beat 2 â€” ATTACK** â€” the counterexample in the state space (Cytoscape graph,
   animated replay lighting the attack path step by step), the spend-cap chart
   (in-flight exposure vs. cap at the crossing), the audit timeline and decision
   tree, and **CLIMAX 1: the K-sweep** over the concurrency bound `K`
-  (`--max-inflight`) the verdict depends on — `K=1` masks the race, `K≥2`
+  (`--max-inflight`) the verdict depends on â€” `K=1` masks the race, `Kâ‰¥2`
   exposes it.
-- **Beat 3 — PROOF** — what the engine discharged, under what bounds (states
+- **Beat 3 â€” PROOF** â€” what the engine discharged, under what bounds (states
   explored, horizon, engines, policy hash), re-derivable byte-for-byte, with
   the buggy/corrected pair at this K.
-- **Beat 4 — COACH** — the hero: the **blocked call → five-field refusal**
+- **Beat 4 â€” COACH** â€” the hero: the **blocked call â†’ five-field refusal**
   (`blocked`, `rule`, `why`, `to_proceed`, `allowed_now`), with
-  **CLIMAX 2: `to_proceed`** — the enabling condition computed from the guard's
-  currently-false conditions — then the repair (Detect → Explain → Correct →
-  Re-check → Close), **discharged by proof** when the corrected policy
+  **CLIMAX 2: `to_proceed`** â€” the enabling condition computed from the guard's
+  currently-false conditions â€” then the repair (Detect â†’ Explain â†’ Correct â†’
+  Re-check â†’ Close), **discharged by proof** when the corrected policy
   re-proves.
 
 Two more views render the **same trace data**:
 
-- **Attestation** (`#/attestation/<id>`, also `?view=attestation`) — the B3
+- **Attestation** (`#/attestation/<id>`, also `?view=attestation`) â€” the B3
   one-pager for the underwriter: scope, assumptions (coverage conditions),
   out-of-scope, counterexample, SOC 2 / AIUC controls, the **bounded caveat**,
   the **Defensible claim / What we do NOT claim** section, the re-verify
   command + expected hash, and the artifact hierarchy
-  (**RTF v1 = source of truth → one-pager = underwriter view → site = demo
+  (**RTF v1 = source of truth â†’ one-pager = underwriter view â†’ site = demo
   view**).
-- **Compare** (`#/compare/<left>/<right>`) — buggy vs. correct side by side
+- **Compare** (`#/compare/<left>/<right>`) â€” buggy vs. correct side by side
   with the K-sweep table and the manifest hashes.
 
 The page is **shareable as a hash-pinned URL**: the hero's
 *Export attestation* button (and the attestation's Share row) copy a link of
-the form `#/attestation/<id>?h=<sha256>` — **the link is the attestation**. On
+the form `#/attestation/<id>?h=<sha256>` â€” **the link is the attestation**. On
 load the pin is verified against the trace: a match renders
-*HASH PIN VERIFIED*; a mismatch renders *HASH MISMATCH — STALE or TAMPERED*,
+*HASH PIN VERIFIED*; a mismatch renders *HASH MISMATCH â€” STALE or TAMPERED*,
 never silently trusted.
 
 The design system (`site/app/style.css`) is hand-written CSS with light / dark
 / **high-contrast** themes, a responsive layout, and accessibility hooks
 (`:focus-visible`, `prefers-reduced-motion`, `forced-colors`). It works offline
 from disk (`file://`) via a deterministic `data/traces.js` registry (`rot site`,
-`rot/sitegen.py`) and prefers `fetch('data/<id>.trace.json')` over HTTP — the
+`rot/sitegen.py`) and prefers `fetch('data/<id>.trace.json')` over HTTP â€” the
 JSON traces stay the source of truth.
 
 > **Live replay: [caravel.github.io/rot-verify](https://caravel.github.io/rot-verify/)**
 >
-> Published to GitHub Pages on every push to `main` (the **Ship plane** — a pure
-> function of the RTF trace; see `docs/architecture.md` §1.4 and
+> Published to GitHub Pages on every push to `main` (the **Ship plane** â€” a pure
+> function of the RTF trace; see `docs/architecture.md` Â§1.4 and
 > `.github/workflows/pages.yml`).
 
 ---
@@ -118,7 +118,7 @@ rot coach --policy samples/spendcap-buggy.dw --out out
 #    -> out/coaching.json: the deterministic CoachingArtifact (Rule + Proof + Coach)
 ```
 
-Exit codes: `0` PROVEN · `1` VIOLATED · `2` UNKNOWN · `3` ERROR.
+Exit codes: `0` PROVEN Â· `1` VIOLATED Â· `2` UNKNOWN Â· `3` ERROR.
 
 CI gate (JUnit XML + SARIF for GitHub PR annotations):
 
@@ -126,10 +126,10 @@ CI gate (JUnit XML + SARIF for GitHub PR annotations):
 rot ci --policy samples/spendcap-buggy.dw --out ci   # exit 1; writes ci/JUnit.xml + ci/results.sarif
 ```
 
-The whole arc in **one command** — `rot demo --beachhead spendcap`:
-**rule** (policy rendered) → **attack** (deterministic counterexample + the
-K-sweep, `K=1` masks / `K≥2` exposes) → **proof** (corrected-safe + manifest +
-hash) → **coach** (`to_proceed` + `allowed_now`) → **attestation** (one-pager
+The whole arc in **one command** â€” `rot demo --beachhead spendcap`:
+**rule** (policy rendered) â†’ **attack** (deterministic counterexample + the
+K-sweep, `K=1` masks / `Kâ‰¥2` exposes) â†’ **proof** (corrected-safe + manifest +
+hash) â†’ **coach** (`to_proceed` + `allowed_now`) â†’ **attestation** (one-pager
 path + hash + the re-verify command). Exits 0 and prints the attestation hash
 and the re-verify command.
 
@@ -139,21 +139,21 @@ rot demo --beachhead spendcap
 
 > **Scope (stated up front).** The initial demo is the **spend-cap (payments)
 > parallel-fire bug + the coach**. The MCP / lethal-trifecta story ships with
-> **B2.3** — it is *not* part of this demo.
+> **B2.3** â€” it is *not* part of this demo.
 
 ---
 
-## Product 2, up front — the runtime coach (the 5-field refusal)
+## Product 2, up front â€” the runtime coach (the 5-field refusal)
 
 > **the LLM proposes, the deterministic core decides.** Product 2 is that
 > decision, live: one command decides a tool call against the policy, and when
 > it is denied the answer is a *computed* remediation read straight from the
-> guard — not a log line, a guarantee.
+> guard â€” not a log line, a guarantee.
 
 `rot runtime eval` decides **one live tool call** against a rule, using the
 *same guard predicate* the offline engine proved safe. The hero is the
-**five-field refusal** — `blocked`, `rule`, `why`, `to_proceed`, `allowed_now`
-— which walks the arc **rule → block → `to_proceed` → `allowed_now`**:
+**five-field refusal** â€” `blocked`, `rule`, `why`, `to_proceed`, `allowed_now`
+â€” which walks the arc **rule â†’ block â†’ `to_proceed` â†’ `allowed_now`**:
 
 ```bash
 # a transfer while 3 requests are in flight (cap 200, $100 each) -> BLOCKED (exit 1)
@@ -171,23 +171,23 @@ rot runtime eval --tool transfer --arg amount=100 --state '{"inflight": 3}'
 }
 ```
 
-- **rule** — which policy/rung decided (`spendcap_within_cap`);
-- **blocked** — the decision (`true` = denied). `allowed_now` is the *same*
+- **rule** â€” which policy/rung decided (`spendcap_within_cap`);
+- **blocked** â€” the decision (`true` = denied). `allowed_now` is the *same*
   decision read the other way (`false`); the two never disagree;
-- **why** — the plain-English reason, naming the state-dependent quantity (the
-  in-flight count — exactly what the settled-trace monitor cannot see);
-- **to_proceed** — the *enabling condition*, computed from the guard's
+- **why** â€” the plain-English reason, naming the state-dependent quantity (the
+  in-flight count â€” exactly what the settled-trace monitor cannot see);
+- **to_proceed** â€” the *enabling condition*, computed from the guard's
   currently-false conjuncts (the spec), not a hand-written rationale.
 
 The refusal is a **pure function** of (rule, request, state): deterministic,
 **hashable** (SHA-256 under the same discipline as the RTF trace), and
-**auditable** — a reader re-runs the guard on the recorded state and re-derives
+**auditable** â€” a reader re-runs the guard on the recorded state and re-derives
 the decision byte-for-byte. An `UNKNOWN` guard (an unmodelled atom) is
 **fail-closed**: blocked, never allowed.
 
 > **Boundary (stated, not implied).** *Runtime* = fast in-path guard
 > evaluation, O(tools); *offline* = bounded model checking, CI / pre-deploy.
-> They are the **same guard, different engines** — and
+> They are the **same guard, different engines** â€” and
 > `tests/test_runtime_offline_agreement.py` pins that they can never disagree
 > (a runtime mutation that ignores `inflight` fails it).
 
@@ -197,13 +197,13 @@ any relaxation.
 
 ---
 
-## The classifier, up front — `rot corpus`
+## The classifier, up front â€” `rot corpus`
 
-> **run your whole policy corpus → SAFE / UNSAFE, a witness per policy, and a
+> **run your whole policy corpus â†’ SAFE / UNSAFE, a witness per policy, and a
 > coverage matrix.** One command, no per-policy tuning.
 
-`rot corpus` walks a directory of `.dw` policies and classifies each one —
-**SAFE** (`PROVEN`) / **UNSAFE** (`VIOLATED`) / `OUT_OF_SCOPE` — attaching the
+`rot corpus` walks a directory of `.dw` policies and classifies each one â€”
+**SAFE** (`PROVEN`) / **UNSAFE** (`VIOLATED`) / `OUT_OF_SCOPE` â€” attaching the
 **counterexample witness** to every UNSAFE, then emits an honest coverage
 matrix (how many SAFE / UNSAFE / out-of-scope, and which shape each is):
 
@@ -222,9 +222,9 @@ Discovered 2 policies under samples
   violated       1
 ```
 
-Exit codes: `0` = the matrix was produced (report semantics) · `3` = internal
+Exit codes: `0` = the matrix was produced (report semantics) Â· `3` = internal
 error. A policy whose reachable state space exceeds the bounded-checking budget
-is reported **`OUT_OF_SCOPE`** — a stated limitation, not a bug, and never
+is reported **`OUT_OF_SCOPE`** â€” a stated limitation, not a bug, and never
 silently read as SAFE. The matrix is written to
 `out/corpus/corpus_matrix.{json,md}` (JSON + Markdown).
 
@@ -271,10 +271,10 @@ PowerShell wrapper (adds a matrix mode):
 
 | code | meaning  |
 |:----:|----------|
-| `0`  | `proven` — invariant holds for every reachable state |
-| `1`  | `violated` — a concrete counterexample was found |
-| `2`  | `unknown` / `unsound` — budget exhausted or a spurious witness |
-| `3`  | `error` — engine/config/IO failure |
+| `0`  | `proven` â€” invariant holds for every reachable state |
+| `1`  | `violated` â€” a concrete counterexample was found |
+| `2`  | `unknown` / `unsound` â€” budget exhausted or a spurious witness |
+| `3`  | `error` â€” engine/config/IO failure |
 
 ---
 
@@ -310,7 +310,7 @@ how participants apply the coordinator's decision:
 | `buggy`   | `applied_i = (vote_i = yes) ? commit : abort` (self-decide from own vote) | **VIOLATED** + witness |
 
 The **bug** is the classic 2PC mistake: a participant that voted `yes` commits
-on its own while a participant that voted `no` aborts — so two participants
+on its own while a participant that voted `no` aborts â€” so two participants
 make *different* final decisions, breaking **agreement**. The counterexample
 TLC / the symbolic engine returns is exactly such a mixed state.
 
@@ -318,20 +318,20 @@ TLC / the symbolic engine returns is exactly such a mixed state.
 
 Broadcast/commit replication. `zab-correct`: followers apply only after the
 leader commits. `zab-buggy`: followers apply as soon as they persist, before the
-leader commits — breaking `zab_no_premature_apply`.
+leader commits â€” breaking `zab_no_premature_apply`.
 
 ### PBFT (`rot.pbft`)
 
 Prepare/commit consensus. `pbft-correct`: a node commits only on a quorum
 certificate. `pbft-buggy`: a node commits after preparing itself, without a
-quorum certificate — breaking `pbft_quorum`.
+quorum certificate â€” breaking `pbft_quorum`.
 
 ### Payment (`rot.payment`, composed by `rot.composition`)
 
 The Phase 2 **composition plane**: a client and a payment service, each modelled
 independently and merged into one concurrent IR. `payment-correct`: charge is
 idempotent. `payment-buggy`: charge ignores the idempotency guard, so a
-re-issued charge double-charges — breaking `no_double_charge`. See the
+re-issued charge double-charges â€” breaking `no_double_charge`. See the
 *Composition plane* section below.
 
 ### AWS Dogwood spend-cap (`rot.spendcap`)
@@ -343,46 +343,46 @@ respond. `spendcap-correct` charges in-flight requests up front (sums over
 `Transfer::request`); `spendcap-buggy` charges only settled responses (sums over
 `Transfer::response`), so a parallel-fire burst of in-flight requests overshoots
 the cap. The pinned invariant `spendcap_within_cap`
-(`completed + inflight·AMOUNT <= CAP`) is **PROVEN** on `spendcap-correct` and
+(`completed + inflightÂ·AMOUNT <= CAP`) is **PROVEN** on `spendcap-correct` and
 **VIOLATED** on `spendcap-buggy` (counterexample `completed=0, inflight=3`). The
 one-word diff (`request` vs. `response`) is the entire seeded bug.
 
 ### Defensible claim / What we do NOT claim (the moat)
 
-> This section is the product's **moat** — it is preserved verbatim in the
+> This section is the product's **moat** â€” it is preserved verbatim in the
 > attestation footer (every `rot report --one-pager` artifact carries it), so
 > the claim and its boundary travel with the proof.
 
 **Defensible claim.** ROTN does **not** claim to compile arbitrary policy
 text into an equivalent model. It **lowers the spend-cap policy class**
 (aggregate-over-events + cap) to a bounded transition system by a
-**mechanical derivation** from the parsed policy — parameterized on
-amount/cap/pool — and verifies it with **multiple independent engines**
+**mechanical derivation** from the parsed policy â€” parameterized on
+amount/cap/pool â€” and verifies it with **multiple independent engines**
 (Z3 SMT + TLC) **and a second, structurally different model family**
 (direct policy SMT). The three engines span two axes of independence:
 *engine* independence (SMT/Z3 and TLC are independent model checkers over
 the same IR state-machine) and *model* independence (the policy-direct
-engine checks a different model family — a direct Z3 encoding of the policy
+engine checks a different model family â€” a direct Z3 encoding of the policy
 obligation over a bounded event sequence, not the transition system). The
 correspondence between the model and the policy is **checked**, not argued
-(`tests/test_correspondence.py`). The policy→model derivation and the
+(`tests/test_correspondence.py`). The policyâ†’model derivation and the
 assumptions it bakes in (uniform `AMOUNT=100`, `CAP=200`, bounded pool `K`)
-are shown explicitly by the demo's `POLICY → MODEL ABSTRACTION` block
+are shown explicitly by the demo's `POLICY â†’ MODEL ABSTRACTION` block
 (`python -m rot.spendcap_display <policy.dw>`).
 
 **What we do NOT claim.** No arbitrary-policy compilation. The lowering
 (`rot/lower.py::lower_policy`) reads the parsed structure (the `Sum` node,
 the event reference's `.kind`, the `<= cap` comparison, the `input.amount`
-binding) and constructs the IR — it does not interpret arbitrary Dogwood
+binding) and constructs the IR â€” it does not interpret arbitrary Dogwood
 text. Policies outside the spend-cap class are not supported. Every verdict is
 **bounded**: it holds over the explored state space, not over all possible
 states.
 
 Both Dogwood policies (`.dw`), the exact IR model ROTN checks, the
-counterexample trace, and the Dogwood-atom → IR-action mapping table live in the
+counterexample trace, and the Dogwood-atom â†’ IR-action mapping table live in the
 fixture README: `tests/fixtures/aws_dogwood/spendcap/README.md`.
 
-Run the three-phase spend-cap demo end-to-end (PROVEN → VIOLATED →
+Run the three-phase spend-cap demo end-to-end (PROVEN â†’ VIOLATED â†’
 three-facet audit + deterministic manifest); the scripts are exit-code aware:
 
 ```powershell
@@ -399,11 +399,11 @@ See `docs/spendcap-demo.md` (the demo walkthrough) and
 ### Phase 5: SAFE / UNSAFE classification (product: `rot corpus`; legacy: `--classify`)
 
 The two endpoints above are *instances* of one structural question: **does the
-spend-cap sum over `request` (issued) rows — SAFE — or over `response` (settled)
-rows — UNSAFE?** Phase 5 turns that into a *classifier*: given any spend-cap
+spend-cap sum over `request` (issued) rows â€” SAFE â€” or over `response` (settled)
+rows â€” UNSAFE?** Phase 5 turns that into a *classifier*: given any spend-cap
 policy, report `SAFE` or `UNSAFE` (with a concrete counterexample witness for
 UNSAFE), using the same sound core (`build_ir` + `ModelFinder.forall_reachable`)
-— no per-policy tuning.
+â€” no per-policy tuning.
 
 ```bash
 # Product batch classifier: run the whole corpus -> per-policy verdict + witness
@@ -428,7 +428,7 @@ The report (`classify_report.json`) carries, per policy: `verdict`
 `1` any-UNSAFE, `2` any-UNKNOWN, `3` error.
 
 **Generalization.** The classifier is pinned on five first-class policies in
-`tests/fixtures/aws_dogwood/spendcap/policies/` — the two endpoints *plus* three
+`tests/fixtures/aws_dogwood/spendcap/policies/` â€” the two endpoints *plus* three
 promoted from the AWS Dogwood corpus (filters, thresholds, forbid/permit shapes)
 that ROTN had never seen before:
 
@@ -442,25 +442,25 @@ that ROTN had never seen before:
 
 The verdict is driven solely by the event kind the sum quantifies over: every
 `response`-sum policy is UNSAFE (witness `completed=0, inflight=3`) and every
-`request`-sum policy is SAFE — regardless of filter, threshold, or forbid/permit
+`request`-sum policy is SAFE â€” regardless of filter, threshold, or forbid/permit
 shape. That is the point: the same sound core classifies unseen corpus policies
 with no per-policy tuning. The **product** batch classifier is `rot corpus`
 (per-policy verdict + witness, a coverage matrix, report semantics);
 `pipeline.py --classify` is the *legacy* CLI (classification semantics: exits
 non-zero on UNSAFE). The classifier core (SAFE/UNSAFE on these five first-class
 policies) and the legacy `--classify` CLI contract are pinned by
-`tests/test_classify.py` — do not confuse it with the assurance-ladder claim
+`tests/test_classify.py` â€” do not confuse it with the assurance-ladder claim
 classifier; `rot corpus` is the batch SAFE/UNSAFE classifier.
 
 ### Invariants (pinnable one at a time)
 
-Every invariant carries an **assurance ladder** (`label` × `rung` × `pinned`) that the MR gate maps to a `PASS`/`BLOCK` verdict (see *Merge-request gate*). `pinned=True` invariants are the regression discriminators — the ones whose violation is a *new* bug introduced by a candidate change.
+Every invariant carries an **assurance ladder** (`label` Ã— `rung` Ã— `pinned`) that the MR gate maps to a `PASS`/`BLOCK` verdict (see *Merge-request gate*). `pinned=True` invariants are the regression discriminators â€” the ones whose violation is a *new* bug introduced by a candidate change.
 
 | invariant | family | label / rung | pinned | statement |
 |-----------|--------|--------------|--------|-----------|
 | `agreement` | 2PC | `core` / `atomicity` | **yes** | two decided participants apply the same decision |
 | `validity` | 2PC | `auxiliary` / `correctness` | no | commit only if all voted `yes` |
-| `no_spurious_abort` | 2PC | `auxiliary` / `correctness` | no | unanimous `yes` ⇒ coordinator does not abort |
+| `no_spurious_abort` | 2PC | `auxiliary` / `correctness` | no | unanimous `yes` â‡’ coordinator does not abort |
 | `zab_no_premature_apply` | ZAB | `core` / `atomicity` | **yes** | a follower applies only after the leader commits |
 | `zab_apply_persisted` | ZAB | `auxiliary` / `correctness` | no | a follower applies only what it has persisted |
 | `pbft_quorum` | PBFT | `core` / `consistency` | **yes** | commit only on a quorum certificate |
@@ -472,7 +472,7 @@ Every invariant carries an **assurance ladder** (`label` × `rung` × `pinned`) 
 | `bounded_eventually` | AgentStep | `core` / `liveness` | **yes** | the agent reaches its goal within a bounded horizon B |
 | `spendcap_within_cap` | SpendCap | `core` / `safety` | **yes** | settled + in-flight amount never exceeds the cap |
 
-The `*-correct` targets prove the pinned invariant; the `*-buggy` target violates exactly the pinned one while the auxiliaries still hold — which is what lets the gate distinguish a *regression* from a vacuous invariant.
+The `*-correct` targets prove the pinned invariant; the `*-buggy` target violates exactly the pinned one while the auxiliaries still hold â€” which is what lets the gate distinguish a *regression* from a vacuous invariant.
 
 ---
 
@@ -574,7 +574,7 @@ AWS's tooling: it is an **absence of a soundness-of-intent guarantee**.
   applies to agent tool policies (contradictions, unreachable rules, Overly
   Permissive / Overly Restrictive, Ineffective) - are *point-in-time* static
   analyses over one request.
-- **Dogwood's** formal spec (guide §7) adds *operational* meta-properties:
+- **Dogwood's** formal spec (guide Â§7) adds *operational* meta-properties:
   fail-closed evaluation, lowering totality, validation soundness,
   determinism of identity, statefulness confined to the temporal engine, and
   acceptance-implies-monitorability. Clause 5 is the boundary: the policy
@@ -608,14 +608,14 @@ and the gaps): [`docs/corpus-eval.md`](docs/corpus-eval.md).
 The invariant check is discharged by one of three **independent** engines, all
 behind the same `EngineResult` interface (`rot.symbolic.EngineResult`):
 
-### 1. `symbolic` — pure-Python SAT engine (`rot.symbolic` + `rot.sat`)
+### 1. `symbolic` â€” pure-Python SAT engine (`rot.symbolic` + `rot.sat`)
 
 - Fully offline, deterministic, no JVM required.
 - Encodes the linearized transition system + invariant and discharges it with
   a bounded SAT loop (`rot.sat` DPLL + clause learning).
 - This is the engine the test suite uses, so tests never depend on Java.
 
-### 2. `tlc` — the real TLC model checker (`rot/tlc.py`)
+### 2. `tlc` â€” the real TLC model checker (`rot/tlc.py`)
 
 - The gold standard. Shells out to `java -cp tla2tools.jar tlc2.TLC` against
   the TLA+ artifacts emitted by `rot/emitter.py`.
@@ -626,24 +626,24 @@ behind the same `EngineResult` interface (`rot.symbolic.EngineResult`):
   it back to IR state names, so the bounded re-check can validate it against the
   IR semantics.
 
-### 3. `apalache` — Apalache ITF counterexample evaluation (`rot/itf.py`)
+### 3. `apalache` â€” Apalache ITF counterexample evaluation (`rot/itf.py`)
 
 - Not an external process: it takes an Apalache **ITF counterexample** (a
   `.itf.json` trace) via `--itf <trace.json>` and replays it through the same
   IR/invariant core, reporting a definite refutation as a `violated` verdict.
 - It is **one-directional**: a single concrete path can refute a safety
   invariant but cannot prove it, so the engine never reports `proven`.
-- This is the Apalache/ITF path — the *Quint-emitter* work item from the plan
+- This is the Apalache/ITF path â€” the *Quint-emitter* work item from the plan
   was superseded by this concrete-trace engine (no Quint emitter exists).
 
 ### Engine selection (`Config.select_engine()`)
 
-- `auto`      → `tlc` if a usable `java` + `tla2tools.jar` pair is present,
+- `auto`      â†’ `tlc` if a usable `java` + `tla2tools.jar` pair is present,
                  else `symbolic`. This keeps the pipeline runnable in a bare
                  Python env.
-- `tlc`       → force TLC (errors out if no jar).
-- `symbolic`  → force the offline engine.
-- `apalache`  → force the ITF-trace engine (requires `--itf <trace.json>`;
+- `tlc`       â†’ force TLC (errors out if no jar).
+- `symbolic`  â†’ force the offline engine.
+- `apalache`  â†’ force the ITF-trace engine (requires `--itf <trace.json>`;
                  refutes, never proves).
 
 ### Configuring the TLC jar
@@ -684,7 +684,7 @@ the result is **unknown**, makes a **bounded** number of re-check attempts
 | `proven`                 | `proven`     | invariant holds                                   |
 | `violated` + feasible witness | `violated` | concrete counterexample returned                  |
 | `violated` + infeasible witness | `unsound` | spurious over-approximation artefact (sound: not a real bug) |
-| `unknown` / `timeout`    | `unknown`    | after ≤ `cegar_max_iter` bounded rechecks         |
+| `unknown` / `timeout`    | `unknown`    | after â‰¤ `cegar_max_iter` bounded rechecks         |
 | `error`                  | `error`      | engine/config/IO failure                          |
 
 The **recheck** hook (plumbing for future counterexample-guided abstraction
@@ -703,10 +703,10 @@ loop **terminates** (`cegar_max_iter` is the hard cap).
 
 `VerdictReport.write(out_dir, base_name)` writes two files per run:
 
-- `<target>_<property>.json` — machine-readable: config, engine, verdict,
+- `<target>_<property>.json` â€” machine-readable: config, engine, verdict,
   counterexample, the abstraction manifest (what was kept/dropped and why),
   and the re-check iteration count.
-- `<target>_<property>.md`   — human-readable summary.
+- `<target>_<property>.md`   â€” human-readable summary.
 
 The **abstraction manifest** is the audit trail for soundness: it records
 exactly which state variables/actions were kept for the pinned property (the
@@ -719,65 +719,65 @@ When a run goes through the **CPG frontend** (Joern artifact present), the
 report and the claim packet (`rot/cpg4.py`) carry three **evidence layers**
 on top of the verdict:
 
-- **`two_layer`** — the *static↔formal agreement* per shape: Layer A (the
-  formal engine verdict) ∘ Layer B (the CPG static ground truth,
+- **`two_layer`** â€” the *staticâ†”formal agreement* per shape: Layer A (the
+  formal engine verdict) âˆ˜ Layer B (the CPG static ground truth,
   `abstraction_soundness`), joined fail-closed.
-- **`ab`** — the *A/B winner table* (`rot/ab.py`): which of the four source
+- **`ab`** â€” the *A/B winner table* (`rot/ab.py`): which of the four source
   frontends is the default, chosen by measurement (no-false-PROVEN hard gate
   first, then the lexicographic tuple), not by assertion.
-- **`retention`** — the *lossiness manifest*: which CPG facts were kept, which
+- **`retention`** â€” the *lossiness manifest*: which CPG facts were kept, which
   were dropped, and the measured fidelity of the abstraction (the retention
   gate), so a reviewer can see exactly what the static layer lost.
 
 ---
 
-## License — the open-core position
+## License â€” the open-core position
 
 ROTN is **open-core**, not "open vs. closed."  The proof is open (the
-credibility wedge); the value is closed (the business).
+credibility wedge); the commercial layer is **source-available** (the business).
 
 | Layer | What's in it | License |
 |-------|--------------|---------|
 | **Open core** (the wedge + credibility) | the bounded engine, the spend-cap policy class, the deterministic counterexample + K-sweep, the tests, the one-pager generator, the CI gate | **Apache-2.0** |
-| **Paid / commercial** (the business) | the runtime coach **as a service** (Product 2), fleet near-miss learning (4.4), risk forecasting (4.3/DBN), the agent-framework / payment / MCP integrations, attestation-as-a-service (Product 3), the B2 generalization, enterprise support | **SSPL-1.0** or a commercial license |
+| **Commercial** (source-available, the business) | the runtime coach **as a service** (Product 2), fleet near-miss learning (4.4), risk forecasting (4.3/DBN), the agent-framework / payment / MCP integrations, attestation-as-a-service (Product 3), the B2 generalization, enterprise support | **SSPL-1.0** or a commercial license |
 
 - **Apache-2.0 (not MIT)** for the core: permissive *plus* the explicit patent
-  grant/defense MIT lacks — the one "stronger than MIT" upgrade that actually
+  grant/defense MIT lacks â€” the one "stronger than MIT" upgrade that actually
   matters for a security product.
-- **SSPL-1.0** on the paid layer: the closest thing to "stronger" that still
-  lets you host it.  It bites a competitor who hosts a clone of the paid layer
+- **SSPL-1.0** on the commercial layer: the closest thing to "stronger" that still
+  lets you host it.  It bites a competitor who hosts a clone of the commercial layer
   (they must open-source their entire stack or buy a license).  A deterrent,
-  not a moat — it won't stop a clean-room build.
+  not a moat â€” it won't stop a clean-room build.
 - **The fleet-data delta is the product:** a self-hoster gets *their*
   near-misses; a service customer gets the *aggregate of everyone's*.  That is
   what no single self-hoster can reproduce.
 
-**One line:** Apache-2.0 core (the proof is open — the credibility wedge),
-SSPL/commercial on the service + learning + integrations (the value is closed).
+**One line:** Apache-2.0 core (the proof is open â€” the credibility wedge),
+SSPL/commercial on the service + learning + integrations (source-available, the business).
 
-Where it lives: `LICENSE` (Apache-2.0, the `rot` core) · `setup.py` (the free
-`rotn` dist — excludes `rot.commercial`) · `rot/commercial/LICENSE` (SSPL /
-commercial, the paid layer) · `setup_commercial.py` (the `rotn-commercial`
-dist, depends on `rotn`) · `docs/licensing.md` (the full position).
+Where it lives: `LICENSE` (Apache-2.0, the `rot` core) Â· `setup.py` (the free
+`rotn` dist â€” excludes `rot.commercial`) Â· `rot/commercial/LICENSE` (SSPL /
+commercial layer) Â· `setup_commercial.py` (the `rotn-commercial`
+dist, depends on `rotn`) Â· `docs/licensing.md` (the full position).
 
 **Install:**
 
 ```sh
 pip install rotn            # Apache-2.0 core: rot demo, rot check, rot report
-pip install rotn-commercial # + the paid layer: rot runtime serve, coach --aggregate, mcp behavior
+pip install rotn-commercial # + the commercial layer: rot runtime serve, coach --aggregate, mcp behavior
 ```
 
-On a core-only install the paid commands degrade to a clear
+On a core-only install the commercial commands degrade to a clear
 `install rotn-commercial` error rather than a raw traceback.
-  which were dropped, which were unknown (unknown → `UNKNOWN`, never silent).
+  which were dropped, which were unknown (unknown â†’ `UNKNOWN`, never silent).
 
-> **The static↔formal agreement invariant** (named property, thesis-quotable):
+> **The staticâ†”formal agreement invariant** (named property, thesis-quotable):
 > a verdict is **PROVEN** only when the formal layer proves it **and** the
 > static ground truth carries no taint-critical threat to the pinned
 > property; a static threat to a PROVEN blocks the proof
 > (`UNKNOWN` + the named disagreement); a **VIOLATED** is never upgraded or
 > mended by the other layer. In short: *the two layers can only disagree
-> loudly — they can never silently agree to a false PROVEN.*
+> loudly â€” they can never silently agree to a false PROVEN.*
 > (`rot/crosscheck.py` `TWO_LAYER_RULE`; the claim-packet `wedge` assembles
 > the A/B winner frontend + the two-layer verdicts + the source-pinned
 > counterexample into the open-source wedge's proof.)
@@ -796,7 +796,7 @@ Three optional extensions of the same core, all wired into the CLI:
 
 ### Environment fragments (`rot.env`, `--env <bound>`)
 
-`rot.env` adds a bounded **message-delay / environment** fragment to the transition system — a bound `K` on the number of in-flight messages — so message-loss and delay scenarios can be checked. Pass `--env <K>` to fold an environment fragment into the run (default `K = 2`):
+`rot.env` adds a bounded **message-delay / environment** fragment to the transition system â€” a bound `K` on the number of in-flight messages â€” so message-loss and delay scenarios can be checked. Pass `--env <K>` to fold an environment fragment into the run (default `K = 2`):
 
 ```bash
 python pipeline.py correct --property agreement --engine symbolic --env 2
@@ -813,7 +813,7 @@ python -m rot.refine correct buggy --invariant agreement   # standalone
 
 ### LLM baseline (`rot.llm_baseline`, `--llm-baseline`)
 
-An **opt-in, explicitly non-sound** LLM baseline: it feeds the exact TLA+ the engine sees to an LLM for a human-readable second opinion and writes an audit artifact (`<out>/<target>_<prop>_llmbaseline.json`). It **never** affects the verdict or the exit code — it is informational only and degrades to `unavailable` when no endpoint is reachable.
+An **opt-in, explicitly non-sound** LLM baseline: it feeds the exact TLA+ the engine sees to an LLM for a human-readable second opinion and writes an audit artifact (`<out>/<target>_<prop>_llmbaseline.json`). It **never** affects the verdict or the exit code â€” it is informational only and degrades to `unavailable` when no endpoint is reachable.
 
 ```bash
 python pipeline.py correct --property agreement --engine symbolic \
@@ -945,13 +945,13 @@ invariant), the EngineResult -> Verdict mapping (bounded re-check) for all
 four outcomes, the composition plane (cross-service merge, bounded witness), the
 MR gate (`PASS` / `BLOCK`), the environment fragments (`--env`), the refinement
 loop (`--before` / `--after`), the Apalache ITF engine (concrete-trace
-refutation, never `proven`), the LLM baseline (audit artifact only — never
+refutation, never `proven`), the LLM baseline (audit artifact only â€” never
 affects the verdict), the impact / spec-diff / trace-check / model-finding /
 ZK-bug / false-block extensions, the SAFE/UNSAFE spend-cap classifier
 (`rot corpus`), and the CLI exit-code contract. **844 tests** currently pass
 (pinned by `tests/test_suite_count.py`, so the count cannot drift). The 80
 service-plane tests (LangChain / MCP gateway / fleet aggregate -- Product 2)
-live in the paid layer under `rot/commercial/tests/`. The TLC and
+live in the commercial layer under `rot/commercial/tests/`. The TLC and
 Apalache engines are exercised by the CLI / `run.ps1` matrix when the
 respective tooling is available.
 

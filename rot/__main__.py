@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """rot -- ROTN temporal policy verification engine, product CLI.
 
 Subcommands
@@ -20,7 +20,7 @@ Subcommands
                 call; ``serve`` runs the MCP tools/call gateway (HTTP).
   rot doctor    Diagnose the installation (Python, package, engines;
                 --deep runs a real end-to-end self-test).
-  rot ab        Frontend A/B over the bench corpus (Joern-primary, §3):
+  rot ab        Frontend A/B over the bench corpus (Joern-primary, Â§3):
                 lexicographic winner, offline and deterministic.
 
 Exit codes
@@ -287,24 +287,17 @@ def _fmt_date(value):
 
 
 def _resolve_budget(args):
-    """Resolve the effective tier budget (Phase D) from CLI options.
+    """Resolve the effective depth budget (full-strength) from CLI options.
 
-    Precedence: ``--license`` (verified, fail-closed) > ``--tier`` /
-    ``--depth`` (the action-input path) > free defaults. Returns a
-    :class:`rot.license.DepthBudget` (never ``None`` -- free is the floor).
+    ROTN is full-strength for everyone: the budget is the generous
+    :data:`rot.license.FREE_LIMITS`. ``--depth`` is an optional user-set
+    ``max_states`` bound (it may only lower the budget). Returns a
+    :class:`rot.license.DepthBudget` (never ``None``).
     """
     import rot.license as lic
 
-    key = getattr(args, "key", None)
-    license_obj = None
-    license_path = getattr(args, "license", None)
-    if license_path:
-        # Fail-closed: a tampered / expired / malformed license is rejected.
-        license_obj = lic.load_license(license_path, key=key)
-
-    tier = getattr(args, "tier", None)
     depth = getattr(args, "depth", None)
-    return lic.resolve_budget(license=license_obj, tier=tier, depth=depth)
+    return lic.resolve_budget(depth=depth)
 
 
 def _cmd_check_mcp(args):
@@ -316,7 +309,6 @@ def _cmd_check_mcp(args):
     the report's gate outcome (0 PASS / 1 BLOCK / 2 OUT_OF_SCOPE).
     """
     import rot.mcp_adapter as mcp
-    import rot.license as lic
     from rot.frontends.policy import dogwood
 
     policy_path = args.policy
@@ -344,12 +336,7 @@ def _cmd_check_mcp(args):
             print("ERROR: %s" % exc, file=sys.stderr)
             return EXIT_ERROR
 
-    try:
-        budget = _resolve_budget(args)
-    except lic.LicenseError as exc:
-        # Fail-closed: a tampered / expired / malformed license is rejected.
-        print("REJECTED: %s" % exc, file=sys.stderr)
-        return EXIT_VIOLATED
+    budget = _resolve_budget(args)
 
     report = mcp.audit_mcp(
         allowed, denied, tools=tools,
@@ -380,7 +367,6 @@ def _cmd_check_manifest(args):
     outcome (0 PASS / 1 BLOCK).
     """
     import rot.mcp_adapter as mcp
-    import rot.license as lic
     import rot.mcp_manifest as mm
 
     manifest_path = args.manifest
@@ -390,12 +376,7 @@ def _cmd_check_manifest(args):
         print("ERROR: %s" % exc, file=sys.stderr)
         return EXIT_ERROR
 
-    try:
-        budget = _resolve_budget(args)
-    except lic.LicenseError as exc:
-        # Fail-closed: a tampered / expired / malformed license is rejected.
-        print("REJECTED: %s" % exc, file=sys.stderr)
-        return EXIT_VIOLATED
+    budget = _resolve_budget(args)
 
     report = mcp.audit_manifest(manifest, budget=budget,
                                 max_states=budget.max_states)
@@ -555,8 +536,6 @@ def cmd_trace(args):
     ``--out`` (a file) or stdout. The exit code is the gate outcome
     (0 PROVEN / 1 VIOLATED / 2 UNKNOWN / 3 ERROR).
     """
-    import rot.license as lic
-
     policy_path = getattr(args, "policy", None)
     manifest_path = getattr(args, "manifest", None)
     if bool(policy_path) == bool(manifest_path):
@@ -564,14 +543,9 @@ def cmd_trace(args):
               file=sys.stderr)
         return EXIT_ERROR
 
-    try:
-        budget = _resolve_budget(args)
-    except lic.LicenseError as exc:
-        # Fail-closed: a tampered / expired / malformed license is rejected.
-        print("REJECTED: %s" % exc, file=sys.stderr)
-        return EXIT_VIOLATED
+    budget = _resolve_budget(args)
 
-    tier = getattr(args, "tier", None)
+    tier = None
     horizon = getattr(args, "liveness_horizon", None) or 12
 
     if policy_path:
@@ -827,7 +801,7 @@ def _cmd_coach_aggregate(args):
         import rot.commercial.runtime.aggregate as agg
     except ImportError:
         print("ERROR: 'rot coach --aggregate' (fleet near-miss learning) needs "
-              "the paid layer -- install rotn-commercial "
+              "the commercial layer -- install rotn-commercial "
               "(pip install rotn-commercial)", file=sys.stderr)
         return EXIT_ERROR
 
@@ -1043,7 +1017,7 @@ def cmd_runtime_serve(args):
     try:
         from rot.commercial.runtime.mcp import McpGateway, build_http_server
     except ImportError:
-        print("ERROR: 'rot runtime serve' (the MCP gateway) needs the paid "
+        print("ERROR: 'rot runtime serve' (the MCP gateway) needs the commercial "
               "layer -- install rotn-commercial "
               "(pip install rotn-commercial)", file=sys.stderr)
         return EXIT_ERROR
@@ -1362,75 +1336,6 @@ def cmd_check(args):
 
 
 # ---------------------------------------------------------------------------
-# rot license
-# ---------------------------------------------------------------------------
-
-def cmd_license(args):
-    """License management (Phase D): verify / make / show.
-
-    Exit codes: 0 = valid / issued, 1 = rejected (tampered / expired),
-    3 = usage / I/O error.
-    """
-    import rot.license as lic
-
-    key = getattr(args, "key", None)
-
-    # --verify: the fail-closed license check (D2 "Done when" #1 / #4).
-    if getattr(args, "verify", False):
-        path = getattr(args, "file", None)
-        if not path:
-            print("ERROR: --verify requires --file LICENSE", file=sys.stderr)
-            return EXIT_ERROR
-        try:
-            license_obj = lic.load_license(path, key=key)
-        except lic.LicenseError as exc:
-            print("REJECTED: %s" % exc, file=sys.stderr)
-            return EXIT_VIOLATED
-        print("VALID: license for %r (tier=%s, expires %s)"
-              % (license_obj.org, license_obj.tier,
-                 _fmt_date(license_obj.expiry)))
-        return EXIT_PROVEN
-
-    # --make: issue a signed license (for testing / the Caravel backend).
-    if getattr(args, "make", False):
-        org = getattr(args, "org", None) or "demo-org"
-        tier = getattr(args, "tier", None) or "free"
-        try:
-            license_dict = lic.make_license(org, tier, key=key)
-        except lic.LicenseError as exc:
-            print("ERROR: %s" % exc, file=sys.stderr)
-            return EXIT_ERROR
-        out = getattr(args, "out", None)
-        if out:
-            _ensure_dir(out)
-            with open(out, "w") as fh:
-                fh.write(json.dumps(license_dict, indent=2,
-                                   sort_keys=True) + "\n")
-            print("wrote %s" % out)
-        else:
-            print(json.dumps(license_dict, indent=2, sort_keys=True))
-        return EXIT_PROVEN
-
-    # --show (or default when only --file is given): show a license (validated).
-    if getattr(args, "show", False) or getattr(args, "file", None):
-        path = getattr(args, "file", None)
-        if not path:
-            print("ERROR: --show requires --file LICENSE", file=sys.stderr)
-            return EXIT_ERROR
-        try:
-            license_obj = lic.load_license(path, key=key)
-        except lic.LicenseError as exc:
-            print("ERROR: %s" % exc, file=sys.stderr)
-            return EXIT_ERROR
-        print(json.dumps(license_obj.to_dict(), indent=2, sort_keys=True))
-        return EXIT_PROVEN
-
-    print("ERROR: specify --verify, --make, or --show --file LICENSE",
-          file=sys.stderr)
-    return EXIT_ERROR
-
-
-# ---------------------------------------------------------------------------
 # rot replay
 # ---------------------------------------------------------------------------
 
@@ -1729,11 +1634,7 @@ def cmd_demo(args):
     beat(3, "PROOF: the corrected policy is safe (+ RTF manifest + hash)")
     run("correct.dw PROVEN (the fix is verifiably safe)", correct, None,
         EXIT_PROVEN)
-    import rot.license as lic
-    try:
-        budget = _resolve_budget(args)
-    except lic.LicenseError:
-        budget = lic.resolve_budget()
+    budget = _resolve_budget(args)
     a = argparse.Namespace(policy=correct, kind=None, max_inflight=None,
                            amount=None, cap=None, window=None,
                            liveness_horizon=None)
@@ -2168,7 +2069,7 @@ def cmd_ladder(args):
 
 
 def cmd_ab(args):
-    """Frontend A/B over the bench corpus (Joern-primary, §3).
+    """Frontend A/B over the bench corpus (Joern-primary, Â§3).
 
     RESEARCH command: the A/B harness lives in the ``rotn-research`` repo.
     In a product build (where the research modules are not installed) this
@@ -2239,20 +2140,10 @@ def main(argv=None):
     p.add_argument("--manifest", default=None, metavar="FILE",
                    help="MCP Manifest v1 JSON file (Phase B, B2): field and "
                         "tenant structural checks via rot.mcp_adapter")
-    # Tier gating (Phase D): license / tier / depth cap the bounded-search
-    # budget. A tampered or expired license is rejected (fail-closed).
-    p.add_argument("--license", default=None, metavar="FILE",
-                   help="Caravel license file (Phase D): verified, fail-closed; "
-                        "its limits cap the audit budget")
-    p.add_argument("--tier", default=None, choices=["free", "paid"],
-                   help="tier (Phase D): caps the audit budget when no "
-                        "--license is given")
+    # --depth: an optional user-set max_states bound (full-strength by default).
     p.add_argument("--depth", type=int, default=None, metavar="N",
-                   help="max_states override (Phase D); capped to the free "
-                        "maximum when tier is free")
-    p.add_argument("--key", default=None, metavar="KEY",
-                   help="Caravel key for license verification "
-                        "[default: $CARAVEL_LICENSE_KEY or the demo key]")
+                   help="optional max_states bound (may only lower the "
+                        "full-strength budget)")
     p.add_argument("--quiet", action="store_true",
                    help="suppress the human summary")
 
@@ -2336,26 +2227,6 @@ def main(argv=None):
                    help="with --fetch: list what would be fetched, download "
                         "nothing (still needs network to list upstream)")
 
-    p = sub.add_parser("license",
-                       help="manage Caravel licenses (Phase D): "
-                            "verify / make / show")
-    p.add_argument("--file", default=None, metavar="LICENSE",
-                   help="license file to verify / show")
-    p.add_argument("--verify", action="store_true",
-                   help="verify the license (fail-closed; exit 1 if rejected)")
-    p.add_argument("--show", action="store_true",
-                   help="show the license (validated)")
-    p.add_argument("--make", action="store_true",
-                   help="issue a signed license for --org / --tier")
-    p.add_argument("--org", default=None, metavar="ORG",
-                   help="licensed organization (for --make)")
-    p.add_argument("--tier", default=None, choices=["free", "paid"],
-                   help="tier (for --make; default free)")
-    p.add_argument("--out", default=None, metavar="FILE",
-                   help="write the issued license here (for --make)")
-    p.add_argument("--key", default=None, metavar="KEY",
-                   help="Caravel key [default: $CARAVEL_LICENSE_KEY or demo]")
-
     p = sub.add_parser(
         "trace",
         help="emit the RTF v1 deterministic, hashable reasoning trace")
@@ -2366,14 +2237,9 @@ def main(argv=None):
                         "vertical slice (for a spend-cap audit)")
     p.add_argument("--out", default=None, metavar="FILE",
                    help="write the trace JSON here [default: stdout]")
-    p.add_argument("--license", default=None, metavar="FILE",
-                   help="Caravel license file (Phase D): verified, fail-closed")
-    p.add_argument("--tier", default=None, choices=["free", "paid"],
-                   help="tier (Phase D): caps the audit budget")
     p.add_argument("--depth", type=int, default=None, metavar="N",
-                   help="max_states override (Phase D)")
-    p.add_argument("--key", default=None, metavar="KEY",
-                   help="Caravel key for license verification")
+                   help="optional max_states bound (may only lower the "
+                        "full-strength budget)")
     p.add_argument("--liveness-horizon", type=int, default=None, metavar="H",
                    help="bounded liveness horizon (recorded for provenance)")
     p.add_argument("--max-inflight", type=int, default=None, metavar="K",
@@ -2512,7 +2378,7 @@ def main(argv=None):
         return EXIT_ERROR
     return {"check": cmd_check, "replay": cmd_replay, "ci": cmd_ci,
             "demo": cmd_demo, "corpus": cmd_corpus,
-            "license": cmd_license, "trace": cmd_trace,
+            "trace": cmd_trace,
             "report": cmd_report,
             "coach": cmd_coach, "runtime": cmd_runtime,
             "site": cmd_site,

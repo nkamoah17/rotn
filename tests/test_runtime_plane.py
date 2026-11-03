@@ -14,7 +14,7 @@ This file covers the **core** (Apache-2.0) surface:
 
 The **service** surface -- the B3 LangChain adapter, the B4 MCP ``tools/call``
 gateway, and the B5 fleet aggregate (``rot coach --aggregate``) -- lives in
-the paid layer and is tested in ``rot/commercial/tests/test_runtime_plane_service.py``
+the commercial layer and is tested in ``rot/commercial/tests/test_runtime_plane_service.py``
 (SSPL / commercial -- see ``rot/commercial/LICENSE``).
 
 Run: python tests/test_runtime_plane.py

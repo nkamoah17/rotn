@@ -838,7 +838,7 @@ def audit_manifest(manifest, budget=None, max_states=200000,
         try:
             import rot.commercial.mcp_behavioral as mcp_behavioral
         except ImportError:
-            # Paid layer not installed -> structural audit only (already
+            # Commercial layer not installed -> structural audit only (already
             # surfaced via the "behavioral audit skipped" facets note below).
             behavioral = None
         else:

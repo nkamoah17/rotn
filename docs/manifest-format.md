@@ -236,9 +236,9 @@ violated / trifecta / budget-exhausted) and the examples:
 
 ```bash
 # Hard guarantees proven + the trifecta *risk* flagged (a warning).
-rot check --manifest examples/mcp-manifest-good.json --tier free
+rot check --manifest examples/mcp-manifest-good.json
 
 # A cross-tenant read + an unapproved write, proven as a *sequence* with
-# the attack path attached (the paid tier lifts the tenant-scope cap).
-rot check --manifest examples/mcp-manifest-bad.json --tier paid
+# the attack path attached (the full-strength budget covers the tenant-scope cap).
+rot check --manifest examples/mcp-manifest-bad.json
 ```

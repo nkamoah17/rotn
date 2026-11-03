@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for the masked MCP ``tools/list`` (the Product 2 *service* surface).
 
-This is the paid-layer half of the tool-masking story: the deterministic
+This is the commercial-layer half of the tool-masking story: the deterministic
 masking core (``RuntimeGuard.enabled_tools`` / ``blocked_tools`` /
 ``rot runtime tools``) is covered by the **core** suite in
 ``tests/test_tool_masking.py`` (Apache-2.0).  Here we test the MCP

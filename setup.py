@@ -73,7 +73,7 @@ setup(
     packages=find_packages(exclude=[
         "tests", "tests.*",        # top-level test tree (not shipped)
         "rot.tests", "rot.tests.*",  # in-package Java-build integration tests
-        # The **paid** layer is a separate distribution (``rotn-commercial``,
+        # The **commercial** layer is a separate distribution (``rotn-commercial``,
         # SSPL / commercial) -- it must NOT ship inside the free Apache-2.0 core.
         "rot.commercial", "rot.commercial.*",
     ]),
