@@ -1,4 +1,0 @@
-usage: rot [-h] [--version]
-           {check,replay,ci,demo,report,corpus,license,trace,coach,runtime,site,doctor,ladder,ab}
-           ...
-rot: error: unrecognized arguments: completed\:0,\inflight\:3} 
