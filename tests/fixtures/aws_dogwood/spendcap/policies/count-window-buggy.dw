@@ -1,0 +1,25 @@
+// APW-6 — Net open-count window cap (opens minus completed reviews) — BUGGY variant.
+//
+// Same intent as the correct variant (at most 3 open PRs at once), but the
+// counted events are `response` instead of `request`. A denied open attempt or
+// a stalled review then distorts the net open count (opens - reviews), so the
+// `< 3` cap is not enforced reliably.
+//
+// The one-word bug vs. the correct variant: `response` instead of `request`.
+//
+// Schema: Repo namespace (cap_open_agent_prs_windowed example).
+// See: rot/shapes.py (the count-window oracle, build_count_window_ir).
+@id("count_window_buggy")
+permit (
+    principal,
+    action == Repo::Action::"OpenPullRequest",
+    resource
+)
+when temporal {
+    (count for (t: Timepoint). where (
+        formerly within 24h (Repo::Action::"OpenPullRequest"::response{} && tp(t))
+    ))
+    - (count for (t: Timepoint). where (
+        formerly within 24h (Repo::Action::"CompleteReview"::response{} && tp(t))
+    )) < 3
+};

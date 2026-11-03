@@ -1,0 +1,25 @@
+// APW-4 — Distinct-event count cap (deduplicated by recipient) — CORRECT variant.
+//
+// Intent: an agent may message at most 3 DISTINCT recipients in an hour. The
+// `count` aggregates over the window and the cap `<= 3` bounds the number of
+// distinct recipients. The correct / buggy distinction is the event kind of
+// the counted event (mirroring the spend-cap shape):
+//   * `request`  (CORRECT): counting *requested* sends -> the counter is
+//     accurate (a dedup key on the recipient is well-defined per request).
+//   * `response` (BUGGY):   counting *settled* sends -> the dedup key collapses
+//     (a failed/rolled-back send leaves no response, so distinct sends are
+//     under-counted and the cap is not enforced).
+//
+// Schema: Drupe namespace.
+// See: rot/shapes.py (build_distinct_count_ir -- the hand-written oracle).
+@id("distinct_count_correct")
+forbid (
+    principal,
+    action == Drupe::Action::"Send",
+    resource
+)
+when temporal {
+    (count for (t: Timepoint). where (
+        formerly within 1h (Drupe::Action::"Send"::request{ input.recipient: context.input.recipient } && tp(t))
+    )) <= 3
+};

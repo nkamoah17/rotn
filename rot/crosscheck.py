@@ -52,6 +52,7 @@ import sys
 from . import verdicts as v
 
 __all__ = ["CrossChecker", "join_status", "join_status3",
+           "join_mode", "minted_by", "MODE_STRICT", "MODE_PRIMARY", "MODES",
            "witness_match", "witness_match3", "REPORT_VERSION",
            "build_crosscheck_report", "add_witness",
            "format_side_by_side", "main",
@@ -108,6 +109,88 @@ def join_status3(smt_status, tlc_status, policy_direct_status):
     if s == v.VIOLATED and t == v.VIOLATED and p == v.VIOLATED:
         return v.VIOLATED
     return v.UNKNOWN
+
+
+# ---------------------------------------------------------------------------
+# Join modes (Phase 2, item 4): the PROVEN authority + the engine label.
+# ---------------------------------------------------------------------------
+
+#: ``strict`` -- the pre-existing all-three path: PROVEN/VIOLATED require
+#: smtz3 AND tlc AND policy_direct to agree.  The most conservative join.
+MODE_STRICT = "strict"
+
+#: ``primary`` -- the two *independent model checkers* (smtz3 and TLC) are
+#: the PROVEN authority (they check the same IR state-machine model with two
+#: different engines).  When TLC is absent (UNKNOWN/ERROR), policy_direct is
+#: the offline fallback (smtz3 AND policy_direct).  This is the default the
+#: Phase 2 plan calls for: "PROVEN requires smtz3=PROVEN AND tlc=PROVEN;
+#: policy_direct stays the offline fallback when TLC is absent."
+MODE_PRIMARY = "primary"
+
+#: The full set of selectable join modes.
+MODES = (MODE_STRICT, MODE_PRIMARY)
+
+
+def join_mode(smt_status, tlc_status, pd_status, mode=MODE_STRICT):
+    """Join the three engines' statuses into one verdict status, by mode.
+
+    * ``strict``   -- PROVEN/VIOLATED require ALL THREE engines to agree
+                      (identical to :func:`join_status3`).
+    * ``primary``  -- PROVEN/VIOLATED require the two independent model
+                      checkers (smtz3 AND tlc) to agree.  When TLC is absent
+                      (UNKNOWN/ERROR), policy_direct is the offline fallback
+                      (smtz3 AND policy_direct).
+
+    Any disagreement or UNKNOWN collapses to UNKNOWN.  No single engine can
+    mint a decision alone.  Both modes are pure functions of the three
+    engines' statuses, so they are unit-testable without any engine.
+    """
+    s, t, p = _norm(smt_status), _norm(tlc_status), _norm(pd_status)
+    if mode == MODE_STRICT:
+        if s == v.PROVEN and t == v.PROVEN and p == v.PROVEN:
+            return v.PROVEN
+        if s == v.VIOLATED and t == v.VIOLATED and p == v.VIOLATED:
+            return v.VIOLATED
+        return v.UNKNOWN
+    if mode == MODE_PRIMARY:
+        if t in (v.PROVEN, v.VIOLATED):
+            # TLC present: the two independent model checkers decide.
+            if s == v.PROVEN and t == v.PROVEN:
+                return v.PROVEN
+            if s == v.VIOLATED and t == v.VIOLATED:
+                return v.VIOLATED
+            return v.UNKNOWN
+        # TLC absent: policy_direct is the offline fallback.
+        if s == v.PROVEN and p == v.PROVEN:
+            return v.PROVEN
+        if s == v.VIOLATED and p == v.VIOLATED:
+            return v.VIOLATED
+        return v.UNKNOWN
+    raise ValueError("unknown crosscheck mode %r (expected one of %r)"
+                     % (mode, MODES))
+
+
+def minted_by(smt_status, tlc_status, pd_status, joined, mode=MODE_STRICT):
+    """The engine label: which engine(s) minted the joined verdict.
+
+    Returns the list of engines that minted the verdict (in a stable order),
+    or ``[]`` when no verdict was minted (UNKNOWN).  This is the "PROVEN
+    verdicts carry an engine-label" requirement: every PROVEN/VIOLATED names
+    the model checker(s) that minted it, so a reader can see *what* proved it
+    without re-deriving the join.
+    """
+    if joined not in (v.PROVEN, v.VIOLATED):
+        return []
+    if mode == MODE_STRICT:
+        return ["smtz3", "tlc", "policy_direct"]
+    if mode == MODE_PRIMARY:
+        # Two independent model checkers when TLC is present; policy_direct
+        # is the fallback when TLC is absent.
+        t = _norm(tlc_status)
+        if t in (v.PROVEN, v.VIOLATED):
+            return ["smtz3", "tlc"]
+        return ["smtz3", "policy_direct"]
+    return []
 
 
 # ---------------------------------------------------------------------------
@@ -364,11 +447,15 @@ class CrossChecker:
     and ``cfg`` (engine config, used to locate the TLC jar).
     """
 
-    def __init__(self, ir, linear_model, prop, cfg):
+    def __init__(self, ir, linear_model, prop, cfg, mode=MODE_STRICT):
         self.ir = ir
         self.linear_model = linear_model
         self.prop = prop
         self.cfg = cfg
+        #: The join mode (``strict`` = all-three, the default; ``primary`` =
+        #: two independent model checkers with policy_direct as the offline
+        #: fallback when TLC is absent).  See :func:`join_mode`.
+        self.mode = mode
 
     # -- engine seams (patchable in tests) ---------------------------------
     def _smt_verdict(self):
@@ -435,7 +522,12 @@ class CrossChecker:
         tlc = self._tlc_result()
         apalache = self._apalache_result()
         policy_direct = self._policy_direct_verdict()
-        joined = join_status3(smt.status, tlc.status, policy_direct.status)
+        joined = join_mode(smt.status, tlc.status, policy_direct.status,
+                           self.mode)
+        # The engine label: which engine(s) minted the verdict (the "PROVEN
+        # verdicts carry an engine-label" requirement).  Empty when UNKNOWN.
+        minted = minted_by(smt.status, tlc.status, policy_direct.status,
+                           joined, self.mode)
 
         # Witness identity: when ALL THREE engines mint VIOLATED, do they
         # point at the SAME attack state?  This is the "three independent
@@ -498,6 +590,8 @@ class CrossChecker:
                           "the other"),
             },
             "joined": joined,
+            "mode": self.mode,
+            "minted_by": minted,
             "witness_match": w_match,
         }
 
@@ -515,15 +609,23 @@ class CrossChecker:
                               else tlc.witness)
             trace = smt.trace
 
+        if minted:
+            minted_label = " + ".join(minted)
+            proven_note = ("cross-check (mode=%s): %s minted the proof"
+                           % (self.mode, minted_label))
+            violated_note = ("cross-check (mode=%s): %s minted the "
+                             "counterexample" % (self.mode, minted_label))
+        else:
+            proven_note = ("cross-check: engines proved the invariant")
+            violated_note = ("cross-check: engines found a counterexample")
         notes = {
-            v.PROVEN: ("cross-check: SMT (Z3), TLC, and policy-direct all "
-                       "proved the invariant"),
-            v.VIOLATED: ("cross-check: SMT (Z3), TLC, and policy-direct all "
-                         "found a counterexample"),
-            v.UNKNOWN: ("cross-check: engines disagree or one is UNKNOWN "
-                        "(SMT=%s, TLC=%s, policy_direct=%s); no verdict "
-                        "issued"
-                        % (smt.status, tlc.status, policy_direct.status)),
+            v.PROVEN: proven_note,
+            v.VIOLATED: violated_note,
+            v.UNKNOWN: ("cross-check (mode=%s): engines disagree or one is "
+                        "UNKNOWN (SMT=%s, TLC=%s, policy_direct=%s); no "
+                        "verdict issued"
+                        % (self.mode, smt.status, tlc.status,
+                           policy_direct.status)),
         }
 
         return v.Verdict(
@@ -610,6 +712,16 @@ def build_crosscheck_report(run_report, witnesses=None):
         smt.get("counterexample"), tlc.get("witness"),
         policy_direct.get("witness"), joined)
 
+    # The join mode + the engine label (which engine(s) minted the verdict).
+    # Read from the per-run evidence when present (new ``check()``); derived
+    # here otherwise so reports written before the label existed still carry
+    # it (defaulting to the pre-existing ``strict`` all-three join).
+    mode = cross.get("mode") or MODE_STRICT
+    minted = cross.get("minted_by")
+    if minted is None:
+        minted = minted_by(smt.get("status"), tlc.get("status"),
+                           policy_direct.get("status"), joined, mode)
+
     return {
         "report": "crosscheck",
         "version": REPORT_VERSION,
@@ -676,6 +788,12 @@ def build_crosscheck_report(run_report, witnesses=None):
             "joined": joined,
             "agree": agree,
             "witness_match": w_match,
+            # The join mode (``strict`` / ``primary``) and the engine label:
+            # which engine(s) minted the verdict (the "PROVEN verdicts carry
+            # an engine-label" requirement).  ``minted_by`` is ``[]`` when the
+            # join is UNKNOWN (no engine minted a decision).
+            "mode": mode,
+            "minted_by": minted,
         },
         "note": _agreement_note(smt.get("status"), tlc.get("status"),
                                 policy_direct.get("status"),

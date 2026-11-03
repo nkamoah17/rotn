@@ -1,0 +1,22 @@
+// APW-4 — Distinct-event count cap (deduplicated by recipient) — BUGGY variant.
+//
+// Same intent as the correct variant (at most 3 distinct recipients per hour),
+// but the counted event is a `response` instead of a `request`. The dedup key
+// collapses on settled events: a failed / rolled-back send leaves no response,
+// so distinct sends are under-counted and the `<= 3` cap is not enforced.
+//
+// The one-word bug vs. the correct variant: `response` instead of `request`.
+//
+// Schema: Drupe namespace.
+// See: rot/shapes.py (build_distinct_count_ir -- the hand-written oracle).
+@id("distinct_count_buggy")
+forbid (
+    principal,
+    action == Drupe::Action::"Send",
+    resource
+)
+when temporal {
+    (count for (t: Timepoint). where (
+        formerly within 1h (Drupe::Action::"Send"::response{ input.recipient: context.input.recipient } && tp(t))
+    )) <= 3
+};

@@ -1,0 +1,26 @@
+// APW-2 — Approval replay (approval consumed exactly once) — CORRECT variant.
+//
+// The load-bearing temporal operator is `since`:
+//     <neg-conjunct> since within <interval> <atom>
+// i.e. "the gated action has NOT held since the approving trigger (within the
+// window)". A fresh cart-check is required after each successful order, so one
+// cart-check authorises at most one order.
+//
+// The correct / buggy distinction is the *presence* of the `since` clause:
+//   * `since` present  (CORRECT): the approval is consumed -> single-use.
+//   * `since` absent   (BUGGY):   the approval is never consumed -> replayable.
+//
+// Schema: Drupe namespace.
+// See: rot/shapes.py (build_approval_replay_ir -- the hand-written oracle),
+//      samples/reference/apw2-order-after-cart-check-correct.dw (verbatim source).
+@id("approval_replay_correct")
+forbid (
+    principal,
+    action == Drupe::Action::"PlaceOrder",
+    resource
+)
+when temporal {
+    !Drupe::Action::"PlaceOrder"::response{ input.amount: context.input.amount }
+    since within 1m
+    Drupe::Action::"GetCart"::request{ input.cartId: context.input.cartId }
+};

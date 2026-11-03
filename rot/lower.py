@@ -44,6 +44,7 @@ Python 3.6 compatible (no f-strings, no walrus, no dataclasses).
 
 import rot.ir as ir
 import rot.spendcap as spendcap
+import rot.shapes as shapes
 
 __all__ = ["lower_policy", "lower_candidate"]
 
@@ -474,6 +475,7 @@ def _lower_count_window(node, detected, window=None, dw_window=None):
         pinned_property=pinned,
         source_path="tests/fixtures/aws_dogwood/spendcap",
         metadata={"protocol": "COUNT_WINDOW", "target": "count_window",
+                  "buggy": (getattr(open_ref, "kind", None) == "response"),
                   "cap": cap,
                   "open_event": "%s::%s" % (open_action,
                                            getattr(open_ref, "kind", "?")),
@@ -973,6 +975,222 @@ def _lower_taint_egress(node, detected, window=None, dw_window=None):
     )
 
 
+
+# ---------------------------------------------------------------------------
+# Shared helpers for the APW shapes (approval-replay / distinct-count /
+# scoped-cap / event-ordering)
+# ---------------------------------------------------------------------------
+
+def _is_since(node):
+    """True if ``node`` looks like a :class:`rot.dw.Since` (``<l> since … <a>``)."""
+    return (node is not None
+            and getattr(node, "left", None) is not None
+            and getattr(node, "anchor", None) is not None)
+
+
+def _is_unary(node):
+    """True if ``node`` looks like a :class:`rot.dw.UnaryOp`` (``!`` / ``not``)."""
+    return (node is not None
+            and getattr(node, "op", None) is not None
+            and getattr(node, "operand", None) is not None
+            and getattr(node, "left", None) is None
+            and getattr(node, "right", None) is None)
+
+
+def _stamp_apw(ir_model, protocol, target, buggy, kind, window, dw_window):
+    """Record the ``.dw`` provenance on a shape-built IR (uniform manifest)."""
+    ir_model.metadata.update({
+        "protocol": protocol,
+        "target": target,
+        "buggy": buggy,
+        "dw_event_kind": kind,
+        "window": window,
+        "dw_window": dw_window,
+    })
+    return ir_model
+
+
+
+# ---------------------------------------------------------------------------
+# Shape 6: approval-replay (``!gated since within <w> trigger``)
+# ---------------------------------------------------------------------------
+
+def _detect_approval_replay(node):
+    """Detect the approval-replay shape.
+
+    Returns ``(variant, ref)`` where ``variant`` is ``"correct"`` (a
+    single-use trigger: a :class:`rot.dw.Since` node) or ``"buggy"`` (a
+    replayable trigger: a bare negated event reference with no temporal
+    anchor), and ``ref`` is the first event reference in the tree; else
+    ``None``.
+    """
+    if _is_since(node):
+        return ("correct", node)
+    if _is_unary(node) and node.op == "!":
+        if _find_window(node) is not None:
+            return None  # temporal anchor present -> a different shape
+        refs = _collect_event_refs(node)
+        if refs:
+            return ("buggy", refs[0])
+    return None
+
+
+def _lower_approval_replay(node, detected, window=None, dw_window=None):
+    """Lower the approval-replay shape to a :class:`ProtocolIR`.
+
+    ``detected`` is the ``(variant, ref)`` tuple from
+    :func:`_detect_approval_replay`.  The model is the single-use-approval
+    oracle (:func:`rot.shapes.build_approval_replay_ir`): a trigger is
+    admitted at most once (correct) or is replayable (buggy); the pinned
+    property is the single-use condition.
+    """
+    variant, _ref = detected
+    buggy = (variant == "buggy")
+    kind = _find_event_kind(node)
+    ir_model = shapes.build_approval_replay_ir(buggy=buggy)
+    return _stamp_apw(ir_model, "APPROVAL_REPLAY", "approval_replay", buggy,
+                      kind, window, dw_window)
+
+
+
+# ---------------------------------------------------------------------------
+# Shape 7: distinct-count (``count where … <op> cap``)
+# ---------------------------------------------------------------------------
+
+def _detect_distinct_count(node):
+    """Detect the distinct-count shape.
+
+    Returns ``(cap, ref)`` if ``node`` matches ``count where … <op> cap``
+    (a *single* :class:`rot.dw.Count` compared to a numeric cap -- distinct
+    from the count-window shape, which is ``count - count <op> cap``), else
+    ``None``.
+    """
+    cmp = _find_comparison(node)
+    if cmp is None:
+        return None
+    op, left, right = cmp
+    if op not in ("<", "<=", ">", ">="):
+        return None
+    if not _is_count(left):
+        return None
+    refs = _collect_event_refs(left)
+    if not refs:
+        return None
+    return (int(right.value), refs[0])
+
+
+def _lower_distinct_count(node, detected, window=None, dw_window=None):
+    """Lower the distinct-count shape to a :class:`ProtocolIR`.
+
+    ``detected`` is the ``(cap, ref)`` tuple from
+    :func:`_detect_distinct_count`.  The model is the distinct-event-count
+    oracle (:func:`rot.shapes.build_distinct_count_ir`): the counter is
+    accurate (correct) or broken (buggy); the pinned property is
+    ``distinct_count <= cap``.
+    """
+    cap, _ref = detected
+    kind = _find_event_kind(node)
+    buggy = (kind == "response")
+    ir_model = shapes.build_distinct_count_ir(buggy=buggy, cap=cap)
+    return _stamp_apw(ir_model, "DISTINCT_COUNT", "distinct_count", buggy,
+                      kind, window, dw_window)
+
+
+
+# ---------------------------------------------------------------------------
+# Shape 8: scoped-cap (``sum(1) where … <op> cap``)
+# ---------------------------------------------------------------------------
+
+def _detect_scoped_cap(node):
+    """Detect the scoped-cap shape.
+
+    Returns ``(cap, ref)`` if ``node`` matches ``sum(<n>) where … <op> cap``
+    (a :class:`rot.dw.Sum` whose *summand is a numeric literal* -- a count cap
+    scoped to a unit -- distinct from the spend-cap shape, whose summand is a
+    ``context.`` field such as ``context.input.amount``), else ``None``.
+    """
+    cmp = _find_comparison(node)
+    if cmp is None:
+        return None
+    op, left, right = cmp
+    if op not in ("<", "<=", ">", ">="):
+        return None
+    if not _is_sum(left):
+        return None
+    if not _is_num(left.summand):
+        return None
+    if _has_context_ref(left):
+        return None  # a context summand is the spend-cap / refund shape
+    refs = _collect_event_refs(left)
+    if not refs:
+        return None
+    return (int(right.value), refs[0])
+
+
+def _lower_scoped_cap(node, detected, window=None, dw_window=None):
+    """Lower the scoped-cap shape to a :class:`ProtocolIR`.
+
+    ``detected`` is the ``(cap, ref)`` tuple from
+    :func:`_detect_scoped_cap`.  The model is the per-unit scoped-cap oracle
+    (:func:`rot.shapes.build_scoped_cap_ir`): the counter tracks the unit's
+    count (correct) or is broken (buggy); the pinned property is
+    ``unit_count <= cap``.
+    """
+    cap, _ref = detected
+    kind = _find_event_kind(node)
+    buggy = (kind == "response")
+    ir_model = shapes.build_scoped_cap_ir(buggy=buggy, cap=cap)
+    return _stamp_apw(ir_model, "SCOPED_CAP", "scoped_cap", buggy,
+                      kind, window, dw_window)
+
+
+
+# ---------------------------------------------------------------------------
+# Shape 9: event-ordering (``formerly within <w> (A && B)``)
+# ---------------------------------------------------------------------------
+
+def _detect_event_ordering(node):
+    """Detect the event-ordering shape.
+
+    Returns ``(ref_a, ref_b, formerly_within_node)`` if ``node`` is a
+    ``formerly within <window>`` whose body is a *conjunction* of at least two
+    event references (the "A must precede B" shape -- distinct from
+    taint-egress, whose body is a single event reference), else ``None``.
+    """
+    if not _is_formerly_within(node):
+        return None
+    body = node.body
+    if _is_sum(body) or _is_count(body) or _is_exists(body):
+        return None
+    if not (_is_binary(body) and body.op == "&&"):
+        return None
+    refs = _collect_event_refs(body)
+    if len(refs) < 2:
+        return None
+    return (refs[0], refs[1], node)
+
+
+def _lower_event_ordering(node, detected, window=None, dw_window=None):
+    """Lower the event-ordering shape to a :class:`ProtocolIR`.
+
+    ``detected`` is the ``(ref_a, ref_b, formerly_within_node)`` tuple from
+    :func:`_detect_event_ordering`.  The model is the event-ordering oracle
+    (:func:`rot.shapes.build_event_ordering_ir`): B is admitted only after A
+    (correct) or is unguarded (buggy); the pinned property is
+    ``NOT b_done OR a_done``.
+    """
+    ref_a, ref_b, _fw = detected
+    kind = _find_event_kind(node)
+    buggy = (kind == "response")
+    first_action = getattr(ref_a, "action", "read") or "read"
+    second_action = getattr(ref_b, "action", "write") or "write"
+    ir_model = shapes.build_event_ordering_ir(buggy=buggy,
+                                              first_action=first_action,
+                                              second_action=second_action)
+    return _stamp_apw(ir_model, "EVENT_ORDERING", "event_ordering", buggy,
+                      kind, window, dw_window)
+
+
 # ---------------------------------------------------------------------------
 # Public dispatcher
 # ---------------------------------------------------------------------------
@@ -1036,10 +1254,30 @@ def lower_policy(node, amount=None, cap=None, max_inflight=None, window=None):
         return _lower_exists_sum(node, detected, k,
                                  window=w, dw_window=dw_window)
 
+    detected = _detect_event_ordering(node)
+    if detected is not None:
+        return _lower_event_ordering(node, detected,
+                                     window=w, dw_window=dw_window)
+
     detected = _detect_taint_egress(node)
     if detected is not None:
         return _lower_taint_egress(node, detected,
                                    window=w, dw_window=dw_window)
+
+    detected = _detect_approval_replay(node)
+    if detected is not None:
+        return _lower_approval_replay(node, detected,
+                                      window=w, dw_window=dw_window)
+
+    detected = _detect_distinct_count(node)
+    if detected is not None:
+        return _lower_distinct_count(node, detected,
+                                     window=w, dw_window=dw_window)
+
+    detected = _detect_scoped_cap(node)
+    if detected is not None:
+        return _lower_scoped_cap(node, detected,
+                                 window=w, dw_window=dw_window)
 
     # Fallback: the basic spend-cap shape (``Sum <op> cap``).
     return _lower_spendcap(node, amt, cp, k,

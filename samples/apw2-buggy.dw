@@ -1,0 +1,24 @@
+// APW-2 — Approval replay (approval never consumed) — BUGGY variant.
+//
+// The same intent as the correct variant ("order only after the cart has been
+// confirmed"), but the `since` clause is *absent*: nothing consumes the
+// cart-check. One `get_cart::response` therefore authorises EVERY matching
+// `place_order` in the window — a parallel burst of N orders, all matching
+// that single cart-check, are all admitted (one verification authorises N
+// actions).
+//
+// The one-clause bug vs. the correct variant: no `since` suffix, so the gated
+// action is a bare negated event reference (a replayable trigger).
+//
+// Schema: Drupe namespace.
+// See: rot/shapes.py (build_approval_replay_ir -- the hand-written oracle),
+//      samples/reference/apw2-order-after-cart-check-buggy.dw (verbatim source).
+@id("approval_replay_buggy")
+forbid (
+    principal,
+    action == Drupe::Action::"PlaceOrder",
+    resource
+)
+when temporal {
+    !Drupe::Action::"PlaceOrder"::response{ input.amount: context.input.amount }
+};

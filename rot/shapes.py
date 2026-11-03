@@ -28,6 +28,11 @@ __all__ = [
     "build_exists_sum_ir",
     "build_refund_budget_ir",
     "build_taint_egress_ir",
+    "build_approval_replay_ir",
+    "build_distinct_count_ir",
+    "build_scoped_cap_ir",
+    "build_event_ordering_ir",
+    "build_window_boundary_ir",
 ]
 
 
@@ -412,3 +417,463 @@ def build_taint_egress_ir(buggy=False, trigger_action="ReadConfidential",
                   "egress_event": egress_action},
     )
 
+
+
+# ---------------------------------------------------------------------------
+# APW-2: approval-replay (single-use approval, ``… since within … …``)
+# ---------------------------------------------------------------------------
+
+def build_approval_replay_ir(buggy=False,
+                             trigger_action="get_cart",
+                             gated_action="place_order",
+                             max_orders=2):
+    """Hand-written oracle for the approval-replay shape.
+
+    A *single-use* approval gates a follow-up action: "you may place an order
+    only after a cart check, and the cart check may be used once".  The two
+    variants differ in whether the approval is consumed on use:
+
+    * **correct** (single-use): ``place_order`` *consumes* the approval
+      (clears ``approved``), so at most one order can be placed per cart
+      check; the pinned property ``orders <= 1`` holds.
+    * **buggy** (replayable): ``place_order`` does *not* consume the
+      approval, so the same cart check can be replayed into an unbounded
+      number of orders; the property ``orders <= 1`` is violated (witness
+      ``orders >= 2``).
+
+    This is the Dogwood ``!gated::response{…} since within <w>
+    trigger::response{…}`` idiom (the ``since`` operator is what makes the
+    trigger single-use).
+
+    Parameters
+    ----------
+    buggy : bool
+        Select the *policy* variant (the thing under test).
+    trigger_action : str
+        The approval / trigger action name (the cart check).
+    gated_action : str
+        The action gated on the approval (the order).
+    max_orders : int
+        Upper bound on the ``orders`` counter (must be >= 2 so the replay
+        violation is reachable).
+
+    Returns
+    -------
+    rot.ir.ProtocolIR
+        A structurally valid IR with two state variables, four actions, and
+        the pinned property ``orders <= 1``.
+    """
+    if max_orders < 2:
+        raise ValueError("max_orders must be >= 2 (got %r)" % (max_orders,))
+
+    if buggy:
+        # Replayable: placing an order does NOT consume the approval.
+        place_order_effects = [
+            ir.Assignment("orders",
+                          ir.BinOp("+", ir.V("orders"), ir.C(1))),
+        ]
+    else:
+        # Single-use: placing an order CONSUMES the approval.
+        place_order_effects = [
+            ir.Assignment("orders",
+                          ir.BinOp("+", ir.V("orders"), ir.C(1))),
+            ir.Assignment("approved", ir.C(False)),
+        ]
+
+    place_order_guard = ir.V("approved")
+    variables = [
+        ir.StateVar("approved", ir.Bool(), ir.MODE_PRECISE, "service",
+                    "a valid, un-consumed approval (cart check) is present"),
+        ir.StateVar("orders", ir.IntRange(0, max_orders), ir.MODE_PRECISE,
+                    "service",
+                    "orders placed since the last approval"),
+    ]
+    actions = [
+        ir.Action(name="init", owner="service", guard=ir.T(),
+                  effects=[ir.Assignment("approved", ir.C(False)),
+                           ir.Assignment("orders", ir.C(0))],
+                  is_initial=True,
+                  source="lower.py:init"),
+        # The approval / trigger: a fresh cart check (re-arms the approval and
+        # resets the order count).
+        ir.Action(name="cart_check", owner="service", guard=ir.T(),
+                  effects=[ir.Assignment("approved", ir.C(True)),
+                           ir.Assignment("orders", ir.C(0))],
+                  linearization="send(cart_check)",
+                  source="lower.py:cart_check"),
+        # The gated action (the thing under test): place an order.
+        ir.Action(name="place_order", owner="service", guard=place_order_guard,
+                  effects=place_order_effects,
+                  linearization="send(place_order)",
+                  source="lower.py:place_order"),
+        # The deny branch: no valid approval is present.
+        ir.Action(name="order_deny", owner="service",
+                  guard=ir.Not(place_order_guard),
+                  effects=[],
+                  source="lower.py:order_deny"),
+    ]
+    pinned = ir.BinOp("<=", ir.V("orders"), ir.C(1))
+
+    return ir.ProtocolIR(
+        name="approval-replay",
+        variables=variables,
+        channels=[],
+        actions=actions,
+        init=ir.T(),
+        pinned_property=pinned,
+        source_path="samples/apw2",
+        metadata={"protocol": "APPROVAL_REPLAY", "target": "approval_replay",
+                  "buggy": bool(buggy),
+                  "trigger_event": "%s::response" % trigger_action,
+                  "gated_event": gated_action,
+                  "single_use": not buggy},
+    )
+
+
+
+# ---------------------------------------------------------------------------
+# APW-4: distinct-count (a cap on *distinct* values)
+# ---------------------------------------------------------------------------
+
+def build_distinct_count_ir(buggy=False, cap=3):
+    """Hand-written oracle for the distinct-count shape.
+
+    A cap on the number of *distinct* values observed (e.g. "at most K
+    distinct recipients").  The two variants differ in the fidelity of the
+    counter the guard actually sees:
+
+    * **correct**: the dedup counter tracks the true distinct count, so the
+      guard admits values only while the distinct count is below the cap; the
+      pinned property ``distinct <= cap`` holds.
+    * **buggy**: the dedup counter is broken (it never advances -- a collapsed
+      / reset dedup), so the guard is always satisfied and the true distinct
+      count runs past the cap; the property ``distinct <= cap`` is violated.
+
+    Parameters
+    ----------
+    buggy : bool
+        Select the *policy* variant (the thing under test).
+    cap : int
+        The maximum number of distinct values (must be >= 1).
+
+    Returns
+    -------
+    rot.ir.ProtocolIR
+        A structurally valid IR with two state variables, three actions, and
+        the pinned property ``distinct <= cap``.
+    """
+    if not isinstance(cap, int) or cap < 1:
+        raise ValueError("cap must be an integer >= 1 (got %r)" % (cap,))
+    top = 2 * cap
+
+    admit_guard = ir.BinOp("<", ir.V("counted"), ir.C(cap))
+    new_value_effects = [
+        ir.Assignment("distinct",
+                      ir.BinOp("+", ir.V("distinct"), ir.C(1))),
+    ]
+    if not buggy:
+        # Accurate dedup: the counter tracks the true distinct count.
+        new_value_effects.append(
+            ir.Assignment("counted",
+                          ir.BinOp("+", ir.V("counted"), ir.C(1))))
+    # else: broken dedup -- the counter never advances (stays at 0).
+
+    variables = [
+        ir.StateVar("distinct", ir.IntRange(0, top), ir.MODE_PRECISE, "service",
+                    "the true number of distinct values observed"),
+        ir.StateVar("counted", ir.IntRange(0, top), ir.MODE_PRECISE, "service",
+                    "the value the policy's dedup counter reports"),
+    ]
+    actions = [
+        ir.Action(name="init", owner="service", guard=ir.T(),
+                  effects=[ir.Assignment("distinct", ir.C(0)),
+                           ir.Assignment("counted", ir.C(0))],
+                  is_initial=True,
+                  source="lower.py:init"),
+        # A new (or repeated) value arrives; the policy admits it while the
+        # counter it sees is below the cap.
+        ir.Action(name="new_value", owner="service", guard=admit_guard,
+                  effects=new_value_effects,
+                  linearization="send(new_value)",
+                  source="lower.py:new_value"),
+        ir.Action(name="deny", owner="service", guard=ir.Not(admit_guard),
+                  effects=[],
+                  source="lower.py:deny"),
+    ]
+    pinned = ir.BinOp("<=", ir.V("distinct"), ir.C(cap))
+
+    return ir.ProtocolIR(
+        name="distinct-count",
+        variables=variables,
+        channels=[],
+        actions=actions,
+        init=ir.T(),
+        pinned_property=pinned,
+        source_path="samples/apw4",
+        metadata={"protocol": "DISTINCT_COUNT", "target": "distinct_count",
+                  "buggy": bool(buggy), "cap": cap, "distinct": True,
+                  "counter_broken": buggy},
+    )
+
+
+
+# ---------------------------------------------------------------------------
+# APW-5: scoped-cap (a cap scoped to a unit, e.g. a session)
+# ---------------------------------------------------------------------------
+
+def build_scoped_cap_ir(buggy=False, cap=3, unit="session"):
+    """Hand-written oracle for the scoped-cap shape.
+
+    A cap scoped to a unit (a session / window / user): "at most K events per
+    unit".  The two variants differ in how the counter the guard sees relates
+    to the unit's true event count:
+
+    * **correct**: the guard's counter tracks the unit's event count
+      (lock-step), so the unit's count is bounded by the cap; the pinned
+      property ``<unit>_count <= cap`` holds.
+    * **buggy**: the scope is broken (the counter is reset after every event,
+      so it only ever sees the most recent one); the guard is always
+      satisfied and the unit's true count runs past the cap; the property is
+      violated.
+
+    Parameters
+    ----------
+    buggy : bool
+        Select the *policy* variant (the thing under test).
+    cap : int
+        The per-unit cap (must be >= 1).
+    unit : str
+        The scope unit name (``"session"``, ``"window"``, ``"user"``).
+
+    Returns
+    -------
+    rot.ir.ProtocolIR
+        A structurally valid IR with two state variables, three actions, and
+        the pinned property ``<unit>_count <= cap``.
+    """
+    if not isinstance(cap, int) or cap < 1:
+        raise ValueError("cap must be an integer >= 1 (got %r)" % (cap,))
+    top = 2 * cap
+    unit_var = "%s_count" % unit
+
+    admit_guard = ir.BinOp("<", ir.V("scope_count"), ir.C(cap))
+    do_event_effects = [
+        ir.Assignment(unit_var,
+                      ir.BinOp("+", ir.V(unit_var), ir.C(1))),
+    ]
+    if buggy:
+        # Scope bug: the counter is reset to 1 after every event.
+        do_event_effects.append(ir.Assignment("scope_count", ir.C(1)))
+    else:
+        # Correct: the counter tracks the unit's event count (lock-step).
+        do_event_effects.append(
+            ir.Assignment("scope_count",
+                          ir.BinOp("+", ir.V("scope_count"), ir.C(1))))
+
+    variables = [
+        ir.StateVar(unit_var, ir.IntRange(0, top), ir.MODE_PRECISE, "service",
+                    "events in the current %s (the property-relevant count)"
+                    % unit),
+        ir.StateVar("scope_count", ir.IntRange(0, cap + 1), ir.MODE_PRECISE,
+                    "service",
+                    "the counter the policy's guard actually uses"),
+    ]
+    actions = [
+        ir.Action(name="init", owner="service", guard=ir.T(),
+                  effects=[ir.Assignment(unit_var, ir.C(0)),
+                           ir.Assignment("scope_count", ir.C(0))],
+                  is_initial=True,
+                  source="lower.py:init"),
+        ir.Action(name="do_event", owner="service", guard=admit_guard,
+                  effects=do_event_effects,
+                  linearization="send(do_event)",
+                  source="lower.py:do_event"),
+        ir.Action(name="deny", owner="service", guard=ir.Not(admit_guard),
+                  effects=[],
+                  source="lower.py:deny"),
+    ]
+    pinned = ir.BinOp("<=", ir.V(unit_var), ir.C(cap))
+
+    return ir.ProtocolIR(
+        name="scoped-cap",
+        variables=variables,
+        channels=[],
+        actions=actions,
+        init=ir.T(),
+        pinned_property=pinned,
+        source_path="samples/apw5",
+        metadata={"protocol": "SCOPED_CAP", "target": "scoped_cap",
+                  "buggy": bool(buggy), "cap": cap, "unit": unit,
+                  "scope_bug": buggy},
+    )
+
+
+
+# ---------------------------------------------------------------------------
+# APW-6: event-ordering (A must precede B)
+# ---------------------------------------------------------------------------
+
+def build_event_ordering_ir(buggy=False, first_action="read",
+                            second_action="write"):
+    """Hand-written oracle for the event-ordering shape.
+
+    An ordering obligation: "B may happen only after A" (e.g. "a write may
+    only follow a read of the same resource").  The two variants differ in
+    whether the order is enforced:
+
+    * **correct**: ``do_b`` is guarded on ``a_done`` (A has occurred), so B
+      can never precede A; the pinned property ``NOT b_done OR a_done`` holds.
+    * **buggy**: ``do_b`` is unguarded, so B can occur before A; the property
+      is violated (witness ``b_done = true, a_done = false``).
+
+    Parameters
+    ----------
+    buggy : bool
+        Select the *policy* variant (the thing under test).
+    first_action : str
+        The action that must come first (A).
+    second_action : str
+        The action that must come second (B).
+
+    Returns
+    -------
+    rot.ir.ProtocolIR
+        A structurally valid IR with two state variables, four actions, and
+        the pinned property ``NOT b_done OR a_done``.
+    """
+    if buggy:
+        do_b_guard = ir.T()             # order not enforced: B may precede A
+    else:
+        do_b_guard = ir.V("a_done")     # order enforced: B only after A
+
+    variables = [
+        ir.StateVar("a_done", ir.Bool(), ir.MODE_PRECISE, "service",
+                    "A (the required first action) has occurred"),
+        ir.StateVar("b_done", ir.Bool(), ir.MODE_PRECISE, "service",
+                    "B (the gated action) has occurred"),
+    ]
+    actions = [
+        ir.Action(name="init", owner="service", guard=ir.T(),
+                  effects=[ir.Assignment("a_done", ir.C(False)),
+                           ir.Assignment("b_done", ir.C(False))],
+                  is_initial=True,
+                  source="lower.py:init"),
+        # A: the required first action.
+        ir.Action(name="do_a", owner="service", guard=ir.T(),
+                  effects=[ir.Assignment("a_done", ir.C(True))],
+                  linearization="send(do_a)",
+                  source="lower.py:do_a"),
+        # B: the gated action (the thing under test).
+        ir.Action(name="do_b", owner="service", guard=do_b_guard,
+                  effects=[ir.Assignment("b_done", ir.C(True))],
+                  linearization="send(do_b)",
+                  source="lower.py:do_b"),
+        # The deny branch: B is not yet permitted.
+        ir.Action(name="b_deny", owner="service", guard=ir.Not(do_b_guard),
+                  effects=[],
+                  source="lower.py:b_deny"),
+    ]
+    # "B has not happened before A": NOT b_done OR a_done.
+    pinned = ir.Or(ir.Not(ir.V("b_done")), ir.V("a_done"))
+
+    return ir.ProtocolIR(
+        name="event-ordering",
+        variables=variables,
+        channels=[],
+        actions=actions,
+        init=ir.T(),
+        pinned_property=pinned,
+        source_path="samples/apw6",
+        metadata={"protocol": "EVENT_ORDERING", "target": "event_ordering",
+                  "buggy": bool(buggy),
+                  "first_event": first_action,
+                  "second_event": second_action,
+                  "order_enforced": not buggy},
+    )
+
+
+
+# ---------------------------------------------------------------------------
+# APW-6: window-boundary (absolute "daily" windows — 2× burst across the reset)
+# ---------------------------------------------------------------------------
+
+def build_window_boundary_ir(buggy=False, cap=3):
+    """Hand-written oracle for the window-boundary burst shape (APW-6).
+
+    An absolute-window cap: "at most K events per (absolute) window" (e.g. per
+    day).  The two variants differ in whether the counter hard-resets at the
+    window boundary:
+
+    * **correct**: the counter does NOT hard-reset at the boundary (a sliding
+      window), so the total admitted across windows is bounded by the cap; the
+      pinned property ``total <= cap`` holds.
+    * **buggy**: the counter hard-resets to zero at the boundary (an absolute
+      window), so an attacker can do ``cap`` events just before the boundary and
+      ``cap`` more just after it — a 2× burst; the property is violated.
+
+    Parameters
+    ----------
+    buggy : bool
+        Select the *policy* variant (the thing under test).
+    cap : int
+        The per-window cap (must be >= 1).
+
+    Returns
+    -------
+    rot.ir.ProtocolIR
+        A structurally valid IR with two state variables, three or four actions
+        (the buggy variant adds ``reset_boundary``), and the pinned property
+        ``total <= cap``.
+    """
+    if not isinstance(cap, int) or cap < 1:
+        raise ValueError("cap must be an integer >= 1 (got %r)" % (cap,))
+
+    admit_guard = ir.BinOp("<", ir.V("count"), ir.C(cap))
+    variables = [
+        ir.StateVar("count", ir.IntRange(0, cap), ir.MODE_PRECISE, "service",
+                    "events in the current window (the counter the guard uses)"),
+        ir.StateVar("total", ir.IntRange(0, 2 * cap), ir.MODE_PRECISE, "service",
+                    "total events admitted across windows (the property target)"),
+    ]
+    actions = [
+        ir.Action(name="init", owner="service", guard=ir.T(),
+                  effects=[ir.Assignment("count", ir.C(0)),
+                           ir.Assignment("total", ir.C(0))],
+                  is_initial=True,
+                  source="lower.py:init"),
+        ir.Action(name="do_event", owner="service", guard=admit_guard,
+                  effects=[ir.Assignment("count",
+                                         ir.BinOp("+", ir.V("count"), ir.C(1))),
+                           ir.Assignment("total",
+                                         ir.BinOp("+", ir.V("total"), ir.C(1)))],
+                  linearization="send(do_event)",
+                  source="lower.py:do_event"),
+        ir.Action(name="deny", owner="service", guard=ir.Not(admit_guard),
+                  effects=[],
+                  source="lower.py:deny"),
+    ]
+    if buggy:
+        # Absolute window: the counter hard-resets to zero at the boundary,
+        # allowing a 2× burst (cap before + cap after).
+        actions.append(
+            ir.Action(name="reset_boundary", owner="service", guard=ir.T(),
+                      effects=[ir.Assignment("count", ir.C(0))],
+                      linearization="send(reset_boundary)",
+                      source="lower.py:reset_boundary"),
+        )
+    # Correct: no reset_boundary action (a sliding window), so the total is
+    # bounded by the cap.
+    pinned = ir.BinOp("<=", ir.V("total"), ir.C(cap))
+
+    return ir.ProtocolIR(
+        name="window-boundary",
+        variables=variables,
+        channels=[],
+        actions=actions,
+        init=ir.T(),
+        pinned_property=pinned,
+        source_path="samples/apw6",
+        metadata={"protocol": "WINDOW_BOUNDARY", "target": "window_boundary",
+                  "buggy": bool(buggy), "cap": cap,
+                  "absolute_window": buggy},
+    )

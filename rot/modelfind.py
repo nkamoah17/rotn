@@ -156,6 +156,44 @@ class ModelFinder(object):
             out[e.var] = r
         return out
 
+    def _in_domains(self, state):
+        """True iff every value in ``state`` lies within its variable's
+        declared IR domain.
+
+        The declared domains are part of the model (the state space is their
+        finite product -- see the module docstring).  A transition whose
+        effect would write a value outside a variable's domain is therefore
+        *disabled*: the post-state is not in the state space.  This keeps the
+        reachable set finite (a counter cannot grow past its declared range)
+        and keeps the pinned property from being evaluated on states that are
+        not part of the model, which would be unsound in both directions.
+
+        Variables without a declared IR domain (e.g. transient bindings not in
+        ``ir.variables``) are exempt.
+        """
+        if self.ir is None:
+            return True
+        for name, value in state.items():
+            sv = self.ir.var(name)
+            if sv is None:
+                continue
+            d = sv.domain
+            if isinstance(d, IntRange):
+                if isinstance(value, bool) or not isinstance(value, int):
+                    return False
+                if value < d.lo or value > d.hi:
+                    return False
+            elif isinstance(d, Bool):
+                if not isinstance(value, bool):
+                    return False
+            elif isinstance(d, Enum):
+                if value not in d.values:
+                    return False
+            elif isinstance(d, (list, tuple)):
+                if value not in d:
+                    return False
+        return True
+
     def reachable_states(self, max_states=None):
         """BFS from the initial state; return a list of reachable state dicts.
 
@@ -205,6 +243,11 @@ class ModelFinder(object):
                     continue
                 ns = self._apply_effects(cur, a.effects)
                 if ns is None:
+                    continue
+                if not self._in_domains(ns):
+                    # The effect leaves a variable's declared domain: the
+                    # post-state is not in the state space (TLC semantics),
+                    # so this transition is disabled.
                     continue
                 edges.append({"from": cur, "to": ns, "action": a.name})
                 key = tuple(sorted(ns.items()))
@@ -295,6 +338,10 @@ class ModelFinder(object):
                     continue
                 ns = self._apply_effects(cur, a.effects)
                 if ns is None:
+                    continue
+                if not self._in_domains(ns):
+                    # Out-of-domain post-state: transition disabled (see
+                    # :meth:`_in_domains` / :meth:`reachable_with_transitions`).
                     continue
                 key = tuple(sorted(ns.items()))
                 if key not in parent:

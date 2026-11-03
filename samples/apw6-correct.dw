@@ -1,0 +1,24 @@
+// APW-6 -- Window-boundary burst (CORRECT): "at most 3 events per day".
+//
+// The *intent* is a per-window cap.  The *fix* is a sliding window (no hard
+// reset at the boundary), so the total admitted across windows stays bounded
+// by the cap -- no 2x burst across the reset.
+//
+// This is a *forward-looking* sample: Dogwood's roadmap lists absolute-time
+// windows, but they are not in the language yet, so this does not lower to a
+// ROTN shape.  The hand-written oracle (rot.shapes.build_window_boundary_ir)
+// models the sliding window and is what ROTN decides: PROVEN.
+//
+// See: docs/apw-catalog.md (APW-6), tests/test_apw6.py.
+
+@id("apw6_correct")
+forbid (
+    principal,
+    action == Drupe::Action::"Send",
+    resource
+)
+when temporal {
+    (sum 1 for (t: Timepoint). where (
+        formerly within 1d (Drupe::Action::"Send"::request{} && tp(t))
+    )) > 3
+};

@@ -997,7 +997,7 @@ this without a server or build step:
 ## Appendix A — WP1–WP6 Evidence & Honest Fallbacks
 
 This appendix maps each work package to the **actual** tests and verdicts that
-evidence it (the 814-test product suite is authoritative; the count is pinned
+evidence it (the 886-test product suite is authoritative; the count is pinned
 by `tests/test_suite_count.py` so it cannot drift; the 80 service-plane tests
 live in the commercial layer under `rot/commercial/tests/`), and records the honest
 fallbacks we used where full automation was not feasible.

@@ -407,6 +407,39 @@ class FormerlyWithin(Node):
         return [("window", self.window), ("body", self.body)]
 
 
+class Since(Node):
+    """``<left> since within <interval> <anchor>``: ``anchor`` held within the
+    window and ``left`` has held at every step since (the negative form
+    ``!left since …`` means "left has *not* held since the anchor").
+
+    This is the Dogwood temporal operator that makes a trigger *single-use*:
+    the approval-replay idiom gates an action on "a trigger happened AND it
+    has not already been consumed since that trigger".
+    """
+
+    def __init__(self, left, window, anchor):
+        self.left = left
+        self.window = window
+        self.anchor = anchor
+
+    def _fields(self):
+        return [("left", self.left), ("window", self.window),
+                ("anchor", self.anchor)]
+
+
+class Previous(Node):
+    """``previous within <interval> <body>`` -- ``body`` held at the
+    immediately preceding window boundary (a past-only temporal operator,
+    the sibling of :class:`FormerlyWithin`)."""
+
+    def __init__(self, window, body):
+        self.window = window
+        self.body = body
+
+    def _fields(self):
+        return [("window", self.window), ("body", self.body)]
+
+
 def _has_aggregation(node):
     """Return ``True`` if ``node`` contains a ``sum`` or ``count`` aggregate."""
     if node is None:
@@ -422,6 +455,11 @@ def _has_aggregation(node):
     if isinstance(node, LetCall):
         return any(_has_aggregation(a) for a in node.args)
     if isinstance(node, FormerlyWithin):
+        return _has_aggregation(node.body)
+    if isinstance(node, Since):
+        return (_has_aggregation(node.left)
+                or _has_aggregation(node.anchor))
+    if isinstance(node, Previous):
         return _has_aggregation(node.body)
     return False
 
@@ -714,11 +752,32 @@ class Parser(object):
         return left
 
     def parse_and(self):
-        left = self.parse_comparison()
+        left = self.parse_since_conjunct()
         while self.peek() is not None and self.peek().kind == "op" and self.peek().value == "&&":
             self.advance()
-            right = self.parse_comparison()
+            right = self.parse_since_conjunct()
             left = BinaryOp("&&", left, right)
+        return left
+
+    def parse_since_conjunct(self):
+        """Parse a conjunct, optionally suffixed with ``since within <interval> <atom>``.
+
+        The Dogwood temporal grammar: ``conjunct_or_since = neg_conjunct
+        (since within <interval> atom)?``.  A plain conjunct parses exactly as
+        before; the ``since`` suffix (e.g. ``!place_order::response{…} since
+        within 1m get_cart::response{…}``) yields a :class:`Since` node, which
+        is the single-use / "not-yet-consumed" idiom (the approval-replay
+        shape).
+        """
+        left = self.parse_comparison()
+        tok = self.peek()
+        if (tok is not None and tok.value == "since"
+                and tok.kind in ("ident", "kw")):
+            self.advance()
+            self.expect("kw", "within")
+            window = self.expect("time").value
+            anchor = self.parse_primary()
+            return Since(left=left, window=window, anchor=anchor)
         return left
 
     def parse_comparison(self):
@@ -794,9 +853,17 @@ class Parser(object):
             if tok.value in ("true", "false"):
                 self.advance()
                 return Bool(tok.value == "true")
+            # Scope keywords that legitimately appear as field values /
+            # references (e.g. ``eventResource: resource``, ``input.principal:
+            # principal``) are plain identifiers in expression position.
+            if tok.value in ("resource", "principal", "action"):
+                self.advance()
+                return Ident(tok.value)
 
         # Identifier (possibly qualified, possibly an event ref, possibly a let_ call).
         if tok.kind == "ident":
+            if tok.value == "previous":
+                return self.parse_previous()
             return self.parse_ident_expr()
 
         raise DwParseError(
@@ -841,6 +908,20 @@ class Parser(object):
         window = self.expect("time").value
         body = self.parse_or()
         return FormerlyWithin(window=window, body=body)
+
+    def parse_previous(self):
+        """Parse ``previous within <interval> <body>`` -- a past-only temporal
+        operator (the body held at the immediately preceding window boundary).
+
+        ``previous`` is lexed as a plain identifier (it is not in the keyword
+        set), so it is dispatched from :meth:`parse_primary`; this method
+        consumes the token here.
+        """
+        self.advance()  # consume the "previous" identifier token
+        self.expect("kw", "within")
+        window = self.expect("time").value
+        body = self.parse_or()
+        return Previous(window=window, body=body)
 
     def parse_bindings(self):
         """Parse a comma-separated list of individually-parenthesized bindings:
@@ -969,6 +1050,13 @@ def _find_event_ref(node):
     if isinstance(node, Exists):
         return _find_event_ref(node.body)
     if isinstance(node, FormerlyWithin):
+        return _find_event_ref(node.body)
+    if isinstance(node, Since):
+        ref = _find_event_ref(node.left)
+        if ref is not None:
+            return ref
+        return _find_event_ref(node.anchor)
+    if isinstance(node, Previous):
         return _find_event_ref(node.body)
     if isinstance(node, LetCall):
         for arg in node.args:

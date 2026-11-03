@@ -1,0 +1,29 @@
+// APW-5 — Event ordering (A must precede B) — CORRECT variant.
+//
+// Intent: a `Write` is only well-formed if a `Read` of the same resource has
+// occurred first (read-before-write). The `when temporal` clause is a
+// `formerly within` whose body is a *conjunction* of two event references —
+// the "A && B in the window" shape (distinct from taint-egress, whose body is
+// a single event reference).
+//
+// The correct / buggy distinction is the event kind of the events (mirroring
+// the other shapes):
+//   * `request`  (CORRECT): the ordering is enforced on the *requested* events
+//     -> B is admitted only after A has been requested.
+//   * `response` (BUGGY):   the ordering is enforced only on *settled* events
+//     -> B can be admitted before A has settled (an out-of-order write).
+//
+// Schema: Drupe namespace.
+// See: rot/shapes.py (build_event_ordering_ir -- the hand-written oracle).
+@id("event_ordering_correct")
+forbid (
+    principal,
+    action == Drupe::Action::"Write",
+    resource
+)
+when temporal {
+    formerly within 1h (
+        Drupe::Action::"Read"::request{ input.key: context.input.key }
+        && Drupe::Action::"Write"::request{ input.key: context.input.key }
+    )
+};

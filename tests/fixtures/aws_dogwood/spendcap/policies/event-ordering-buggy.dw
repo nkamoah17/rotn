@@ -1,0 +1,23 @@
+// APW-5 — Event ordering (A must precede B) — BUGGY variant.
+//
+// Same intent as the correct variant (read-before-write), but the events are
+// `response` instead of `request`. The ordering is then enforced only on
+// *settled* events, so a `Write` can be admitted before the corresponding
+// `Read` has settled — an out-of-order write (the ordering hole).
+//
+// The one-word bug vs. the correct variant: `response` instead of `request`.
+//
+// Schema: Drupe namespace.
+// See: rot/shapes.py (build_event_ordering_ir -- the hand-written oracle).
+@id("event_ordering_buggy")
+forbid (
+    principal,
+    action == Drupe::Action::"Write",
+    resource
+)
+when temporal {
+    formerly within 1h (
+        Drupe::Action::"Read"::response{ input.key: context.input.key }
+        && Drupe::Action::"Write"::response{ input.key: context.input.key }
+    )
+};

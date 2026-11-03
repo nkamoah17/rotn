@@ -1,0 +1,28 @@
+// CORRECT spend-cap policy — sums over Transfer::request rows (all issued
+// transfers, including in-flight). The temporal window is closed and
+// reflexive, so the current request being decided is already included in the
+// sum; no `+ context.input.amount` term is needed (that would double-count).
+//
+// The one-word fix: `request` instead of `response`.
+//
+// Schema: Drupe namespace (alert_total_transfer_over_200 schema).
+//
+// Correct behavior for the same burst:
+//   fire(amount=100) -> permit  (sum=100, 100<=200)
+//   fire(amount=100) -> permit  (sum=200, 200<=200)
+//   fire(amount=100) -> DENY    (sum=300, 300>200)   <-- 3rd fire blocked
+//
+// See: examples/alert_total_transfer_over_200/policy.dw (the `request`-sum idiom),
+//      guide/08-formal-specification.md §5.4 (temporal windows are closed/reflexive).
+
+@id("spendcap_correct")
+permit (
+    principal,
+    action == Drupe::Action::"Transfer",
+    resource
+)
+when temporal {
+    (sum a for (a: Long), (t: Timepoint). where (
+        formerly within 24h (Drupe::Action::"Transfer"::request{ input.amount: a } && tp(t))
+    )) <= 200
+};

@@ -46,6 +46,7 @@ Every command is deterministic, offline, and exit-code aware (`0` proven · `1` 
 ## What it finds
 
 - **A concrete, replayable counterexample** — not just "unsafe", but the exact state that breaks the invariant, and a replay that re-derives it.
+- **Six named bug classes** — the [APW catalog](docs/apw-catalog.md): settled-sum cap bypass, approval replay, taint race, distinct-count race, session splitting, and window-boundary burst — each with a buggy/correct pair and an oracle-verified witness.
 - **A K-sweep** — the pool size that masks vs. exposes the bug (K=1 masks, K≥2 exposes).
 - **A verdict per policy** — `PROVEN` / `VIOLATED` / `UNKNOWN` (never a silent `SAFE`), with an honest coverage matrix over a whole corpus (`rot corpus`).
 - **A coach** — a runtime guard that decides one live tool call against the *same guard* the offline engine proved safe; a denial is a computed remediation (`to_proceed`), not a log line.
@@ -76,7 +77,7 @@ holds, counter = ModelFinder.from_ir(ir).forall_reachable(ir.pinned_property.eva
 # counter -> {"completed": 0, "inflight": 3}
 ```
 
-**CI**: the suite is pure-stdlib (no Java, no Z3, no network) and green in a bare Python env — **814 tests**, deterministic, exit-code aware. See `.github/workflows/rotn.yml` (tests) and `.github/workflows/publish.yml` (PyPI).
+**CI**: the suite is pure-stdlib (no Java, no Z3, no network) and green in a bare Python env — **886 tests**, deterministic, exit-code aware. See `.github/workflows/rotn.yml` (tests) and `.github/workflows/publish.yml` (PyPI).
 
 ## License — all Apache-2.0, one product
 
@@ -99,6 +100,7 @@ See [`docs/licensing.md`](docs/licensing.md) for the full position.
 
 ## Go deeper
 
+- [`docs/apw-catalog.md`](docs/apw-catalog.md) — **the APW catalog: six ways agent policies fail under concurrency** (the named bug classes, each with a buggy/correct pair, a lowering, and an oracle-verified witness)
 - [`docs/architecture.md`](docs/architecture.md) — the pipeline, the engines, the bounded re-check
 - [`docs/spendcap-demo.md`](docs/spendcap-demo.md) — the demo walkthrough
 - [`docs/spendcap-usage.md`](docs/spendcap-usage.md) — the CLI reference

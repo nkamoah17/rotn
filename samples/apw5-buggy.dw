@@ -1,0 +1,26 @@
+// APW-5 -- Session splitting (BUGGY): "at most 3 sends per session".
+//
+// The *intent* is a per-session cap.  The *bug* is in the runtime counter:
+// the session counter is reset to 1 after every send, so the guard
+// (`scope_count < 3`) is always satisfied and N sessions each admit 3 sends --
+// the total is N x the per-session cap.  The Classmethod tutorial itself notes
+// that temporal limits are per-session; this shape makes the split explicit.
+//
+// This is a *concept* sample: Dogwood has no per-session scoping operator yet,
+// so this does not lower to a ROTN shape.  The hand-written oracle
+// (rot.shapes.build_scoped_cap_ir) models the broken counter and is what ROTN
+// decides: VIOLATED, witness session_count=4, scope_count=1.
+//
+// See: docs/apw-catalog.md (APW-5), tests/test_apw5.py.
+
+@id("apw5_buggy")
+forbid (
+    principal,
+    action == Drupe::Action::"Send",
+    resource
+)
+when temporal {
+    (sum 1 for (t: Timepoint). where (
+        formerly within 1h (Drupe::Action::"Send"::request{} && tp(t))
+    )) > 3
+};

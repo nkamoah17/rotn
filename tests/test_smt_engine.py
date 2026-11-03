@@ -49,6 +49,22 @@ def _goal_gte(var, value):
     return BinOp(">=", V(var), C(value))
 
 
+def _over_cap_goal(amount=AMOUNT, cap=CAP):
+    """Over-cap goal: committed (settled + in-flight) amount exceeds the cap.
+
+    The negation of the pinned safety property, expressed *inside* the
+    declared domains: ``completed`` is bounded by the cap, so the over-cap
+    state is a commitment past the cap (settled + in-flight), not a settled
+    amount past the cap (which the domain-bounded state space cannot
+    express).  Reachable in the buggy variant, unreachable in the correct
+    one -- the liveness-side view of the same parallel-fire race.
+    """
+    return BinOp(">",
+                 BinOp("+", V("completed"),
+                       BinOp("*", V("inflight"), C(amount))),
+                 C(cap))
+
+
 @unittest.skipUnless(_Z3_AVAILABLE, "z3 not installed")
 class SMTBackendSafetyTest(unittest.TestCase):
     """Safety verdicts on the spendcap slice."""
@@ -132,13 +148,12 @@ class SMTBackendLivenessTest(unittest.TestCase):
         self.assertIs(True, prop.expression.eval(witness))
 
     def test_unreachable_goal_is_violated(self):
-        """``completed >= CAP + AMOUNT`` is unreachable in the correct variant
-        (the in-flight-aware guard stops admitting before 300 can settle) ->
-        bounded liveness fails within the horizon."""
+        """The over-cap goal (committed > cap) is unreachable in the correct
+        variant (the in-flight-aware guard stops admitting before the cap is
+        committed) -> bounded liveness fails within the horizon."""
         ir = build_ir(buggy=False)
         backend = SMTBackend(ir)
-        prop = _liveness_invariant(
-            "spendcap_over_cap", _goal_gte("completed", CAP + AMOUNT))
+        prop = _liveness_invariant("spendcap_over_cap", _over_cap_goal())
         verdict = backend.verify_liveness(bound=1000, prop=prop)
         self.assertEqual(verdict.status, "violated")
         self.assertEqual(verdict.property_kind, "liveness")
@@ -146,15 +161,21 @@ class SMTBackendLivenessTest(unittest.TestCase):
         self.assertEqual(verdict.violation_code, "LIVENESS_BOUND_EXCEEDED")
 
     def test_same_goal_reachable_in_buggy_variant(self):
-        """Discrimination check: the over-cap goal *is* reachable in the buggy
-        variant (settled-only accounting lets 300 settle) -> holds there."""
+        """Discrimination check: the over-cap goal (committed > cap) *is*
+        reachable in the buggy variant (settled-only accounting admits a
+        burst that commits 300 against the 200 cap) -> holds there,
+        witnessed by the canonical 3-parallel-fire state."""
         ir = build_ir(buggy=True)
         backend = SMTBackend(ir)
-        prop = _liveness_invariant(
-            "spendcap_over_cap", _goal_gte("completed", CAP + AMOUNT))
+        prop = _liveness_invariant("spendcap_over_cap", _over_cap_goal())
         verdict = backend.verify_liveness(bound=1000, prop=prop)
         self.assertEqual(verdict.status, "proven")
-        self.assertIs(True, prop.expression.eval(verdict.evidence["witness"]))
+        witness = verdict.evidence["witness"]
+        # The witness must actually satisfy the goal predicate.
+        self.assertIs(True, prop.expression.eval(witness))
+        # ...and it is the canonical 3-parallel-fire over-cap state, the
+        # liveness-side twin of the safety counterexample.
+        self.assertEqual(witness, {"completed": 0, "inflight": 3})
 
 
 @unittest.skipUnless(_Z3_AVAILABLE, "z3 not installed")

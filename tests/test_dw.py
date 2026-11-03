@@ -288,6 +288,165 @@ class TestComplexFixtures(unittest.TestCase):
         self.assertEqual(egress_b["contact_outsider"].guard.to_dict(),
                          ir.T().to_dict())
 
+    # ------------------------------------------------------------------
+    # APW-2: approval-replay (single-use approval)
+    # ------------------------------------------------------------------
+
+    def test_approval_replay_matches_oracle(self):
+        """The approval-replay shape must reproduce the hand-written oracle.
+
+        The two fixtures differ only in the *presence* of the ``since`` clause
+        -- the SAFE (consumed) / UNSAFE (replayable) distinction:
+          * correct -- a :class:`rot.dw.Since` node (single-use trigger);
+          * buggy   -- a bare negated event reference (replayable trigger).
+        """
+        import rot.shapes as shapes
+        correct = ("tests/fixtures/aws_dogwood/spendcap/policies/"
+                   "approval-replay-correct.dw")
+        buggy = ("tests/fixtures/aws_dogwood/spendcap/policies/"
+                 "approval-replay-buggy.dw")
+        self.assertEqual(
+            parse_file(correct).to_ir(),
+            shapes.build_approval_replay_ir(buggy=False))
+        self.assertEqual(
+            parse_file(buggy).to_ir(),
+            shapes.build_approval_replay_ir(buggy=True))
+
+    def test_approval_replay_protocol_and_buggy_flag(self):
+        """The approval-replay IR must be tagged and the buggy flag correct."""
+        correct = ("tests/fixtures/aws_dogwood/spendcap/policies/"
+                   "approval-replay-correct.dw")
+        buggy = ("tests/fixtures/aws_dogwood/spendcap/policies/"
+                 "approval-replay-buggy.dw")
+        ir_c = parse_file(correct).to_ir()
+        ir_b = parse_file(buggy).to_ir()
+        self.assertEqual(ir_c.metadata.get("protocol"), "APPROVAL_REPLAY")
+        self.assertEqual(ir_c.metadata.get("buggy"), False)
+        self.assertEqual(ir_b.metadata.get("protocol"), "APPROVAL_REPLAY")
+        self.assertEqual(ir_b.metadata.get("buggy"), True)
+        # the only structural difference is the place_order *effects*:
+        #   correct -> consumes the approval (2 effects)
+        #   buggy   -> does NOT consume it (1 effect) -> replayable
+        po_c = dict((a.name, a) for a in ir_c.actions)["place_order"]
+        po_b = dict((a.name, a) for a in ir_b.actions)["place_order"]
+        self.assertEqual(len(po_c.effects), 2)
+        self.assertEqual(len(po_b.effects), 1)
+        self.assertNotEqual(po_c.effects, po_b.effects)
+
+    # ------------------------------------------------------------------
+    # APW-4: distinct-event count cap
+    # ------------------------------------------------------------------
+
+    def test_distinct_count_matches_oracle(self):
+        """The distinct-count shape must reproduce the hand-written oracle.
+
+        The two fixtures differ only in the counted event's kind
+        (``request`` vs. ``response``) -- the SAFE / UNSAFE distinction.
+        """
+        import rot.shapes as shapes
+        correct = ("tests/fixtures/aws_dogwood/spendcap/policies/"
+                   "distinct-count-correct.dw")
+        buggy = ("tests/fixtures/aws_dogwood/spendcap/policies/"
+                 "distinct-count-buggy.dw")
+        self.assertEqual(
+            parse_file(correct).to_ir(),
+            shapes.build_distinct_count_ir(buggy=False, cap=3))
+        self.assertEqual(
+            parse_file(buggy).to_ir(),
+            shapes.build_distinct_count_ir(buggy=True, cap=3))
+
+    def test_distinct_count_protocol_and_buggy_flag(self):
+        """The distinct-count IR must be tagged and the buggy flag correct."""
+        correct = ("tests/fixtures/aws_dogwood/spendcap/policies/"
+                   "distinct-count-correct.dw")
+        buggy = ("tests/fixtures/aws_dogwood/spendcap/policies/"
+                 "distinct-count-buggy.dw")
+        ir_c = parse_file(correct).to_ir()
+        ir_b = parse_file(buggy).to_ir()
+        self.assertEqual(ir_c.metadata.get("protocol"), "DISTINCT_COUNT")
+        self.assertEqual(ir_c.metadata.get("buggy"), False)
+        self.assertEqual(ir_c.metadata.get("dw_event_kind"), "request")
+        self.assertEqual(ir_b.metadata.get("protocol"), "DISTINCT_COUNT")
+        self.assertEqual(ir_b.metadata.get("buggy"), True)
+        self.assertEqual(ir_b.metadata.get("dw_event_kind"), "response")
+        # the only structural difference is the new_value *effects*:
+        #   correct -> advances the dedup counter (2 effects)
+        #   buggy   -> counter never advances (1 effect) -> cap not enforced
+        nv_c = dict((a.name, a) for a in ir_c.actions)["new_value"]
+        nv_b = dict((a.name, a) for a in ir_b.actions)["new_value"]
+        self.assertEqual(len(nv_c.effects), 2)
+        self.assertEqual(len(nv_b.effects), 1)
+        self.assertNotEqual(nv_c.effects, nv_b.effects)
+
+    # ------------------------------------------------------------------
+    # APW-5: event ordering (A must precede B)
+    # ------------------------------------------------------------------
+
+    def test_event_ordering_matches_oracle(self):
+        """The event-ordering shape must reproduce the hand-written oracle.
+
+        The two fixtures differ only in the events' kind (``request`` vs.
+        ``response``) -- the SAFE / UNSAFE distinction.
+        """
+        import rot.shapes as shapes
+        correct = ("tests/fixtures/aws_dogwood/spendcap/policies/"
+                   "event-ordering-correct.dw")
+        buggy = ("tests/fixtures/aws_dogwood/spendcap/policies/"
+                 "event-ordering-buggy.dw")
+        self.assertEqual(
+            parse_file(correct).to_ir(),
+            shapes.build_event_ordering_ir(buggy=False))
+        self.assertEqual(
+            parse_file(buggy).to_ir(),
+            shapes.build_event_ordering_ir(buggy=True))
+
+    def test_event_ordering_protocol_and_buggy_flag(self):
+        """The event-ordering IR must be tagged and the buggy flag correct."""
+        correct = ("tests/fixtures/aws_dogwood/spendcap/policies/"
+                   "event-ordering-correct.dw")
+        buggy = ("tests/fixtures/aws_dogwood/spendcap/policies/"
+                 "event-ordering-buggy.dw")
+        ir_c = parse_file(correct).to_ir()
+        ir_b = parse_file(buggy).to_ir()
+        self.assertEqual(ir_c.metadata.get("protocol"), "EVENT_ORDERING")
+        self.assertEqual(ir_c.metadata.get("buggy"), False)
+        self.assertEqual(ir_c.metadata.get("dw_event_kind"), "request")
+        self.assertEqual(ir_b.metadata.get("protocol"), "EVENT_ORDERING")
+        self.assertEqual(ir_b.metadata.get("buggy"), True)
+        self.assertEqual(ir_b.metadata.get("dw_event_kind"), "response")
+        # the only structural difference is the do_b guard:
+        #   correct -> a_done (B only after A) ; buggy -> True (unguarded)
+        b_c = dict((a.name, a) for a in ir_c.actions)["do_b"]
+        b_b = dict((a.name, a) for a in ir_b.actions)["do_b"]
+        self.assertNotEqual(b_c.guard.to_dict(), b_b.guard.to_dict())
+        self.assertEqual(b_c.guard.to_dict(), ir.V("a_done").to_dict())
+        self.assertEqual(b_b.guard.to_dict(), ir.T().to_dict())
+
+    # ------------------------------------------------------------------
+    # APW-6: net open-count window cap
+    # ------------------------------------------------------------------
+
+    def test_count_window_pair_matches_oracle(self):
+        """The count-window pair must reproduce the hand-written oracle.
+
+        The two fixtures differ only in the counted events' kind (``request``
+        vs. ``response``); the net-open-count model is the same.
+        """
+        import rot.shapes as shapes
+        correct = ("tests/fixtures/aws_dogwood/spendcap/policies/"
+                   "count-window-correct.dw")
+        buggy = ("tests/fixtures/aws_dogwood/spendcap/policies/"
+                 "count-window-buggy.dw")
+        self.assertEqual(parse_file(correct).to_ir(),
+                         shapes.build_count_window_ir(3))
+        self.assertEqual(parse_file(buggy).to_ir(),
+                         shapes.build_count_window_ir(3))
+        # and the buggy flag is threaded through the event kind.
+        self.assertEqual(parse_file(correct).to_ir().metadata.get("buggy"),
+                         False)
+        self.assertEqual(parse_file(buggy).to_ir().metadata.get("buggy"),
+                         True)
+
 
 if __name__ == "__main__":
     unittest.main()

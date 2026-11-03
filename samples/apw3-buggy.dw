@@ -1,0 +1,35 @@
+// BUGGY taint-egress policy — "never contact an outsider after touching
+// confidential data".  The `when temporal` clause is a *bare temporal trigger*
+// predicate (not an aggregate, not compared to a cap): the confidential-data
+// read (`ReadConfidential`) taints the agent's context, and the policy's
+// scope (`Send`) names the egress that is forbidden while the taint is held.
+//
+// The one-word bug vs. the correct variant: `response` instead of `request`.
+//   * `response`-trigger (BUGGY):  the read's *response* alone taints the
+//     context, leaving a window in which the egress is admitted while the
+//     agent still holds private data (the exfiltration hole).  VIOLATED.
+//   * `request`-trigger  (CORRECT): the read's *request* already taints the
+//     context, so the egress is admitted only when the agent is NOT holding
+//     private data (the NoExfiltration rule holds).  PROVEN.
+//
+// Schema: Drupe namespace.  `ReadConfidential` carries `output.label`; the
+// `private` label marks the data as confidential.
+// The response event carries the same `output` as its request, so
+// `response{ output.label: "private" }` is well-formed.
+//
+// Counterexample (this variant):
+//   ReadConfidential  -> agent now holds private data (taint set)
+//   Send              -> admitted (unguarded) -> EXFILTRATION  <-- violation
+//
+// See: rot/agent_harness.py (the exfiltration model this shape lowers to),
+//      rot/shapes.py  (build_taint_egress_ir -- the hand-written oracle).
+
+@id("taint_egress_buggy")
+forbid (
+    principal,
+    action == Drupe::Action::"Send",
+    resource
+)
+when temporal {
+    formerly within 24h Drupe::Action::"ReadConfidential"::response{ output.label: "private" }
+};

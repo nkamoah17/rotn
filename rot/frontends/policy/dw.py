@@ -52,12 +52,19 @@ PROPERTY_KIND = "safety"
 #: expect.  The four aggregate shapes all pin a "within-cap" safety invariant;
 #: the taint-egress shape pins the ``no_exfiltration`` invariant instead
 #: (the thesis's "never contact outsiders after touching confidential data").
+#: the APW corpus shapes (docs/apw-catalog.md) each pin their own invariant
+#: (see the ``rot.shapes`` oracles for the exact property).
 _SHAPE = {
     "SPENDCAP": ("SPENDCAP", "spendcap_within_cap"),
     "COUNT_WINDOW": ("SPENDCAP", "spendcap_within_cap"),
     "EXISTS_SUM": ("SPENDCAP", "spendcap_within_cap"),
     "REFUND_BUDGET": ("SPENDCAP", "spendcap_within_cap"),
     "TAINT_EGRESS": ("TAINT_EGRESS", "no_exfiltration"),
+    "APPROVAL_REPLAY": ("APPROVAL_REPLAY", "approval_single_use"),
+    "DISTINCT_COUNT": ("DISTINCT_COUNT", "distinct_within_cap"),
+    "SCOPED_CAP": ("SCOPED_CAP", "scoped_within_cap"),
+    "EVENT_ORDERING": ("EVENT_ORDERING", "a_precedes_b"),
+    "WINDOW_BOUNDARY": ("WINDOW_BOUNDARY", "total_within_cap"),
 }
 
 

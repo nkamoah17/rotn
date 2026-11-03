@@ -1,0 +1,33 @@
+// APW-6 — Net open-count window cap (opens minus completed reviews) — CORRECT variant.
+//
+// Intent: a coding agent may hold at most 3 open pull requests at once. A new
+// open is allowed only while fewer than 3 are open, measured as opens minus
+// completed reviews in the 24h window; the guard runs before the new PR lands,
+// so `< 3` now means at most 3 open afterwards.
+//
+// The correct / buggy distinction is the event kind of the counted events
+// (mirroring the other shapes):
+//   * `request`  (CORRECT): counting *requested* opens / reviews -> the net
+//     open count is accurate.
+//   * `response` (BUGGY):   counting only *settled* opens / reviews -> a
+//     denied open or a stalled review distorts the net count (the cap is not
+//     enforced reliably).
+//
+// The `-` between the two counts is the arithmetic: net opens = opens - reviews.
+//
+// Schema: Repo namespace (cap_open_agent_prs_windowed example).
+// See: rot/shapes.py (the count-window oracle, build_count_window_ir).
+@id("count_window_correct")
+permit (
+    principal,
+    action == Repo::Action::"OpenPullRequest",
+    resource
+)
+when temporal {
+    (count for (t: Timepoint). where (
+        formerly within 24h (Repo::Action::"OpenPullRequest"::request{} && tp(t))
+    ))
+    - (count for (t: Timepoint). where (
+        formerly within 24h (Repo::Action::"CompleteReview"::request{} && tp(t))
+    )) < 3
+};
