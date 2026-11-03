@@ -6,7 +6,7 @@ temporal safety policies against bounded state-space models using three
 independent engines (SMT/Z3, TLC, and policy-direct).  It ships with a
 ``rot`` console script for the product-grade CLI.
 
-Python 3.6 compatible.  No external dependencies.
+Python 3.8+.  No external dependencies.
 """
 
 from setuptools import setup, find_packages
@@ -30,7 +30,7 @@ def _read_version():
                     return line.split("=", 1)[1].strip().strip('"').strip("'")
     except (IOError, OSError):
         pass
-    return "0.1.0"
+    return "0.2.0"
 
 
 setup(
@@ -56,7 +56,7 @@ setup(
         "bounded re-check loop, maps findings to SOC 2 / AIUC controls, gates "
         "depth by tier, and emits a deterministic, hashed trace that "
         "replays as an interactive proof on GitHub Pages.\n\n"
-        "Pure stdlib, zero external dependencies, Python 3.6+.\n\n"
+        "Pure stdlib, zero external dependencies, Python 3.8+.\n\n"
         "Repository: [nkamoah17/rotn]"
         "(https://github.com/nkamoah17/rotn)\n"
     ),
@@ -69,7 +69,7 @@ setup(
         "Documentation": "https://nkamoah17.github.io/rotn/",
     },
     license="Apache-2.0",
-    python_requires=">=3.6",
+    python_requires=">=3.8",
     packages=find_packages(exclude=[
         "tests", "tests.*",        # top-level test tree (not shipped)
         "rot.tests", "rot.tests.*",  # in-package Java-build integration tests
@@ -94,13 +94,12 @@ setup(
         "Intended Audience :: Information Technology",
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "Topic :: Security",
         "Topic :: Software Development :: Quality Assurance",
         "Topic :: Software Development :: Testing",

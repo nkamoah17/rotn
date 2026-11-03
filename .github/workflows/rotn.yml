@@ -27,9 +27,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The package floor is Python 3.6 (verified locally); 3.6 is EOL and
-        # not preinstalled on runners, so the CI legs cover 3.8 -> 3.12.
-        python: ["3.8", "3.10", "3.12"]
+        # The package floor is Python 3.8 (see setup.py); the CI legs cover
+        # 3.10 -> 3.13 (3.8/3.9 stay supported but aren't preinstalled on the
+        # current runner images).
+        python: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

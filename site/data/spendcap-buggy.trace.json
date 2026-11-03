@@ -47,7 +47,7 @@
         "inflight": 3
       }
     },
-    "hash": "92c2cbe7f7b12944b7d1a4d9ea905b5c0331473d83cdfd00d1d74f4061621839",
+    "hash": "650b18bcdbbb21042157867f3590f0b4f5660eee5a07873199de89d9573078ff",
     "policy": {
       "action": "Transfer",
       "amount": 100,
@@ -63,7 +63,7 @@
       "status": "proven",
       "witness": null
     },
-    "rot_version": "0.1.0",
+    "rot_version": "0.2.0",
     "schema": "caravel.coach/v1",
     "status": "closed",
     "to_proceed": {
@@ -241,7 +241,7 @@
       "s0_3"
     ]
   },
-  "hash": "d9966eed79ad84c314126abc00850578197d5b4c5985a88a18547b0089f3b87f",
+  "hash": "2207f820e063e565d2758ec66eaec28fb86aed644010a3e349a035b43916d2ff",
   "horizon": 12,
   "manifest_id": "mf-4227160622359a2c",
   "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 3 * 100 = 300 -- past the cap of 200. The counterexample is {'completed': 0, 'inflight': 3}. (20 reachable states explored.)",
@@ -273,7 +273,7 @@
     "policy_hash": "4227160622359a2cc5678aa61ffb0e7e8cd9b5fa6fd489317a29ff6e0c284db4",
     "policy_source": "samples/spendcap-buggy.dw"
   },
-  "rot_version": "0.1.0",
+  "rot_version": "0.2.0",
   "schema": "caravel.rtf/v1",
   "source": {
     "hash": "4227160622359a2cc5678aa61ffb0e7e8cd9b5fa6fd489317a29ff6e0c284db4",

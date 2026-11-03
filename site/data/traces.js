@@ -226,7 +226,7 @@ window.ROT_TRACES = {
       ],
       "tenant_scope": "tenant:acme"
     },
-    "hash": "1ab24ee05662692f8d450f33e0065171d0dd412ef40d37f9d931f2ccdd3435ed",
+    "hash": "5cd09c55c6ba741dd0cbb87bdb3662ea81a1a470416ef9130353bdf4e4cbd547",
     "horizon": 12,
     "manifest_id": "mf-61c0c11ae7156e0d",
     "narration": "ROTN MCP findings  (Cedar-AR vocabulary, temporal proof)\n====================================================\nmanifest server=caravel-agent-tools  version=1.0.0\n         tenant_scope=tenant:acme  allowed_write_fields=['account.balance']\ntools    leaky_balance\n\nbehavioral audit (adversarial agent, tool-call sequences):\n  status : VIOLATED -- a reachable tool-call sequence breaks the property\n  attack : leaky_balance\n  witness: {\"holding_private\": true, \"read_foreign\": true, \"used_outbound\": true, \"wrote_unapproved\": true}\n  broken : no_cross_tenant_read, no_unapproved_write\n  risk   : LETHAL TRIFECTA -- the agent can hold the tenant's private data AND reach an outbound channel (flag, per the thesis; not a hard violation)\n\nRESULT: BLOCK -- 2 Cedar-AR finding(s)\n\n[ERROR] Overly Permissive\n    facet: policy   property: field_write_permission\n    controls: CC6.1, AIUC-1\n    tool 'leaky_balance' writes field(s) ['account.ssn'] not in the tenant's allowed write set ['account.balance']\n    witness: {\"allowed_write_fields\": [\"account.balance\"], \"over_permission\": [\"account.ssn\"], \"tool\": \"leaky_balance\", \"write_fields\": [\"account.balance\", \"account.ssn\"]}\n\n[ERROR] Overly Permissive\n    facet: policy   property: tenant_read_isolation\n    controls: CC6.3, AIUC-1\n    tool 'leaky_balance' reads cross-tenant field(s) ['tenant:globex.account.balance'] outside its tenant_scope 'tenant:acme'\n    witness: {\"cross_tenant_fields\": [\"tenant:globex.account.balance\"], \"read_fields\": [\"tenant:acme.account.balance\", \"tenant:globex.account.balance\"], \"tenant_scope\": \"...\n",
@@ -259,7 +259,7 @@ window.ROT_TRACES = {
       "policy_hash": "61c0c11ae7156e0d2c3d1142061112e5d8b60b17df5d323c01d95e25ec0e5fc9",
       "policy_source": "examples/mcp-manifest-bad.json"
     },
-    "rot_version": "0.1.0",
+    "rot_version": "0.2.0",
     "schema": "caravel.rtf/v1",
     "source": {
       "hash": "61c0c11ae7156e0d2c3d1142061112e5d8b60b17df5d323c01d95e25ec0e5fc9",
@@ -382,7 +382,7 @@ window.ROT_TRACES = {
       ],
       "tenant_scope": "tenant:acme"
     },
-    "hash": "ab5b7620698a380347ab638c242d571217e710ee7a80562fb5b68f4d9316b1b7",
+    "hash": "0a5a53804e60e869790e2f24e778a43e5e60b3dac7f448a5bf56de1cfec06a2d",
     "horizon": 12,
     "manifest_id": "mf-b3886e274afb2fe1",
     "narration": "ROTN MCP findings  (Cedar-AR vocabulary, temporal proof)\n====================================================\nmanifest server=caravel-agent-tools  version=1.0.0\n         tenant_scope=tenant:acme  allowed_write_fields=['account.balance']\ntools    get_balance, update_balance\n\nbehavioral audit (adversarial agent, tool-call sequences):\n  status : PROVEN -- the property holds in all 3 reachable states\n  risk   : LETHAL TRIFECTA -- the agent can hold the tenant's private data AND reach an outbound channel (flag, per the thesis; not a hard violation)\n\nRESULT: PASS -- field and tenant structural checks clean; no Cedar-AR findings\n\nCedar-AR findings: none",
@@ -415,7 +415,7 @@ window.ROT_TRACES = {
       "policy_hash": "b3886e274afb2fe1e53b2e3006429583c23ff6444f0ddce3558dda0217737f0b",
       "policy_source": "examples/mcp-manifest-good.json"
     },
-    "rot_version": "0.1.0",
+    "rot_version": "0.2.0",
     "schema": "caravel.rtf/v1",
     "source": {
       "hash": "b3886e274afb2fe1e53b2e3006429583c23ff6444f0ddce3558dda0217737f0b",
@@ -497,7 +497,7 @@ window.ROT_TRACES = {
           "inflight": 3
         }
       },
-      "hash": "92c2cbe7f7b12944b7d1a4d9ea905b5c0331473d83cdfd00d1d74f4061621839",
+      "hash": "650b18bcdbbb21042157867f3590f0b4f5660eee5a07873199de89d9573078ff",
       "policy": {
         "action": "Transfer",
         "amount": 100,
@@ -513,7 +513,7 @@ window.ROT_TRACES = {
         "status": "proven",
         "witness": null
       },
-      "rot_version": "0.1.0",
+      "rot_version": "0.2.0",
       "schema": "caravel.coach/v1",
       "status": "closed",
       "to_proceed": {
@@ -691,7 +691,7 @@ window.ROT_TRACES = {
         "s0_3"
       ]
     },
-    "hash": "d9966eed79ad84c314126abc00850578197d5b4c5985a88a18547b0089f3b87f",
+    "hash": "2207f820e063e565d2758ec66eaec28fb86aed644010a3e349a035b43916d2ff",
     "horizon": 12,
     "manifest_id": "mf-4227160622359a2c",
     "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 3 * 100 = 300 -- past the cap of 200. The counterexample is {'completed': 0, 'inflight': 3}. (20 reachable states explored.)",
@@ -723,7 +723,7 @@ window.ROT_TRACES = {
       "policy_hash": "4227160622359a2cc5678aa61ffb0e7e8cd9b5fa6fd489317a29ff6e0c284db4",
       "policy_source": "samples/spendcap-buggy.dw"
     },
-    "rot_version": "0.1.0",
+    "rot_version": "0.2.0",
     "schema": "caravel.rtf/v1",
     "source": {
       "hash": "4227160622359a2cc5678aa61ffb0e7e8cd9b5fa6fd489317a29ff6e0c284db4",
@@ -1024,7 +1024,7 @@ window.ROT_TRACES = {
       ],
       "witness_path": []
     },
-    "hash": "99df3f52b43549e98de9703ab6c83a17ff4e53adf641d3f56c27f59337a41baf",
+    "hash": "8924ab18eb71e2d9ad2570da4d0188c52b3f2964c62c80f5bede35e24965e6a5",
     "horizon": 12,
     "manifest_id": "mf-5834b20b0999946d",
     "narration": "The spend-cap policy is PROVEN. The ``spend_ok`` guard charges in-flight requests against the cap, so the settled + in-flight amount never exceeds 200 in any of the 5 reachable states.",
@@ -1056,7 +1056,7 @@ window.ROT_TRACES = {
       "policy_hash": "5834b20b0999946dd43eeca87eb10f6b2b2f57e057e691b3f003e501e63aab31",
       "policy_source": "samples/spendcap-buggy.dw"
     },
-    "rot_version": "0.1.0",
+    "rot_version": "0.2.0",
     "schema": "caravel.rtf/v1",
     "source": {
       "hash": "5834b20b0999946dd43eeca87eb10f6b2b2f57e057e691b3f003e501e63aab31",
@@ -1165,7 +1165,7 @@ window.ROT_TRACES = {
           "inflight": 2
         }
       },
-      "hash": "e4098e1ab5ba718a0f289edaca8337c88c2d84d75a33d67ad51eeef6c9af9490",
+      "hash": "5b83d90e2830cb84aa3cb7a6a565a1e102cd666c8d0da11487baf6cb172a2fa3",
       "policy": {
         "action": "Transfer",
         "amount": 100,
@@ -1181,7 +1181,7 @@ window.ROT_TRACES = {
         "status": "proven",
         "witness": null
       },
-      "rot_version": "0.1.0",
+      "rot_version": "0.2.0",
       "schema": "caravel.coach/v1",
       "status": "closed",
       "to_proceed": {
@@ -1394,7 +1394,7 @@ window.ROT_TRACES = {
         "s100_2"
       ]
     },
-    "hash": "c9ab293816e242bd9d65e61898730f4dabb93f3c50e7208f8bd10f5604a2d787",
+    "hash": "7aff3db15dde4fa1cbdf168b6b05066ebd40cdf9865e390e89d6f25274854ef9",
     "horizon": 12,
     "manifest_id": "mf-1030049f3b5c2797",
     "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 2 * 100 = 200 -- past the cap of 200. The counterexample is {'completed': 100, 'inflight': 2}. (9 reachable states explored.)",
@@ -1426,7 +1426,7 @@ window.ROT_TRACES = {
       "policy_hash": "1030049f3b5c27972c9d19acd3289c4d11fb9d1fe41c59253e4ab09e3faab404",
       "policy_source": "samples/spendcap-buggy.dw"
     },
-    "rot_version": "0.1.0",
+    "rot_version": "0.2.0",
     "schema": "caravel.rtf/v1",
     "source": {
       "hash": "1030049f3b5c27972c9d19acd3289c4d11fb9d1fe41c59253e4ab09e3faab404",
@@ -1648,7 +1648,7 @@ window.ROT_TRACES = {
           "inflight": 3
         }
       },
-      "hash": "1cb5984d886a8466a97d6b2dd26294e71580df9b3f749f94a826c713080c258d",
+      "hash": "7f61d3534eb8bb7d5bc0e347200894f36a1c3c7354f86610b74d123198cf5f75",
       "policy": {
         "action": "Transfer",
         "amount": 100,
@@ -1664,7 +1664,7 @@ window.ROT_TRACES = {
         "status": "proven",
         "witness": null
       },
-      "rot_version": "0.1.0",
+      "rot_version": "0.2.0",
       "schema": "caravel.coach/v1",
       "status": "closed",
       "to_proceed": {
@@ -1844,7 +1844,7 @@ window.ROT_TRACES = {
         "s0_3"
       ]
     },
-    "hash": "554f1344ac6169b6ca5354d10e35843c91307aa37a49247416396ed6e2f3114f",
+    "hash": "fc9be14b0aa70d4be86885ad6b4a66d520d492fdb7ecaf36819903d32beb27e5",
     "horizon": 12,
     "manifest_id": "mf-ba311c76ea6f5884",
     "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 3 * 100 = 300 -- past the cap of 200. The counterexample is {'completed': 0, 'inflight': 3}. (14 reachable states explored.)",
@@ -1876,7 +1876,7 @@ window.ROT_TRACES = {
       "policy_hash": "ba311c76ea6f5884ccf4526f6e611793db5de132e657807b92344a9b8893c3e7",
       "policy_source": "samples/spendcap-buggy.dw"
     },
-    "rot_version": "0.1.0",
+    "rot_version": "0.2.0",
     "schema": "caravel.rtf/v1",
     "source": {
       "hash": "ba311c76ea6f5884ccf4526f6e611793db5de132e657807b92344a9b8893c3e7",
@@ -2149,7 +2149,7 @@ window.ROT_TRACES = {
       ],
       "witness_path": []
     },
-    "hash": "af30636c491dfa4f2d96fdb620a90ff29b5d82eb8db465643cfa9f1d4e058269",
+    "hash": "618df504da5a479195cceb6c7189f0ebb8558b08e785cc50f1ad26d22a05aeab",
     "horizon": 12,
     "manifest_id": "mf-a848e9a4e6c2a999",
     "narration": "The spend-cap policy is PROVEN. The ``spend_ok`` guard charges in-flight requests against the cap, so the settled + in-flight amount never exceeds 200 in any of the 6 reachable states.",
@@ -2181,7 +2181,7 @@ window.ROT_TRACES = {
       "policy_hash": "a848e9a4e6c2a9994e9c6eb3cdce2d6847bb827b9a1511b90e68b86386010596",
       "policy_source": "samples/spendcap-correct.dw"
     },
-    "rot_version": "0.1.0",
+    "rot_version": "0.2.0",
     "schema": "caravel.rtf/v1",
     "source": {
       "hash": "a848e9a4e6c2a9994e9c6eb3cdce2d6847bb827b9a1511b90e68b86386010596",
@@ -2331,7 +2331,7 @@ window.ROT_TRACES = {
       ],
       "witness_path": []
     },
-    "hash": "0edfb7fa38dd7a2bd57455affa513f51ce0c4df0fe02374e2f936f22aa791a09",
+    "hash": "8a23b4016a6b88ee4ef5ae91b2b01fa5ecda39df036c7714c6612d913c20ce06",
     "horizon": 12,
     "manifest_id": "mf-97c802024552fe2f",
     "narration": "The spend-cap policy is PROVEN. The ``spend_ok`` guard charges in-flight requests against the cap, so the settled + in-flight amount never exceeds 200 in any of the 5 reachable states.",
@@ -2363,7 +2363,7 @@ window.ROT_TRACES = {
       "policy_hash": "97c802024552fe2fcf7fbf2e04f2a2e083d93acb40331b68c160401400630352",
       "policy_source": "samples/spendcap-correct.dw"
     },
-    "rot_version": "0.1.0",
+    "rot_version": "0.2.0",
     "schema": "caravel.rtf/v1",
     "source": {
       "hash": "97c802024552fe2fcf7fbf2e04f2a2e083d93acb40331b68c160401400630352",
@@ -2515,7 +2515,7 @@ window.ROT_TRACES = {
       ],
       "witness_path": []
     },
-    "hash": "941def2dc66f93bcc1a0388ee7bb5fb63a574295a59f2798b310e3d00fd5679c",
+    "hash": "2dc13f6677b9a4b1a182ff05b57bda9b319230eb11718bd94e0cb08bb5121d3f",
     "horizon": 12,
     "manifest_id": "mf-b863363abfa870cd",
     "narration": "The spend-cap policy is PROVEN. The ``spend_ok`` guard charges in-flight requests against the cap, so the settled + in-flight amount never exceeds 200 in any of the 6 reachable states.",
@@ -2547,7 +2547,7 @@ window.ROT_TRACES = {
       "policy_hash": "b863363abfa870cd3f788c4287e346e2c2cb098c53675c73939391e50cf7bddd",
       "policy_source": "samples/spendcap-correct.dw"
     },
-    "rot_version": "0.1.0",
+    "rot_version": "0.2.0",
     "schema": "caravel.rtf/v1",
     "source": {
       "hash": "b863363abfa870cd3f788c4287e346e2c2cb098c53675c73939391e50cf7bddd",
@@ -2705,7 +2705,7 @@ window.ROT_TRACES = {
       ],
       "witness_path": []
     },
-    "hash": "568297495c4f87de7190f0045046f55b22f9bca88e8e6642d2ea243b6ab3f553",
+    "hash": "745f450adddd0423482d7469fdd544d2b88b07341935f840966eecd8b26cf24d",
     "horizon": 12,
     "manifest_id": "mf-ced79ff21583e50d",
     "narration": "The spend-cap policy is PROVEN. The ``spend_ok`` guard charges in-flight requests against the cap, so the settled + in-flight amount never exceeds 200 in any of the 6 reachable states.",
@@ -2737,7 +2737,7 @@ window.ROT_TRACES = {
       "policy_hash": "ced79ff21583e50d94956420f5de8f20ef806eaa11c61c436bdaabc22217e4c5",
       "policy_source": "samples/spendcap-correct.dw"
     },
-    "rot_version": "0.1.0",
+    "rot_version": "0.2.0",
     "schema": "caravel.rtf/v1",
     "source": {
       "hash": "ced79ff21583e50d94956420f5de8f20ef806eaa11c61c436bdaabc22217e4c5",

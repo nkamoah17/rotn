@@ -16,7 +16,7 @@ It depends on the ``rotn`` core (``pip install rotn``) and ships the
     pip install rotn            # the Apache-2.0 core (proof wedge)
     pip install rotn-commercial # the SSPL-1.0 commercial layer
 
-Python 3.6 compatible.  Zero *external* runtime deps (LangChain / MCP are
+Python 3.8+.  Zero *external* runtime deps (LangChain / MCP are
 optional, imported lazily only when the corresponding command is used).
 """
 
@@ -36,7 +36,7 @@ def _read_version():
                     return line.split("=", 1)[1].strip().strip('"').strip("'")
     except (IOError, OSError):
         pass
-    return "0.1.0"
+    return "0.2.0"
 
 
 setup(
@@ -65,7 +65,7 @@ setup(
         "Licensing": "https://github.com/nkamoah17/rotn/blob/main/docs/licensing.md",
     },
     license="Server Side Public License (SSPL-1.0) / commercial",
-    python_requires=">=3.6",
+    python_requires=">=3.8",
     # Only the commercial sub-packages -- the Apache-2.0 core comes from ``rotn``.
     packages=find_packages(include=["rot.commercial", "rot.commercial.*"]),
     # The free core is a hard dependency (this layer is a plugin on it).
@@ -75,10 +75,10 @@ setup(
         "Intended Audience :: Developers",
         "Intended Audience :: Information Technology",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
         "Topic :: Security",
         "Topic :: Software Development :: Quality Assurance",
         "Operating System :: OS Independent",

@@ -11,11 +11,11 @@ Pipeline: front-end -> ProtocolIR (the narrow waist) -> linearization
 -> engine (symbolic | SMT | policy-direct) + bounded re-check -> verdict
 -> deterministic manifest (the RTF trace).
 
-This package is pure-stdlib (Python 3.6 compatible) so it runs fully
+This package is pure-stdlib (Python 3.8+) so it runs fully
 offline.  See ``docs/architecture.md`` for the single source of truth.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "sat",

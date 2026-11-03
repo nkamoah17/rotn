@@ -1466,7 +1466,7 @@ def _sarif(status, prop, witness, policy):
                     "master/Schemata/sarif-schema-2.1.0.json"),
         "version": "2.1.0",
         "runs": [{
-            "tool": {"driver": {"name": "ROTN", "version": "0.1.0"}},
+            "tool": {"driver": {"name": "ROTN", "version": rot.__version__}},
             "artifacts": [{"location": {"uri": "file://"
                                         + policy.replace("\\", "/")}}],
             "results": [{"ruleId": "rotn.%s" % prop,

@@ -220,7 +220,7 @@
     ],
     "tenant_scope": "tenant:acme"
   },
-  "hash": "1ab24ee05662692f8d450f33e0065171d0dd412ef40d37f9d931f2ccdd3435ed",
+  "hash": "5cd09c55c6ba741dd0cbb87bdb3662ea81a1a470416ef9130353bdf4e4cbd547",
   "horizon": 12,
   "manifest_id": "mf-61c0c11ae7156e0d",
   "narration": "ROTN MCP findings  (Cedar-AR vocabulary, temporal proof)\n====================================================\nmanifest server=caravel-agent-tools  version=1.0.0\n         tenant_scope=tenant:acme  allowed_write_fields=['account.balance']\ntools    leaky_balance\n\nbehavioral audit (adversarial agent, tool-call sequences):\n  status : VIOLATED -- a reachable tool-call sequence breaks the property\n  attack : leaky_balance\n  witness: {\"holding_private\": true, \"read_foreign\": true, \"used_outbound\": true, \"wrote_unapproved\": true}\n  broken : no_cross_tenant_read, no_unapproved_write\n  risk   : LETHAL TRIFECTA -- the agent can hold the tenant's private data AND reach an outbound channel (flag, per the thesis; not a hard violation)\n\nRESULT: BLOCK -- 2 Cedar-AR finding(s)\n\n[ERROR] Overly Permissive\n    facet: policy   property: field_write_permission\n    controls: CC6.1, AIUC-1\n    tool 'leaky_balance' writes field(s) ['account.ssn'] not in the tenant's allowed write set ['account.balance']\n    witness: {\"allowed_write_fields\": [\"account.balance\"], \"over_permission\": [\"account.ssn\"], \"tool\": \"leaky_balance\", \"write_fields\": [\"account.balance\", \"account.ssn\"]}\n\n[ERROR] Overly Permissive\n    facet: policy   property: tenant_read_isolation\n    controls: CC6.3, AIUC-1\n    tool 'leaky_balance' reads cross-tenant field(s) ['tenant:globex.account.balance'] outside its tenant_scope 'tenant:acme'\n    witness: {\"cross_tenant_fields\": [\"tenant:globex.account.balance\"], \"read_fields\": [\"tenant:acme.account.balance\", \"tenant:globex.account.balance\"], \"tenant_scope\": \"...\n",
@@ -253,7 +253,7 @@
     "policy_hash": "61c0c11ae7156e0d2c3d1142061112e5d8b60b17df5d323c01d95e25ec0e5fc9",
     "policy_source": "examples/mcp-manifest-bad.json"
   },
-  "rot_version": "0.1.0",
+  "rot_version": "0.2.0",
   "schema": "caravel.rtf/v1",
   "source": {
     "hash": "61c0c11ae7156e0d2c3d1142061112e5d8b60b17df5d323c01d95e25ec0e5fc9",
