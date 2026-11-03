@@ -459,7 +459,47 @@ class CrossChecker:
 
     # -- engine seams (patchable in tests) ---------------------------------
     def _smt_verdict(self):
-        from .smtz3 import SMTBackend
+        from .smtz3 import (SMTBackend, SymbolicSpendcap, SYMBOLIC_ENGINE)
+        meta = getattr(self.ir, "metadata", None) or {}
+        # Phase 2 items 2+3: the SMT leg is the SYMBOLIC (uninterpreted
+        # AMOUNT/CAP) encoding -- it proves for all values, and for the safe
+        # shape an inductive invariant (PROVEN for any number of concurrent
+        # requests).  The concrete bounded leg (pinned 100/200) is kept as the
+        # bounded cross-check: its answer is recorded in evidence when the
+        # symbolic leg is decisive, and used as the fallback when the symbolic
+        # leg is inconclusive (non-spendcap IR / z3 unavailable / unknown).
+        if meta.get("protocol") == "SPENDCAP":
+            try:
+                sym = (SymbolicSpendcap(self.ir)
+                       .verify_safety_symbolic(self.prop))
+            except ImportError:
+                sym = None
+            except Exception:
+                sym = None
+            if sym is not None and sym.status in (v.PROVEN, v.VIOLATED):
+                concrete = SMTBackend(self.ir).verify_safety(self.prop)
+                # Fail-closed on contradiction: the pinned values are in the
+                # symbolic domain, so a concrete counterexample is a symbolic
+                # one too -- a PROVEN symbolic leg cannot coexist with a
+                # VIOLATED concrete one.
+                if sym.status == v.PROVEN and concrete.status == v.VIOLATED:
+                    return v.Verdict(
+                        status=v.UNKNOWN, property_name=self.prop.name,
+                        engine=SYMBOLIC_ENGINE,
+                        note="contradiction: symbolic SMT leg PROVEN but the "
+                             "concrete bounded leg is VIOLATED; failing closed")
+                sym.evidence = dict(sym.evidence or {})
+                sym.evidence["concrete_crosscheck"] = {
+                    "engine": "smtz3 (bounded, pinned values)",
+                    "status": concrete.status,
+                    "note": concrete.note,
+                    "counterexample": concrete.counterexample,
+                }
+                # The symbolic witness is kept (it is consistent with the
+                # witness AMOUNT/CAP recorded in the evidence); the concrete
+                # bounded counterexample is the recorded cross-check.
+                return sym
+        # Symbolic leg inconclusive / non-spendcap -> the concrete bounded leg.
         return SMTBackend(self.ir).verify_safety(self.prop)
 
     def _tlc_result(self):

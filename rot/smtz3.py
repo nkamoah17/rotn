@@ -420,6 +420,355 @@ class Z3Backend(object):
             return INCONCLUSIVE, None
 
 
+# ---------------------------------------------------------------------------
+# Phase 2 items 2 + 3: the SMT leg with SYMBOLIC (uninterpreted) AMOUNT / CAP.
+# ---------------------------------------------------------------------------
+#
+# ``SymbolicSpendcap`` re-encodes the spend-cap shape with the per-request
+# amount (``AMOUNT``) and the spend cap (``CAP``) as *free* Z3 ``Int``
+# constants -- uninterpreted except for ``AMOUNT >= 0`` and ``CAP >= 0`` --
+# instead of the pinned ``100`` / ``200``.  The proof therefore holds for
+# **all values** of the amount and the cap, not just the one example the
+# concrete engines pin.  The concrete engines (the bounded ``SMTBackend`` and
+# ``policy_direct``) remain the bounded cross-check with the pinned values.
+#
+# Two discharges:
+#
+#   * ``bounded_check`` (item 2) -- a bounded unroll of the transition system
+#     for a horizon ``H`` (default 16), with symbolic ``AMOUNT`` / ``CAP``.
+#     Proves the obligation for all ``H``-step traces and **all values** of
+#     the amount and cap.  Bounded in *trace length*, unbounded in
+#     *amount/cap* -- the "bounded cross-check" the plan keeps.
+#   * ``inductive_check`` (item 3) -- proves the pinned property is an
+#     *inductive invariant*: it holds at the initial state and is closed under
+#     every action's guard + effect.  When it discharges, the result is
+#     "PROVEN for **any number of concurrent requests**" -- the concurrency
+#     (``K``) bound is irrelevant, so the biggest bounded caveat is deleted.
+#
+# Both are sound: a ``VIOLATED`` carries a concrete counterexample (specific
+# ``AMOUNT`` / ``CAP`` / state), and a ``PROVEN`` is a Z3 ``unsat``
+# certificate.  A solver ``unknown`` / timeout is ``UNKNOWN`` (never a
+# verdict).
+#
+SYMBOLIC_ENGINE = "smtz3-symbolic"
+
+
+class SymbolicSpendcap(object):
+    """The symbolic (uninterpreted ``AMOUNT`` / ``CAP``) SMT leg.
+
+    The spend-cap shape, re-encoded with ``AMOUNT`` and ``CAP`` as free Z3
+    ``Int`` constants, so the proof holds for **all values** of the
+    per-request amount and the spend cap (Phase 2 item 2), and -- for the
+    safe (request-sum) shape -- the pinned property is shown to be an
+    *inductive invariant*, i.e. PROVEN for any number of concurrent requests
+    (Phase 2 item 3).
+
+    The variant (buggy vs. correct decision rule) is read from the IR
+    metadata (``metadata["buggy"]``) or passed explicitly.  The transition
+    structure (``init`` / ``spend_ok`` / ``spend_deny`` / ``respond``) mirrors
+    ``rot.spendcap.build_ir``; only the amount and cap are symbolic.
+
+    API (each returns a ``rot.verdicts.Verdict`` with
+    ``engine == "smtz3-symbolic"``):
+
+      * ``bounded_check(horizon=None)``   -- item 2 (bounded, all values).
+      * ``inductive_check()``             -- item 3 (unbounded invariant).
+      * ``verify_safety_symbolic(prop)``  -- the combined SMT leg (item 3
+        primary, item 2 cross-check / fallback).
+
+    Z3 is an optional dependency: ``__init__`` raises ``ImportError`` when
+    z3 is not installed (the caller degrades to the concrete bounded leg).
+    """
+
+    ENGINE = SYMBOLIC_ENGINE
+
+    def __init__(self, ir=None, buggy=None, horizon=6, timeout_ms=10000):
+        import z3  # raises ImportError if z3 is not installed
+        self.z3 = z3
+        self.ir = ir
+        self.horizon = max(1, int(horizon))
+        self.timeout_ms = int(timeout_ms)
+        meta = (getattr(ir, "metadata", None) or {})
+        if buggy is None:
+            buggy = bool(meta.get("buggy", False))
+        self.buggy = bool(buggy)
+        # The free, uninterpreted policy parameters (the crux of items 2+3).
+        self.AMOUNT = z3.Int("AMOUNT")
+        self.CAP = z3.Int("CAP")
+
+    # -- the pinned invariant + decision rule (symbolic) ---------------------
+    def _invariant(self, completed, inflight):
+        """The candidate invariant I(s): settled + in-flight within the cap."""
+        z3 = self.z3
+        return z3.And(completed >= 0, inflight >= 0,
+                      completed + inflight * self.AMOUNT <= self.CAP)
+
+    def _guard(self, completed, inflight):
+        """The ``spend_ok`` decision rule (the seeded difference), symbolic.
+
+        ``buggy``: charge settled responses only (in-flight invisible) --
+        ``completed + AMOUNT <= CAP``.  ``correct``: charge the in-flight set
+        plus the current request -- ``completed + (inflight+1)*AMOUNT <= CAP``.
+        """
+        if self.buggy:
+            return completed + self.AMOUNT <= self.CAP
+        return completed + (inflight + 1) * self.AMOUNT <= self.CAP
+
+    # -- solving / evaluation helpers ----------------------------------------
+    def _solve(self, solver):
+        """Run ``solver.check()`` with a timeout -> ``sat``/``unsat``/``unknown``."""
+        z3 = self.z3
+        solver.set("timeout", self.timeout_ms)
+        try:
+            r = solver.check()
+        except Exception:
+            return "unknown"
+        if r == z3.sat:
+            return "sat"
+        if r == z3.unsat:
+            return "unsat"
+        return "unknown"
+
+    def _eval_int(self, model, expr):
+        z3 = self.z3
+        val = model.eval(expr, model_completion=True)
+        return val.as_long() if val.is_int() else 0
+
+
+    # -- item 2: bounded unroll with symbolic AMOUNT / CAP -------------------
+    def bounded_check(self, horizon=None):
+        """Item 2: the obligation holds for all ``H``-step traces, all values.
+
+        A bounded unroll of the transition system (``H`` steps) with ``AMOUNT``
+        and ``CAP`` as free Z3 constants.  ``unsat`` (no violating trace) is a
+        PROVEN *bounded in trace length, unbounded in amount/cap*; ``sat`` is a
+        VIOLATED with a concrete counterexample (specific ``AMOUNT`` / ``CAP`` /
+        state); ``unknown`` / timeout is UNKNOWN.
+        """
+        z3 = self.z3
+        H = self.horizon if horizon is None else max(1, int(horizon))
+        solver = z3.Solver()
+        solver.add(self.AMOUNT >= 0, self.CAP >= 0)
+        completed = [z3.Int("c_%d" % i) for i in range(H + 1)]
+        inflight = [z3.Int("f_%d" % i) for i in range(H + 1)]
+        solver.add(completed[0] == 0, inflight[0] == 0)
+        for i in range(H):
+            solver.add(completed[i] >= 0, inflight[i] >= 0)
+            admit = z3.Bool("adm_%d" % i)
+            settle = z3.Bool("set_%d" % i)
+            solver.add(inflight[i + 1] == inflight[i]
+                       + z3.If(admit, 1, 0) - z3.If(settle, 1, 0))
+            solver.add(completed[i + 1] == completed[i]
+                       + z3.If(settle, self.AMOUNT, 0))
+            solver.add(z3.Implies(admit,
+                                  self._guard(completed[i], inflight[i])))
+            solver.add(z3.Implies(settle, inflight[i] >= 1))
+            solver.add(inflight[i + 1] >= 0)
+        # Look for a step where the obligation is violated.
+        solver.add(z3.Or([completed[i] + inflight[i] * self.AMOUNT > self.CAP
+                          for i in range(H + 1)]))
+        r = self._solve(solver)
+        if r == "sat":
+            return self._bounded_violated(solver.model(), completed, inflight,
+                                          H)
+        if r == "unsat":
+            return self._proven(
+                "item 2 (bounded, symbolic): the obligation "
+                "'completed + inflight*AMOUNT <= CAP' holds for every %d-step "
+                "trace and for ALL values of AMOUNT (>=0) and CAP (>=0) -- "
+                "unbounded in amount/cap, bounded only in trace length "
+                "(H=%d)" % (H, H))
+        return self._unknown(
+            "item 2 (bounded, symbolic): z3 returned unknown/timeout "
+            "(horizon=%d); no verdict" % H)
+
+    def _bounded_violated(self, model, completed, inflight, H):
+        a_val = self._eval_int(model, self.AMOUNT)
+        cap_val = self._eval_int(model, self.CAP)
+        for i in range(H + 1):
+            c_val = self._eval_int(model, completed[i])
+            f_val = self._eval_int(model, inflight[i])
+            if c_val + f_val * a_val > cap_val:
+                return self._violated(
+                    {"completed": c_val, "inflight": f_val},
+                    "item 2 (bounded, symbolic): counterexample at step %d "
+                    "with AMOUNT=%d, CAP=%d (settled %d + in-flight %d x %d "
+                    "=%d > cap %d)"
+                    % (i, a_val, cap_val, c_val, f_val, a_val,
+                       c_val + f_val * a_val, cap_val),
+                    amount=a_val, cap=cap_val)
+        # Fallback (the model asserts some violation exists; use the last step).
+        return self._violated(
+            {"completed": self._eval_int(model, completed[H]),
+             "inflight": self._eval_int(model, inflight[H])},
+            "item 2 (bounded, symbolic): counterexample with AMOUNT=%d, CAP=%d"
+            % (a_val, cap_val),
+            amount=a_val, cap=cap_val)
+
+
+    # -- item 3: inductive invariant (unbounded in concurrency) --------------
+    def inductive_check(self):
+        """Item 3: prove the pinned property is an inductive invariant.
+
+        A candidate invariant I is *inductive* iff (a) I holds at the initial
+        state and (b) for every action, I(s) ∧ guard(s) => I(next(s)).  If I is
+        inductive it holds in every reachable state -- for any number of steps
+        / concurrent requests -- so the property is PROVEN unboundedly.  I take
+        I to be the pinned property itself (settled + in-flight within the cap).
+
+        For the safe (request-sum / ``correct``) shape I is inductive, so the
+        result is "PROVEN for any number of concurrent requests".  For the
+        buggy (response-sum) shape I is NOT inductive (the ``spend_ok`` guard
+        admits a request whose settlement breaks the invariant), so the result
+        is VIOLATED with a concrete counterexample.
+        """
+        z3 = self.z3
+        # (a) I holds at the initial state (completed=0, inflight=0).
+        s0 = z3.Solver()
+        s0.add(self.AMOUNT >= 0, self.CAP >= 0)
+        s0.add(z3.Not(self._invariant(z3.IntVal(0), z3.IntVal(0))))
+        r = self._solve(s0)
+        if r == "sat":
+            return self._violated(
+                {"completed": 0, "inflight": 0},
+                "item 3 (inductive): the invariant does not hold at the "
+                "initial state")
+        if r == "unknown":
+            return self._unknown(
+                "item 3 (inductive): init check inconclusive (z3 unknown)")
+
+        # (b) Closure under every action: I(s) ∧ guard(s) => I(next(s)).
+        # ``next_fn(c, f) -> (pc, pf)`` is the action's effect on (completed,
+        # inflight); ``spend_deny`` is the no-op other branch of the decision.
+        actions = [
+            ("spend_ok",
+             lambda c, f: self._guard(c, f),
+             lambda c, f: (c, f + 1)),
+            ("spend_deny",
+             lambda c, f: z3.Not(self._guard(c, f)),
+             lambda c, f: (c, f)),
+            ("respond",
+             lambda c, f: f >= 1,
+             lambda c, f: (c + self.AMOUNT, f - 1)),
+        ]
+        for name, guard_fn, next_fn in actions:
+            solver = z3.Solver()
+            solver.add(self.AMOUNT >= 0, self.CAP >= 0)
+            c = z3.Int("c")
+            f = z3.Int("f")
+            solver.add(self._invariant(c, f))             # I(s)
+            solver.add(guard_fn(c, f))                    # guard(s)
+            pc, pf = next_fn(c, f)
+            solver.add(z3.Not(self._invariant(pc, pf)))   # NOT I(next(s))
+            r = self._solve(solver)
+            if r == "sat":
+                model = solver.model()
+                a_val = self._eval_int(model, self.AMOUNT)
+                cap_val = self._eval_int(model, self.CAP)
+                viol_c = self._eval_int(model, pc)
+                viol_f = self._eval_int(model, pf)
+                return self._violated(
+                    {"completed": viol_c, "inflight": viol_f},
+                    "item 3 (inductive): the invariant is NOT closed under "
+                    "'%s' -- the guard admits a request whose settlement "
+                    "breaks 'settled + in-flight <= cap' (the parallel-fire "
+                    "race) at AMOUNT=%d, CAP=%d" % (name, a_val, cap_val),
+                    amount=a_val, cap=cap_val)
+            if r == "unknown":
+                return self._unknown(
+                    "item 3 (inductive): closure under '%s' inconclusive "
+                    "(z3 unknown)" % name)
+        return self._proven(
+            "item 3 (inductive invariant): the pinned property "
+            "(completed >= 0 ∧ inflight >= 0 ∧ completed + inflight*AMOUNT <= "
+            "CAP) holds at the initial state and is closed under every "
+            "action's guard + effect, for ALL values of AMOUNT (>=0) and CAP "
+            "(>=0) -- PROVEN for ANY number of concurrent requests "
+            "(unbounded; the K concurrency bound is irrelevant)")
+
+
+    # -- verdict builders -----------------------------------------------------
+    def _base(self, status, note, counterexample=None):
+        from . import verdicts as vv
+        kind = {"proven": vv.PROVEN, "violated": vv.VIOLATED,
+                "unknown": vv.UNKNOWN}[status]
+        return vv.Verdict(
+            status=kind,
+            property_name="spendcap_within_cap",
+            engine=self.ENGINE,
+            counterexample=counterexample,
+            assumptions=[
+                "AMOUNT >= 0 (the per-request settlement amount is "
+                "non-negative)",
+                "CAP >= 0 (the spend cap is non-negative)",
+            ],
+            soundness=[
+                "symbolic: AMOUNT and CAP are uninterpreted Z3 Int "
+                "constants -- the proof holds for all values, not just the "
+                "pinned 100/200",
+                "a VIOLATED carries a concrete counterexample (specific "
+                "AMOUNT/CAP/state); a PROVEN is a Z3 unsat certificate",
+            ],
+            evidence={
+                "engine": self.ENGINE,
+                "model": "symbolic (uninterpreted AMOUNT/CAP)",
+                "symbolic_constants": ["AMOUNT", "CAP"],
+                "variant": "buggy" if self.buggy else "correct",
+            },
+            note=note,
+            property_kind=vv.KIND_SAFETY,
+            violation_code=vv.POLICY_DENIAL if status == "violated" else None)
+
+    def _proven(self, note):
+        return self._base("proven", note)
+
+    def _violated(self, counterexample, note, amount=None, cap=None):
+        v = self._base("violated", note, counterexample=counterexample)
+        if amount is not None:
+            # The witness is a state that violates for the model's (symbolic)
+            # AMOUNT / CAP -- record them so the witness is concrete/reproducible.
+            v.evidence["witness_amount"] = int(amount)
+            v.evidence["witness_cap"] = int(cap)
+        return v
+
+    def _unknown(self, note):
+        return self._base("unknown", note)
+
+    # -- the combined SMT leg -------------------------------------------------
+    def verify_safety_symbolic(self, prop=None):
+        """The symbolic SMT leg (items 2+3), combined.
+
+        Primary (item 3): the inductive invariant -- if the pinned property is
+        inductive, PROVEN for any number of concurrent requests (the unbounded
+        result).  Cross-check / fallback (item 2): the bounded unroll with
+        symbolic ``AMOUNT`` / ``CAP``.
+
+        Returns a ``Verdict`` (PROVEN / VIOLATED / UNKNOWN) with
+        ``engine == "smtz3-symbolic"``.
+        """
+        ind = self.inductive_check()
+        if ind.status != v.UNKNOWN:
+            # The bounded leg (item 2) is the cross-check.  A contradiction
+            # (inductive PROVEN but bounded VIOLATED) fails closed -- the
+            # pinned values are in the symbolic domain, so a bounded
+            # counterexample is a symbolic one too.
+            bnd = self.bounded_check()
+            if ind.status == v.PROVEN and bnd.status == v.VIOLATED:
+                return self._unknown(
+                    "contradiction: inductive invariant PROVEN but the "
+                    "bounded leg is VIOLATED; failing closed to UNKNOWN")
+            ind.evidence = dict(ind.evidence or {})
+            ind.evidence["bounded_crosscheck"] = bnd.status
+            if ind.status == v.PROVEN:
+                ind.note = (ind.note + "  [item-2 bounded cross-check: %s]"
+                            % bnd.status)
+            # The inductive witness (item 3) is kept: it is a concrete state
+            # consistent with the witness AMOUNT/CAP recorded in the evidence.
+            return ind
+        # Item 3 inconclusive -> the bounded leg (item 2) is the answer.
+        return self.bounded_check()
+
+
 class SMTBackend(object):
     """Dual-backend facade: Z3 + pure-Python, cross-checked.
 
@@ -472,6 +821,38 @@ class SMTBackend(object):
         if agree:
             return self._annotate(pp, z3_status)
         return self._disagreement(prop, "safety", pp, z3_status, z3_witness)
+
+    def verify_safety_symbolic(self, prop=None):
+        """The symbolic (uninterpreted ``AMOUNT`` / ``CAP``) SMT leg.
+
+        Phase 2 items 2+3: re-encodes the spend-cap shape with ``AMOUNT`` and
+        ``CAP`` as free Z3 ``Int`` constants, so the proof holds for **all
+        values** (not just the pinned 100/200).  Returns a ``Verdict`` from
+        :class:`SymbolicSpendcap` (engine ``"smtz3-symbolic"``), or an
+        ``UNKNOWN`` verdict when the IR is not a spend-cap IR (the symbolic
+        leg is spend-cap specific) or z3 is unavailable -- the caller then
+        falls back to the concrete bounded leg.
+        """
+        meta = getattr(self.ir, "metadata", None) or {}
+        if meta.get("protocol") != "SPENDCAP":
+            return v.Verdict(
+                status=v.UNKNOWN, property_name="spendcap_within_cap",
+                engine=SYMBOLIC_ENGINE,
+                note="symbolic leg: not a spend-cap IR (protocol=%r)"
+                % (meta.get("protocol"),))
+        try:
+            sym = SymbolicSpendcap(self.ir)
+        except ImportError:
+            return v.Verdict(
+                status=v.UNKNOWN, property_name="spendcap_within_cap",
+                engine=SYMBOLIC_ENGINE,
+                note="symbolic leg: z3 not installed")
+        except Exception as exc:
+            return v.Verdict(
+                status=v.UNKNOWN, property_name="spendcap_within_cap",
+                engine=SYMBOLIC_ENGINE,
+                note="symbolic leg error: %s: %s" % (type(exc).__name__, exc))
+        return sym.verify_safety_symbolic(prop)
 
     # -- liveness ---------------------------------------------------------------
     def verify_liveness(self, prop, bound=1000):

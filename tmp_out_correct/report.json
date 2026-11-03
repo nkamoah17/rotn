@@ -1,0 +1,11 @@
+{
+  "attack_path": [],
+  "dw_window": "1h",
+  "policy_source": "C:\\Users\\jeren\\Documents\\KAMANU\\ROTN\\samples\\apw4-correct.dw",
+  "property_kind": "safety",
+  "property_name": "distinct_within_cap",
+  "target": "policy-apw4-correct.dw",
+  "verdict": "proven",
+  "window": 4,
+  "witness": null
+}
