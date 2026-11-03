@@ -31,11 +31,11 @@ _REPO_ROOT = os.path.dirname(_TESTS_DIR)
 
 # The pinned product-suite count. Update together with the README and the
 # technical report whenever the suite size changes (this test enforces it).
-# NOTE: this count INCLUDES this file's single test case (847 + 1).
+# NOTE: this count INCLUDES this file's single test case (859 + 1).
 # The 80 service-plane (Product 2: LangChain / MCP gateway / fleet-aggregate)
 # tests live in the commercial layer under rot/commercial/tests/ and are NOT counted
 # here -- the free core suite is what this test pins.
-PINNED_SUITE_COUNT = 848
+PINNED_SUITE_COUNT = 860
 
 # The exact documented phrasings this test checks (keep in sync with the docs).
 _README_TEST_COUNT_RE = re.compile(r"\*\*(\d+) tests\*\*")

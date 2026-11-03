@@ -258,5 +258,91 @@ class CliTests(unittest.TestCase):
             shutil.rmtree(out_dir, ignore_errors=True)
 
 
+class UnderwriterAttestationTests(unittest.TestCase):
+    """The underwriter attestation (v2): re-centered on the corrected policy,
+    carrying the 3-engine cross-check, the finding (the buggy policy), and a
+    distinct signature block over the content hash."""
+
+    _CC = {
+        "smt": {"engine": "smtz3", "status": "proven", "note": ""},
+        "tlc": {"engine": "tlc", "status": "proven",
+                "note": "TLC: invariant holds in all 6 reachable states",
+                "n_states": 6},
+        "policy_direct": {"engine": "policy_direct", "status": "proven",
+                          "note": "policy_direct: obligation holds (steps=5)"},
+        "joined": "proven",
+    }
+    _FINDING = {
+        "artifact": "buggy policy (the original)",
+        "verdict": "violated",
+        "buggy_guard": "settled_count < cap",
+        "fix": "charge in-flight",
+        "corrected_guard": "inflight < cap",
+    }
+
+    def _uw(self, **kw):
+        return att.build_underwriter_attestation(
+            _build_trace(_CORRECT), crosscheck=dict(self._CC),
+            finding=dict(self._FINDING), **kw)
+
+    def test_schema_is_v2(self):
+        self.assertEqual(self._uw().body["schema"], "caravel.attestation/v2")
+
+    def test_subject_is_corrected_policy(self):
+        s = self._uw().body["subject"]
+        self.assertEqual(s["artifact"], "corrected policy")
+        self.assertEqual(s["verdict"], "proven")
+
+    def test_headline_verdict_is_corrected(self):
+        self.assertEqual(self._uw().verdict(), "proven")
+
+    def test_engines_carried(self):
+        self.assertEqual(self._uw().body["engines"],
+                         ["smtz3", "tlc", "policy_direct"])
+
+    def test_crosscheck_joined_proven(self):
+        self.assertEqual(self._uw().body["crosscheck"]["joined"], "proven")
+
+    def test_finding_is_buggy_policy(self):
+        f = self._uw().body["finding"]
+        self.assertEqual(f["artifact"], "buggy policy (the original)")
+        self.assertEqual(f["verdict"], "violated")
+
+    def test_content_hash_is_attestation_hash(self):
+        d = self._uw().to_dict()
+        self.assertEqual(d["signature"]["signed_over"], d["hash"])
+
+    def test_signature_degraded_without_key(self):
+        sig = self._uw().body["signature"]
+        self.assertTrue(sig["degraded"])
+        self.assertEqual(sig["algorithm"], "content-hash-only")
+        self.assertIsNone(sig.get("signature"))
+
+    def test_verify_signature_ok(self):
+        ok, _detail = att.verify_signature(self._uw().to_dict())
+        self.assertTrue(ok)
+
+    def test_tampered_body_rejects(self):
+        d = self._uw().to_dict()
+        d["verdict"] = "violated"
+        ok, _detail = att.verify_signature(d)
+        self.assertFalse(ok)
+
+    def test_deterministic(self):
+        a = self._uw()
+        b = self._uw()
+        self.assertEqual(a.to_json(), b.to_json())
+        self.assertEqual(a.to_markdown(), b.to_markdown())
+        self.assertEqual(a.to_html(), b.to_html())
+
+    def test_markdown_has_new_sections(self):
+        md = self._uw().to_markdown()
+        for section in ("Subject (the attested artifact)",
+                        "Cross-check (three independent engines)",
+                        "Finding (the buggy policy",
+                        "Signature (distinct from the content hash)"):
+            self.assertIn(section, md)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

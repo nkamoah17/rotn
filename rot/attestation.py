@@ -37,6 +37,7 @@ liability, never a silent re-proof. :func:`is_stale` performs that comparison.
 Pure stdlib, Python 3.6 compatible.
 """
 
+import base64
 import json
 
 import rot
@@ -44,11 +45,13 @@ import rot.trace as trace
 
 __all__ = [
     "SCHEMA",
+    "SCHEMA_V2",
     "ARTIFACT_HIERARCHY",
     "DEFENSIBLE_CLAIM",
     "NOT_CLAIMED",
     "Attestation",
     "build_attestation",
+    "build_underwriter_attestation",
     "attestation_hash",
     "verify_trace_hash",
     "is_stale",
@@ -56,10 +59,22 @@ __all__ = [
     "summarize_coverage",
     "render_markdown",
     "render_html",
+    "cryptography_available",
+    "sign_attestation",
+    "verify_signature",
 ]
 
 #: The attestation schema tag (bump on breaking changes to the one-pager shape).
 SCHEMA = "caravel.attestation/v1"
+
+#: The underwriter-grade attestation schema (v2): re-centered on the CORRECTED
+#: policy (the buggy policy becomes the "finding"), carrying the 3-engine
+#: cross-check (SMT/Z3 + TLC + policy-direct, joined) and a DISTINCT signature
+#: block (asymmetric when ``cryptography`` + a key are available, else a
+#: clearly-labeled content-hash-only block).  v1 remains the trace-derived
+#: one-pager (``build_attestation``); v2 is the signed, cross-checked
+#: artifact (``build_underwriter_attestation``).
+SCHEMA_V2 = "caravel.attestation/v2"
 
 #: The artifact hierarchy -- stated ONCE (the B3.3 contract). Every tier is a
 #: pure, hashable view of the tier above it; the trace is the source of truth.
@@ -402,6 +417,317 @@ def build_attestation(trace_dict, coverage=None):
     return Attestation(body)
 
 
+# ---------------------------------------------------------------------------
+# the underwriter-grade attestation (v2): re-centered on the corrected policy,
+# carrying the 3-engine cross-check and a DISTINCT signature block.
+# ---------------------------------------------------------------------------
+
+def cryptography_available():
+    """True when the optional ``cryptography`` package is importable.
+
+    The asymmetric-signature path is *optional*: when ``cryptography`` is
+    absent, the attestation degrades to a clearly-labeled content-hash-only
+    block (the SHA-256 content hash is the pin).  This lets the product run
+    with zero dependencies while still offering a real signature when the
+    dependency is present.
+    """
+    try:
+        import cryptography  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _sign_bytes(canonical_bytes, private_key_pem):
+    """Sign ``canonical_bytes`` with a PEM private key.
+
+    Prefers Ed25519; falls back to ECDSA P-256.  Returns a tuple
+    ``(algorithm, public_key_pem, signature_bytes)`` -- the public key is
+    embedded so the artifact is self-contained for verification.
+
+    Raises ``ValueError`` for an unsupported key type.
+    """
+    from cryptography.hazmat.primitives.serialization import (
+        load_pem_private_key, Encoding, PublicFormat)
+    private_key = load_pem_private_key(private_key_pem, password=None)
+    public_key = private_key.public_key()
+    public_pem = public_key.public_bytes(
+        Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
+
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+        Ed25519PrivateKey)
+    if isinstance(private_key, Ed25519PrivateKey):
+        return "ed25519", public_pem, private_key.sign(canonical_bytes)
+
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives import hashes
+    if isinstance(private_key, ec.EllipticCurvePrivateKey):
+        return ("ecdsa-p256", public_pem,
+                private_key.sign(canonical_bytes, ec.ECDSA(hashes.SHA256())))
+
+    raise ValueError("unsupported private key type: %r" % (type(private_key),))
+
+
+def sign_attestation(body, signer=None, private_key_pem=None):
+    """Build the DISTINCT ``signature`` block for an attestation body.
+
+    The SHA-256 ``attestation_hash`` (``signed_over``) is KEPT as the stable
+    *content* hash.  This function adds a distinct signature layer:
+
+      * when a PEM private key is supplied AND ``cryptography`` is installed,
+        an asymmetric signature (Ed25519 preferred, ECDSA P-256 fallback) over
+        the body's canonical bytes, with the public key embedded for
+        self-contained verification;
+      * otherwise a clearly-labeled content-hash-only block (``degraded`` is
+        true, ``signature`` / ``public_key`` are null) -- the content hash is
+        the pin, and the block says so plainly.
+
+    Deterministic for a given body + key (the signature is a pure function of
+    the canonical bytes).  Returns the ``signature`` block dict.
+    """
+    content_hash = attestation_hash(body)
+    canonical_bytes = trace.canonical_json(body, indent=None).encode("utf-8")
+
+    if private_key_pem is not None and cryptography_available():
+        algorithm, public_pem, signature = _sign_bytes(
+            canonical_bytes, private_key_pem)
+        return {
+            "algorithm": algorithm,
+            "signer": signer,
+            "public_key": public_pem.decode("utf-8"),
+            "signature": base64.b64encode(signature).decode("ascii"),
+            "signed_over": content_hash,
+            "degraded": False,
+            "verify_command": "rot attestation --verify <this-attestation.json>",
+            "note": ("asymmetric %s signature over the attestation body's "
+                     "canonical bytes; verify with the embedded public key"
+                     % algorithm),
+        }
+
+    # Degraded: no key supplied, or ``cryptography`` not installed.
+    return {
+        "algorithm": "content-hash-only",
+        "signer": signer,
+        "public_key": None,
+        "signature": None,
+        "signed_over": content_hash,
+        "degraded": True,
+        "verify_command": "rot attestation --verify <this-attestation.json>",
+        "note": ("DEGRADED -- no asymmetric signature (no key supplied and/or "
+                 "`cryptography` not installed). The SHA-256 content hash "
+                 "(signed_over) is the pin; it is NOT a cryptographic "
+                 "signature."),
+    }
+
+
+def verify_signature(attestation_dict):
+    """Verify an attestation's DISTINCT ``signature`` block.
+
+    Returns a ``(ok, detail)`` tuple.  Checks, in order:
+
+      1. the recomputed content hash matches ``signature.signed_over`` AND the
+         top-level ``hash`` (the signature binds to the exact content -- a
+         tampered body fails here);
+      2. for a real signature: the embedded public key verifies the signature
+         over the body's canonical bytes (a wrong key fails here).
+
+    A content-hash-only (degraded) block only passes the content-hash check
+    and is reported as such -- it is NOT a cryptographic signature.
+    """
+    sig = attestation_dict.get("signature")
+    if not isinstance(sig, dict):
+        return False, "no signature block present"
+
+    # The body is the attestation minus the top-level ``hash`` and the
+    # ``signature`` block itself (the signature is computed over the body).
+    body = dict((k, v) for k, v in attestation_dict.items()
+                if k not in ("hash", "signature"))
+    canonical_bytes = trace.canonical_json(body, indent=None).encode("utf-8")
+    recomputed = attestation_hash(body)
+
+    signed_over = sig.get("signed_over")
+    if signed_over is not None and signed_over != recomputed:
+        return False, ("content hash mismatch: signed_over=%s recomputed=%s"
+                       % (signed_over, recomputed))
+
+    top_hash = attestation_dict.get("hash")
+    if top_hash is not None and top_hash != recomputed:
+        return False, ("top-level hash mismatch: %s != %s"
+                       % (top_hash, recomputed))
+
+    if sig.get("degraded") or not sig.get("signature") or not sig.get("public_key"):
+        return True, ("content-hash-only (DEGRADED): content hash verified -- "
+                      "this is NOT a cryptographic signature")
+
+    if not cryptography_available():
+        return False, "cannot verify: `cryptography` is not installed"
+    try:
+        from cryptography.hazmat.primitives.serialization import (
+            load_pem_public_key)
+        public_key = load_pem_public_key(sig["public_key"].encode("utf-8"))
+        signature = base64.b64decode(sig["signature"])
+        algorithm = sig.get("algorithm")
+        if algorithm == "ed25519":
+            public_key.verify(signature, canonical_bytes)
+        elif algorithm == "ecdsa-p256":
+            from cryptography.hazmat.primitives.asymmetric import ec
+            from cryptography.hazmat.primitives import hashes
+            public_key.verify(signature, canonical_bytes,
+                              ec.ECDSA(hashes.SHA256()))
+        else:
+            return False, "unknown signature algorithm: %r" % (algorithm,)
+    except Exception as exc:
+        return False, "signature verification failed: %s" % (exc,)
+    return True, "asymmetric signature verified (%s)" % (sig.get("algorithm"),)
+
+
+def _normalize_crosscheck(crosscheck):
+    """Normalize a cross-check result into the canonical attestation shape.
+
+    Accepts either a ``rot.verdicts.Verdict`` (uses ``evidence["crosscheck"]``)
+    or the raw evidence dict.  Returns a dict with the canonical engine keys
+    (``smtz3`` / ``tlc`` / ``policy_direct``), the engine list, and the
+    ``joined`` verdict (the 3-way ``join_status3``).  Returns ``None`` when
+    ``crosscheck`` is ``None``.
+    """
+    if crosscheck is None:
+        return None
+    cc = crosscheck
+    if hasattr(crosscheck, "evidence"):
+        cc = (crosscheck.evidence or {}).get("crosscheck") or {}
+    if not isinstance(cc, dict):
+        return None
+
+    def _block(*names):
+        for name in names:
+            b = cc.get(name)
+            if isinstance(b, dict) and b.get("status") is not None:
+                out = dict(b)
+                out.setdefault("engine", name)
+                return out
+        return None
+
+    smtz3 = _block("smtz3", "smt")
+    tlc = _block("tlc")
+    policy_direct = _block("policy_direct", "policy")
+
+    joined = cc.get("joined")
+    if joined is None:
+        if smtz3 and tlc and policy_direct:
+            from rot.crosscheck import join_status3
+            joined = join_status3(smtz3["status"], tlc["status"],
+                                  policy_direct["status"])
+        else:
+            joined = "unknown"
+
+    engines = [name for name, block in (
+        ("smtz3", smtz3), ("tlc", tlc), ("policy_direct", policy_direct))
+        if block is not None]
+    return {
+        "engines": engines,
+        "smtz3": smtz3,
+        "tlc": tlc,
+        "policy_direct": policy_direct,
+        "joined": joined,
+        "independence": cc.get("independence"),
+    }
+
+
+def build_underwriter_attestation(trace_dict, crosscheck=None, coverage=None,
+                                  signer=None, private_key_pem=None,
+                                  finding=None):
+    """Build the underwriter-grade attestation (v2), re-centered on the
+    CORRECTED policy (the subject), carrying the 3-engine cross-check and a
+    DISTINCT signature block.
+
+    Parameters
+    ----------
+    trace_dict : dict
+        The CORRECTED policy's RTF v1 trace (the subject; the headline verdict
+        is its PROVEN -- the buggy policy is NOT the headline).
+    crosscheck : rot.verdicts.Verdict or dict, optional
+        A cross-check result (a ``Verdict`` or its ``evidence["crosscheck"]``
+        dict) -- so the attestation carries ``engines = [smtz3, tlc,
+        policy_direct]`` and the 3-way ``join_status3`` verdict.
+    coverage : dict, optional
+        The ``rot corpus`` summary (D4), as in :func:`build_attestation`.
+    signer : str, optional
+        The signer identity (recorded in the signature block).
+    private_key_pem : str, optional
+        A PEM private key for the asymmetric signature (when ``cryptography``
+        is installed); otherwise the signature block is clearly-labeled
+        content-hash-only.
+    finding : dict, optional
+        The buggy-policy finding (its verdict, guard, counterexample, fix).
+        When omitted, it is derived from the trace's coaching block (if any).
+
+    Returns
+    -------
+    Attestation
+        A v2 attestation whose ``hash`` is the SHA-256 *content* hash of the
+        body (excluding the signature block) and whose body carries a DISTINCT
+        ``signature`` block.
+    """
+    base = build_attestation(trace_dict, coverage=coverage)
+    body = dict(base.body)
+
+    # (1) Re-center the subject on the corrected policy (the headline).
+    body["schema"] = SCHEMA_V2
+    body["artifact_hierarchy"] = [
+        {"artifact": "RTF v1 trace", "schema": "caravel.rtf/v1",
+         "role": "source of truth (hash-pinned)"},
+        {"artifact": "underwriter attestation", "schema": SCHEMA_V2,
+         "role": "underwriter view (corrected-policy subject, 3-engine "
+                 "cross-check, signed)"},
+        {"artifact": "site", "schema": "site/data",
+         "role": "demo view (interactive)"},
+    ]
+    body["subject"] = {
+        "artifact": "corrected policy",
+        "manifest_id": trace_dict.get("manifest_id"),
+        "verdict": body.get("verdict"),
+        "note": ("the attested subject is the CORRECTED policy (its PROVEN); "
+                 "the buggy policy is carried as the finding below"),
+    }
+
+    # The finding (the buggy policy -- the original, the one that was
+    # violated).  Explicit when supplied; otherwise derived from the trace's
+    # coaching block (the coach loop's detect/explain steps).
+    if finding is None:
+        coaching = trace_dict.get("coaching") or {}
+        if coaching:
+            correct = coaching.get("correct") or {}
+            finding = {
+                "artifact": "buggy policy (the original)",
+                "verdict": "violated",
+                "buggy_guard": correct.get("buggy_guard"),
+                "fix": correct.get("delta"),
+                "corrected_guard": correct.get("guard"),
+                "discharge": (coaching.get("close") or {}).get("discharge"),
+            }
+    body["finding"] = finding
+
+    # (2) The 3-engine cross-check (engines + the join_status3 verdict).
+    cc = _normalize_crosscheck(crosscheck)
+    if cc is not None:
+        body["crosscheck"] = cc
+        body["engines"] = cc["engines"]
+        if cc["joined"] in ("proven", "violated", "unknown"):
+            body["verdict"] = cc["joined"]
+            if isinstance(body.get("subject"), dict):
+                body["subject"]["verdict"] = cc["joined"]
+        if isinstance(body.get("version"), dict):
+            body["version"]["engines"] = cc["engines"]
+
+    # (3) The DISTINCT signature block (asymmetric, or content-hash-only).
+    #     The content hash is computed over the body WITHOUT the signature
+    #     block, so the signature and the content hash are distinct layers.
+    content_hash = attestation_hash(body)
+    body["signature"] = sign_attestation(
+        body, signer=signer, private_key_pem=private_key_pem)
+    return Attestation(body, hash_=content_hash)
+
+
 class Attestation(object):
     """A deterministic, hashable, re-issuable underwriter view of a trace.
 
@@ -411,12 +737,18 @@ class Attestation(object):
         The attestation body (every field except the top-level ``hash``).
     hash : str
         The SHA-256 hex digest of the body's canonical JSON -- the one-pager's
-        stable identity (so it, too, can be pinned and re-derived).
+        stable identity (so it, too, can be pinned and re-derived).  For a v1
+        attestation this is the hash of the whole body; for a v2 attestation
+        (with a signature block) it is the hash of the body *excluding* the
+        signature block -- the content hash that the signature binds to.
     """
 
-    def __init__(self, body):
+    def __init__(self, body, hash_=None):
         self.body = body
-        self.hash = attestation_hash(body)
+        # When a signature block is present, the caller passes the content hash
+        # (the hash of the body WITHOUT the signature block) explicitly; for a
+        # v1 attestation (no signature) it is simply the body's hash.
+        self.hash = hash_ if hash_ is not None else attestation_hash(body)
 
     # -- queries -----------------------------------------------------------
     def verdict(self):
@@ -506,6 +838,17 @@ def render_markdown(att):
     lines.append("")
     lines.append("**Verdict:** %s" % _verdict_label(att.get("verdict")))
     lines.append("")
+    subject = att.get("subject")
+    if subject:
+        lines.append("## Subject (the attested artifact)")
+        lines.append("")
+        lines.append("**%s** -- verdict **%s**" % (
+            subject.get("artifact"),
+            _verdict_label(subject.get("verdict"))))
+        if subject.get("manifest_id"):
+            lines.append("- Manifest ID: `%s`" % subject.get("manifest_id"))
+        lines.append("_%s_" % subject.get("note"))
+        lines.append("")
     lines.append("## Source of truth")
     lines.append("")
     lines.append("- Trace schema: `%s`" % source.get("schema"))
@@ -530,6 +873,26 @@ def render_markdown(att):
     for c in att.get("out_of_scope") or []:
         lines.append("- %s" % c)
     lines.append("")
+    cc = att.get("crosscheck")
+    if cc:
+        lines.append("## Cross-check (three independent engines)")
+        lines.append("")
+        lines.append("Engines: %s"
+                     % ", ".join("`%s`" % e for e in cc.get("engines") or []))
+        lines.append("")
+        for name in ("smtz3", "tlc", "policy_direct"):
+            b = cc.get(name)
+            if b:
+                line = "- **%s**: %s" % (name, _verdict_label(b.get("status")))
+                if b.get("note"):
+                    line += " -- %s" % b["note"]
+                if b.get("n_states") is not None:
+                    line += " (n_states=%s)" % b["n_states"]
+                lines.append(line)
+        lines.append("")
+        lines.append("**Join:** %s (all three must agree; disagreement -> UNKNOWN)"
+                     % _verdict_label(cc.get("joined")))
+        lines.append("")
     cov = att.get("corpus_coverage")
     if cov:
         lines.append("## Corpus coverage (the beachhead corpus)")
@@ -570,6 +933,21 @@ def render_markdown(att):
         if cp.get("discharge"):
             lines.append("- Discharge: %s" % cp.get("discharge"))
         lines.append("")
+    finding = att.get("finding")
+    if finding:
+        lines.append("## Finding (the buggy policy -- the original)")
+        lines.append("")
+        lines.append("**Verdict:** %s" % _verdict_label(finding.get("verdict")))
+        lines.append("")
+        if finding.get("buggy_guard"):
+            lines.append("- Buggy guard: `%s`" % finding.get("buggy_guard"))
+        if finding.get("fix"):
+            lines.append("- Fix: %s" % finding.get("fix"))
+        if finding.get("corrected_guard"):
+            lines.append("- Corrected guard: `%s`" % finding.get("corrected_guard"))
+        if finding.get("discharge"):
+            lines.append("- Discharge: %s" % finding.get("discharge"))
+        lines.append("")
     lines.append("## Controls (SOC 2 / AIUC)")
     lines.append("")
     lines.extend(_md_controls(controls))
@@ -586,6 +964,29 @@ def render_markdown(att):
     lines.append("")
     lines.append("Expected trace hash: `%s`" % reverify.get("expected_hash"))
     lines.append("")
+    sig = att.get("signature")
+    if sig:
+        lines.append("## Signature (distinct from the content hash)")
+        lines.append("")
+        if sig.get("degraded"):
+            lines.append("**DEGRADED -- content-hash-only (NOT a cryptographic signature).**")
+            lines.append("")
+        else:
+            lines.append("**%s** asymmetric signature, signed over `%s`"
+                         % (sig.get("algorithm"), sig.get("signed_over")))
+            lines.append("")
+        if sig.get("signer"):
+            lines.append("- Signer: %s" % sig.get("signer"))
+        lines.append("- Signed over (content hash): `%s`" % sig.get("signed_over"))
+        if sig.get("public_key"):
+            lines.append("- Public key: embedded (self-contained verification)")
+        lines.append("_%s_" % sig.get("note"))
+        lines.append("")
+        if sig.get("verify_command"):
+            lines.append("```bash")
+            lines.append(sig.get("verify_command"))
+            lines.append("```")
+            lines.append("")
     claims = att.get("claims") or {}
     if claims.get("defensible") or claims.get("not_claimed"):
         lines.append("## Defensible claim / What we do NOT claim")

@@ -2113,6 +2113,187 @@ def cmd_ab(args):
     return EXIT_PROVEN
 
 
+def _run_crosscheck(policy_path, args):
+    """Run the 3-engine cross-check (SMT/Z3 + TLC + policy-direct) on a policy.
+
+    Reuses the same wiring as ``pipeline._cmd_policy_crosscheck``: build the
+    IR, the pinned safety invariant, the property-directed abstraction, the
+    linear model, then run :class:`rot.crosscheck.CrossChecker`.
+
+    Returns ``(verdict, error)`` -- ``verdict`` is the ``rot.verdicts.Verdict``
+    (its ``evidence["crosscheck"]`` carries the per-engine evidence and the
+    ``join_status3`` join), or ``None`` when the cross-check could not be run
+    (e.g. TLC jar / Z3 absent); ``error`` is a human message in that case, else
+    ``None``.  The attestation degrades to no cross-check block on error.
+    """
+    import rot.invariants as invariants
+    from rot.config import Config
+    from rot.crosscheck import CrossChecker
+    from rot.linearization import linearize
+
+    if not os.path.isfile(policy_path):
+        return None, "policy file not found: %s" % policy_path
+    try:
+        ir = _build_ir(policy_path, args)
+        ir.validate()
+    except Exception as exc:  # noqa: BLE001
+        return None, "could not build the IR: %s" % (exc,)
+
+    prop_name = ir.metadata.get("property_name") or "policy_property"
+    prop = invariants.Invariant(
+        name=prop_name,
+        description="attestation cross-check: %s" % prop_name,
+        expression=ir.pinned_property,
+        kind="safety",
+        label=invariants.LABEL_BOUNDED,
+        pinned=True,
+    )
+    try:
+        cfg = Config(engine="crosscheck", out_dir=args.out or "out")
+        if not cfg.tlc_available():
+            return None, ("TLC jar + java runtime unavailable; the "
+                          "three-engine cross-check was not run")
+        linear_model = linearize(ir)
+        verdict = CrossChecker(ir, linear_model, prop, cfg).check()
+        return verdict, None
+    except Exception as exc:  # noqa: BLE001
+        return None, "cross-check failed: %s" % (exc,)
+
+
+def cmd_attestation(args):
+    """``rot attestation`` -- cross-check the corrected policy (3 engines),
+    build + sign the underwriter attestation (v2), and verify it.
+
+    Build mode:
+      rot attestation --policy CORRECTED.dw [--finding-policy BUGGY.dw]
+                      [--signer ID] [--key KEY.pem] [--max-inflight K]
+
+    Verify mode:
+      rot attestation --verify --attestation ATT.json
+    """
+    import rot.attestation as attmod
+
+    # -- verify mode ------------------------------------------------------
+    if args.verify:
+        if not args.attestation:
+            print("error: --verify requires --attestation FILE", file=sys.stderr)
+            return EXIT_ERROR
+        if not os.path.isfile(args.attestation):
+            print("error: attestation file not found: %s" % args.attestation,
+                  file=sys.stderr)
+            return EXIT_ERROR
+        with open(args.attestation, "r") as f:
+            att_dict = json.load(f)
+        ok, detail = attmod.verify_signature(att_dict)
+        if not args.quiet:
+            bar = "=" * 56
+            print(bar)
+            print("  ROTN attestation verification")
+            print(bar)
+            print("  file    : %s" % args.attestation)
+            print("  result  : %s" % ("OK" if ok else "REJECTED"))
+            print("  detail  : %s" % detail)
+            print(bar)
+        return EXIT_PROVEN if ok else EXIT_ERROR
+
+    # -- build mode -------------------------------------------------------
+    if not args.policy:
+        print("error: --policy FILE is required (or use --verify)",
+              file=sys.stderr)
+        return EXIT_ERROR
+
+    # 1. The subject: the corrected policy's RTF v1 trace.
+    budget = _resolve_budget(args)
+    correct, _code = _trace_policy(args.policy, args, budget, 12, None)
+    if correct is None:
+        return EXIT_ERROR
+    correct_dict = correct.to_dict()
+
+    # 2. The 3-engine cross-check on the corrected policy.
+    crosscheck_verdict, cc_error = _run_crosscheck(args.policy, args)
+
+    # 3. The finding (the buggy policy), when supplied.
+    finding = None
+    if args.finding_policy:
+        if os.path.isfile(args.finding_policy):
+            buggy, _bcode = _trace_policy(
+                args.finding_policy, args, budget, 12, None)
+            if buggy is not None:
+                buggy_dict = buggy.to_dict()
+                finding = {
+                    "artifact": "buggy policy (the original)",
+                    "verdict": buggy_dict.get("verdict"),
+                    "counterexample": buggy_dict.get("counterexample"),
+                }
+                coaching = buggy_dict.get("coaching") or {}
+                if coaching:
+                    correct_blk = coaching.get("correct") or {}
+                    finding["buggy_guard"] = correct_blk.get("buggy_guard")
+                    finding["fix"] = correct_blk.get("delta")
+                    finding["corrected_guard"] = correct_blk.get("guard")
+                    finding["discharge"] = (
+                        (coaching.get("close") or {}).get("discharge"))
+        else:
+            print("warning: finding policy not found: %s" % args.finding_policy,
+                  file=sys.stderr)
+
+    # 4. The signing key (if supplied).
+    key_pem = None
+    if args.key:
+        if os.path.isfile(args.key):
+            with open(args.key, "r") as f:
+                key_pem = f.read()
+        else:
+            print("warning: key file not found: %s (degraded signature)"
+                  % args.key, file=sys.stderr)
+
+    # 5. Build the underwriter attestation (v2).
+    att = attmod.build_underwriter_attestation(
+        correct_dict,
+        crosscheck=crosscheck_verdict,
+        finding=finding,
+        signer=args.signer,
+        private_key_pem=key_pem)
+
+    # 6. Write the artifacts.
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    out_dir = args.out or os.path.join(repo_root, "out")
+    if not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
+    stem = os.path.splitext(os.path.basename(args.policy))[0]
+    base = os.path.join(out_dir, "attestation-%s" % stem)
+    with open(base + ".json", "w") as f:
+        f.write(att.to_json())
+    with open(base + ".md", "w") as f:
+        f.write(att.to_markdown())
+    with open(base + ".html", "w") as f:
+        f.write(att.to_html())
+
+    # 7. Verify the signature we just produced.
+    ok, detail = attmod.verify_signature(att.to_dict())
+
+    if not args.quiet:
+        body = att.body
+        bar = "=" * 56
+        print(bar)
+        print("  ROTN underwriter attestation (v2)")
+        print(bar)
+        print("  subject   : corrected policy -- %s" % (body.get("verdict"),))
+        print("  engines   : %s"
+              % (", ".join(body.get("engines") or []) or "(none)"))
+        if cc_error:
+            print("  crosscheck: NOT RUN -- %s" % cc_error)
+        sig = body.get("signature") or {}
+        print("  signature : %s (degraded=%s)"
+              % (sig.get("algorithm"), sig.get("degraded")))
+        print("  verify    : %s -- %s" % ("OK" if ok else "REJECTED", detail))
+        print("  json      : %s" % (base + ".json"))
+        print("  md        : %s" % (base + ".md"))
+        print("  html      : %s" % (base + ".html"))
+        print(bar)
+    return EXIT_PROVEN if ok else EXIT_ERROR
+
+
 def main(argv=None):
     """ROTN CLI entry point. Returns the process exit code."""
     parser = argparse.ArgumentParser(
@@ -2362,6 +2543,35 @@ def main(argv=None):
     p.add_argument("--quiet", action="store_true",
                    help="suppress the human summary")
 
+    p = sub.add_parser(
+        "attestation",
+        help="cross-check the corrected policy (3 engines), build + sign the "
+             "underwriter attestation (v2), and verify it")
+    p.add_argument("--policy", default=None, metavar="FILE",
+                   help="the CORRECTED policy to attest (the subject; "
+                        "required unless --verify is given)")
+    p.add_argument("--finding-policy", default=None, metavar="FILE",
+                   help="the buggy policy (the finding); when given, its "
+                        "violated verdict + counterexample are carried")
+    p.add_argument("--signer", default=None, metavar="IDENTITY",
+                   help="the signer identity (recorded in the signature "
+                        "block)")
+    p.add_argument("--key", default=None, metavar="FILE",
+                   help="PEM private key file for the asymmetric signature "
+                        "(requires the `cryptography` package)")
+    p.add_argument("--max-inflight", type=int, default=None, metavar="K",
+                   help="bounded concurrency pool K (spend-cap policies)")
+    p.add_argument("--out", default=None, metavar="DIR",
+                   help="output dir [default: <repo>/out]")
+    p.add_argument("--quiet", action="store_true",
+                   help="suppress the human summary")
+    p.add_argument("--verify", action="store_true",
+                   help="verify an EXISTING attestation file (its signature "
+                        "block) instead of building one")
+    p.add_argument("--attestation", default=None, metavar="FILE",
+                   help="an existing attestation JSON to verify (with "
+                        "--verify)")
+
     # RESEARCH commands: `ladder` and `ab` live in the rotn-research repo.
     # They are registered HIDDEN (absent from `rot --help`) so the product
     # build lists only product commands, yet running one still yields a clear
@@ -2380,6 +2590,7 @@ def main(argv=None):
             "demo": cmd_demo, "corpus": cmd_corpus,
             "trace": cmd_trace,
             "report": cmd_report,
+            "attestation": cmd_attestation,
             "coach": cmd_coach, "runtime": cmd_runtime,
             "site": cmd_site,
             "doctor": cmd_doctor,
