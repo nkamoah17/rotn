@@ -1,0 +1,41 @@
+// APW-2 — Approval replay (approval consumed exactly once) — CORRECT variant.
+//
+// SOURCE (verbatim): same Classmethod tutorial; the `since` clause is the
+// tutorial's own fix — it is added so that a FRESH cart-check is required
+// after each successful order.
+//
+// The fix: the approval is *consumed*. In addition to the cart-check having
+// occurred within the window, NO successful place_order::response may have
+// occurred SINCE that cart-check. Once an order settles, the next order needs
+// a new cart-check. This bounds one cart-check to one order.
+//
+// The load-bearing temporal operator is `since`:
+//     <neg-conjunct> since within <interval> <atom>
+// i.e. "left has NOT held since right (within the window)". This is the
+// operator the ROTN parser (rot/dw.py) must gain in Phase 1.
+@id("apw2_order_after_cart_check_correct")
+permit (
+    principal,
+    action == AgentCore::Action::"ShoppingTarget___place_order",
+    resource == AgentCore::Gateway::"<GATEWAY_ARN>"
+)
+when {
+    context.input.amount > 0 && context.input.amount <= 3000
+}
+when temporal {
+    formerly within 1m AgentCore::Action::"ShoppingTarget___get_cart"::response {
+        eventResource: resource,
+        output.cartId: context.input.cartId,
+        output.store: context.input.store,
+        output.amount: context.input.amount
+    }
+    && (
+        !AgentCore::Action::"ShoppingTarget___place_order"::response {
+            eventResource: resource
+        }
+        since within 1m
+        AgentCore::Action::"ShoppingTarget___get_cart"::response {
+            eventResource: resource
+        }
+    )
+};

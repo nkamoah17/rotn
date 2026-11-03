@@ -1,0 +1,39 @@
+// APW-2 — Approval replay (approval never consumed) — BUGGY variant.
+//
+// SOURCE (verbatim, practitioner-written):
+//   Classmethod, "AgentCore Gateway Dogwood temporal policies", 2026-09-14.
+//   https://dev.classmethod.jp/articles/agentcore-gateway-dogwood-temporal-policies/
+//   policy: gateway/OrderAfterCartCheck.dw
+//
+// Stated intent (from the tutorial): "order only after the cart has been
+// confirmed" — allow place_order only if a get_cart RESPONSE with the SAME
+// cartId / store / amount was seen within the last minute.
+//
+// The weakness (APW-2): nothing *consumes* that cart-check. One
+// get_cart::response therefore authorises EVERY matching place_order in the
+// window. A parallel burst of N orders, all matching that single cart-check,
+// are all admitted — one verification authorises N actions.
+//
+// Framing (pattern education, NOT a vulnerability disclosure):
+//   "If your intent is one approval -> one action, this policy does not
+//    enforce it."
+//
+// Namespace: AgentCore (as authored in the public tutorial). Phase 1 will
+// normalize to the repo's Drupe namespace for the ROTN parser.
+@id("apw2_order_after_cart_check_buggy")
+permit (
+    principal,
+    action == AgentCore::Action::"ShoppingTarget___place_order",
+    resource == AgentCore::Gateway::"<GATEWAY_ARN>"
+)
+when {
+    context.input.amount > 0 && context.input.amount <= 3000
+}
+when temporal {
+    formerly within 1m AgentCore::Action::"ShoppingTarget___get_cart"::response {
+        eventResource: resource,
+        output.cartId: context.input.cartId,
+        output.store: context.input.store,
+        output.amount: context.input.amount
+    }
+};
