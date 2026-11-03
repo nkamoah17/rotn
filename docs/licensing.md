@@ -1,90 +1,113 @@
-# ROTN licensing — the open-core position
+# ROTN licensing — one license, one product
 
-ROTN is **open-core**: the proof is open (that is the credibility wedge); the
-commercial layer is **source-available** (that is the business).  Two licenses,
-two layers:
+ROTN is **all Apache‑2.0** — every line of code in this repo (the proof core
+*and* the commercial service layer) is licensed under the same permissive
+Apache‑2.0.  There is no open‑core split, no source‑available tier, and no
+local license gate.
 
-| Layer | What's in it | License |
-|-------|--------------|---------|
-| **Open core** (the wedge + credibility) | the bounded engine, the spend‑cap policy class, the deterministic counterexample, the tests, the one‑pager generator, the CI gate | **Apache‑2.0** |
-| **Commercial** (source-available, the business) | the runtime coach **as a service** (Product 2), fleet near‑miss learning (4.4), risk forecasting (4.3/DBN), the agent‑framework / payment / MCP integrations, attestation‑as‑a‑service (Product 3), the B2 generalization (sequences, flow‑proof, real liveness), enterprise support | **SSPL‑1.0** or a commercial license |
+The paid product is not a license on this code.  It is the **hosted service**:
+the cloud version of the runtime coach (`rot runtime serve`), the fleet
+near‑miss aggregate, the risk forecast, and the **signed attestations** —
+operated as a service, with the signing keys held by the operator.  That
+hosted product is **not** in this repo; this repo is the full, unredacted,
+Apache‑2.0 source you can read, use, fork, and self‑host.
 
-## Why Apache‑2.0 (not MIT) for the core
+| What | License |
+|------|---------|
+| This repo (the `rot` core **and** the `rot.commercial` layer) | **Apache‑2.0** |
+| The hosted service (cloud runtime coach, fleet aggregate, signed attestations) | a **service**, not a license — you buy the operation, not the code |
+
+## Why Apache‑2.0 for everything
 
 Apache‑2.0 is permissive like MIT, **plus** it carries the explicit **patent
-grant** (and the patent‑termination defense) that MIT lacks.  That is the one
-"stronger than MIT" upgrade that actually matters for a security product: a
-contributor's patents are licensed to you, and if they sue you over them, the
-license terminates.  For the credibility wedge — the part that must be
-unambiguously free and safe to build on — that is the license to ship.
+grant** (and the patent‑termination defense) that MIT lacks.  A contributor's
+patents are licensed to you, and if they sue you over them, the license
+terminates.  That is the one "stronger than MIT" upgrade that actually matters
+for a security product, and it is the license to ship for the credibility
+wedge — the part that must be unambiguously free and safe to build on.
 
-## Why SSPL‑1.0 (source-available, not proprietary) for the commercial layer
+Applying it to *every* line (not just the core) is deliberate:
 
-The commercial layer's source is right here in the repo — it is **source-available**,
-free to read, use, and self-host.  SSPL‑1.0 is the license that keeps it that way
-without going proprietary: it still lets you offer a **hosted** version, but
-requires anyone who offers the software **as a service** to open‑source their
-**entire service stack**, or to buy a license.  That bites the specific threat
-we actually face — a competitor hosting a clone of this layer — while still
-letting the core be free.
+- **One license, no ambiguity.** A reader never has to ask "is this file the
+  free core or the source‑available layer?" — it is Apache‑2.0, full stop.
+- **The proof is the credibility wedge.** The counterexample, the K‑sweep, the
+  attestation hash, and the re‑verify command must be unambiguously free and
+  reproducible.  A single, permissive license across the whole repo makes that
+  true by construction.
+- **The moat is the service, not the license.** Revenue comes from operating
+  the hosted service (the fleet aggregate, the signed attestations, the SLA) —
+  not from restricting the code.  A license that only *deters* (like SSPL) is a
+  weaker position than a permissive license plus a service that is genuinely
+  hard to replicate.
 
-Two honest notes (do not skip these):
+## What the paid product is (and is not)
 
-1. **SSPL is a deterrent, not a moat.** It still does not stop a clean‑room or
-   LLM‑assisted independent build, and it can scare off some enterprise buyers
-   (copyleft anxiety).  Use it on the SaaS layer only.
-2. **Open‑core only pays if the commercial layer is thick.** If the commercial
-   part is thin, everyone uses the free core and you earn nothing.  So the
-   commercial layer must be genuinely hard to replicate.
+The paid product is the **hosted service**:
 
-## The fleet-data delta is the product
+- The **runtime coach as a service** — `rot runtime serve` operated in the
+  cloud, with the MCP `tools/call` gateway and the LangChain adapter.
+- The **fleet near‑miss aggregate** — the cross‑customer learning (4.4) that no
+  single self‑hoster can reproduce (they only have their own data).
+- The **risk forecast** (4.3) and the **signed attestations** (Product 3) —
+  the attestation is signed with the operator's keys, so the signature is a
+  statement *by the operator*, not a claim you can mint yourself.
 
-A self‑hosted user of the free core gets **their** near‑misses.  A customer of
-the service gets the **aggregate of everyone's** — the fleet learning (4.4), the
-risk forecast (4.3), the attestation pipeline.  That aggregate delta is the
-product.  No single self‑hoster can reproduce it; they only have their own
-data.
+What it is **not**:
 
-## The one-line license position
+- It is **not** a license that unlocks a larger search budget.  The bounded
+  engine runs at **full strength for every user** — see below.
+- It is **not** a gate on the code in this repo.  Everything here is Apache‑2.0;
+  you can self‑host the entire `rot.commercial` layer today.
 
-> **Apache‑2.0 core** (the proof is open — that's the credibility wedge),
-> **SSPL‑1.0 on the service + fleet learning + integrations** (source-available,
-> not proprietary).  Keep the wedge, keep the revenue, and hold a legal lever on
-> the specific "hosted clone of this layer" threat.
-
-## Where the split lives in this repo
-
-- `LICENSE` (top level) — **Apache‑2.0**, governs the `rot` core.
-- `setup.py` — the free `rotn` distribution; **excludes** `rot.commercial`.
-- `rot/commercial/` — the commercial layer (source-available; `rot.commercial` + `rot.commercial.runtime`).
-- `rot/commercial/LICENSE` — **SSPL‑1.0 / commercial**, governs the commercial layer.
-- `setup_commercial.py` — the `rotn-commercial` distribution (depends on `rotn`).
-- `rotn-research/` — the research plane (ZAB/PBFT/2PC/CPG‑4/A‑B), a **separate
-  repo** that depends on the core and is never imported by it.
 
 ## The audit is full-strength for everyone (no budget tiers)
 
-Do not confuse the **open-core split above** with a runtime budget.  The "free"
-and "commercial" in this document refer to **which code is Apache‑2.0 vs SSPL**
-— they are *not* audit-budget tiers.  The bounded engine itself runs at
-**full strength for every user**: no license or tier unlocks a larger search
-budget, and there is no public default license key (signing/verification is
-simply unavailable without a `$ROTN_LICENSE_KEY`).  The only things that can
-cap a run are the user's own choices — an explicit `--depth` bound, or a
-license file the user supplies (the license is the highest authority and the
-only thing that can shrink the budget).  So a self‑hosted Apache‑2.0 user gets
-the same proof, at the same strength, as anyone else.
+There is **no free/paid budget split** and **no local license gate**.  The
+bounded engine runs at **full strength for every user**:
 
-## What is and is not in the free core
+- `resolve_budget()` returns the generous full-strength defaults
+  (`FREE_LIMITS`) by default.  There is no tier to resolve and no key to
+  check.
+- The only thing that can *cap* a run is a **user-set depth bound**
+  (`--depth` or an explicit `DepthBudget`), which may only *lower* the budget
+  — it can never raise it.  That is a user choice, not a license.
+- There is no public default signing key and no HMAC license check.  Signing /
+  verification of attestations is a **service** capability (the operator holds
+  the keys), not a budget privilege.
 
-**In** the free core (Apache‑2.0): `rot demo` end-to-end, the bounded engine,
-the spend‑cap policy class, the deterministic counterexample + K‑sweep, the
-one‑pager generator, the attestation hash + re‑verify command, the 860-test
-product suite (count pinned by `tests/test_suite_count.py`), and the CI gate.
+So a self-hosted Apache‑2.0 user gets the same proof, at the same strength, as
+anyone else.  The `budget` block in an RTF v1 trace records the *source* of the
+budget (`"free"` for the full-strength defaults, or a user-supplied label for a
+depth-bound) — it is provenance, not a tier.
 
-**Not** in the free core (commercial, SSPL‑1.0): `rot coach --aggregate`
-(fleet learning), `rot runtime serve` (the MCP gateway / LangChain adapter),
-`rot mcp behavior` (G8 behavioral audit), the Lethal‑Trifecta risk surface, and
-attestation‑as‑a‑service.  The CLI *exposes* these commands for a commercial
-install; on a core-only install they degrade to a clear "install
-rotn-commercial" error rather than a raw traceback.
+## Where this lives in the repo
+
+- `LICENSE` (top level) — **Apache‑2.0**, governs the whole repo.
+- `rot/` — the proof core (the bounded engine, the spend-cap policy class, the
+  deterministic counterexample, the tests, the one-pager generator, the CI
+  gate).  Apache‑2.0.
+- `rot/commercial/` — the service layer (the runtime coach as a service, the
+  LangChain adapter, the MCP `tools/call` gateway, the fleet aggregate, the G8
+  behavioral audit, the Lethal-Trifecta risk surface).  Apache‑2.0.
+- `rot/commercial/LICENSE` — **Apache‑2.0** (identical to the root `LICENSE`).
+- `setup.py` — the `rotn` distribution (the core); **excludes** `rot.commercial`.
+- `setup_commercial.py` — the `rotn-commercial` distribution (the service
+  layer); depends on `rotn`.
+- `rotn-research/` — the research plane (ZAB/PBFT/2PC/CPG‑4/A‑B), a **separate
+  repo** that depends on the core and is never imported by it.
+
+## What is and is not in this repo
+
+**In** this repo (all Apache‑2.0): `rot demo` end-to-end, the bounded engine,
+the spend-cap policy class, the deterministic counterexample + K-sweep, the
+one-pager generator, the attestation hash + re-verify command, the service
+layer (`rot runtime serve`, the LangChain adapter, the MCP gateway, the fleet
+aggregate, the G8 behavioral audit, the Lethal-Trifecta risk surface), the
+814-test product suite (count pinned by `tests/test_suite_count.py`), and the
+CI gate.
+
+**Not** in this repo: the **hosted service** — the cloud operation of the
+runtime coach, the cross-customer fleet aggregate, the risk forecast, and the
+**signed attestations** (the operator's signing keys and the service SLA).
+That is the paid product: you buy the *operation* and the *signature*, not the
+code.

@@ -600,7 +600,7 @@ def audit_mcp(allowed, denied, tools=None, horizon=12, max_states=200000,
     denied = list(denied)
     tool_names = _tool_names(tools)
 
-    # Tier gating (Phase D): a license budget may cap the bounded-search depth
+    # Depth-bound cap: a user-set budget may cap the bounded-search depth
     # (``max_states`` / ``horizon``) and the tool-catalog scope (``max_tools``).
     # An out-of-scope catalog is reported as UNKNOWN (exit 2), never silent.
     note = ""
@@ -611,7 +611,7 @@ def audit_mcp(allowed, denied, tools=None, horizon=12, max_states=200000,
         horizon = min(horizon, budget.max_horizon)
         if (budget.max_tools is not None
                 and len(tool_names) > budget.max_tools):
-            note = ("tool catalog has %d tools, exceeding the tier cap of %d; "
+            note = ("tool catalog has %d tools, exceeding the depth-bound cap of %d; "
                     "audit is out of scope"
                     % (len(tool_names), budget.max_tools))
 
@@ -797,7 +797,7 @@ def audit_manifest(manifest, budget=None, max_states=200000,
     manifest : rot.mcp_manifest.McpManifest
         A validated manifest (see :mod:`rot.mcp_manifest`).
     budget : rot.license.DepthBudget, optional
-        A tier budget (Phase D). When present, ``max_tenant_scopes`` caps the
+        A depth-bound budget. When present, ``max_tenant_scopes`` caps the
         number of distinct tenant scopes the audit may reason about; exceeding
         it marks the audit out of scope (UNKNOWN / exit 2).
     max_states : int, optional
@@ -814,7 +814,7 @@ def audit_manifest(manifest, budget=None, max_states=200000,
     """
     findings = manifest_findings(manifest)
 
-    # Tier gating (Phase D): cap the number of distinct tenant scopes.
+    # Depth-bound cap: cap the number of distinct tenant scopes.
     note = ""
     if budget is not None and budget.max_tenant_scopes is not None:
         tenants = set()
@@ -826,8 +826,8 @@ def audit_manifest(manifest, budget=None, max_states=200000,
                 if t:
                     tenants.add(t)
         if len(tenants) > budget.max_tenant_scopes:
-            note = ("manifest references %d tenant scopes, exceeding the tier "
-                    "cap of %d; audit is out of scope"
+            note = ("manifest references %d tenant scopes, exceeding the "
+                    "depth-bound cap of %d; audit is out of scope"
                     % (len(tenants), budget.max_tenant_scopes))
 
     # The behavioral (temporal) audit -- the G8 fix.  Lazy import: mcp_behavioral

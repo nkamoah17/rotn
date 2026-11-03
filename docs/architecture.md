@@ -15,8 +15,8 @@
 
 > **Ingest** an AI agent's tool policy (Dogwood *or* a standard **MCP
 > manifest**), **verify** it with three independent engines + bounded re-check,
-> **map** findings to SOC 2 / AIUC controls, **gate** depth by tier (license
-> or GitHub-Action input), **emit** a deterministic trace, and **replay** it
+> **map** findings to SOC 2 / AIUC controls, **bound** depth by a user-set
+> `--depth` bound, **emit** a deterministic trace, and **replay** it
 > as an interactive proof on GitHub Pages.
 
 The whole system is built on four invariants that never change:
@@ -25,7 +25,7 @@ The whole system is built on four invariants that never change:
 |-----------|---------|
 | **zero runtime deps** | the `rot` package is pure stdlib (Python 3.6+); optional external engines (TLC, Apalache, Z3) *degrade* to a skip or an honest `UNKNOWN`, never a hard failure |
 | **narrow waist** | every front-end imports **only** `rot.ir`; every engine consumes **only** a `ProtocolIR` (§2) |
-| **deterministic** | the same `(policy, environment, tier)` always produces a byte-identical, hash-stable trace (§3, §6) |
+| **deterministic** | the same `(policy, environment, depth)` always produces a byte-identical, hash-stable trace (§3, §6) |
 | **fail-closed** | `UNKNOWN` is never read as `PROVEN`; a counterexample is only trusted once re-validated; exit codes are `0/1/2/3` (§5) |
 
 ---
@@ -39,7 +39,7 @@ The whole system is built on four invariants that never change:
 │ tools.json           │   │ SMT (Z3 + ref)      │   │ verdict+graph+CE+      │   │ verdict card, replay,    │
 └──────────────────────┘   │ policy-direct       │   │ timeline+narration+    │   │ findings+compliance      │
                            │ + bounded re-check  │   │ findings+compliance+   │   └─────────────────────────┘
-                           │  DepthBudget (tier) │   │ coaching (Rule+Proof+  │
+                           │  DepthBudget (bound)│   │ coaching (Rule+Proof+  │
                            └─────────────────────┘   │ Coach)                 │
                                                       └─────────────────────────┘
 ```
@@ -249,7 +249,7 @@ between "we verified this" and "here is the interactive proof."
 - **stable hashing** (SHA-256) over the canonical body → `manifest_id`;
 - **no** timestamps, **no** absolute paths, **no** random ids, **no**
   environment-dependent values;
-- two runs with the same `(policy, environment, tier)` produce **byte-identical**
+- two runs with the same `(policy, environment, depth)` produce **byte-identical**
   traces — re-running `verify` must reproduce the exact same `manifest_id`.
 
 **The RTF body** (schema `rotn.rtf/v1`, a superset of `rotn.manifest/v1`):
@@ -273,12 +273,11 @@ only ever accompanied by the budget that was exhausted and the honest
 
 ---
 
-## 4. The tier / budget model (`DepthBudget`)
+## 4. The budget model (`DepthBudget`)
 
-Verification depth is **gated by tier**. A tier is selected by a **license** or
-by a **GitHub-Action input** (e.g. `with: tier: standard`), and it resolves to a
-named **`DepthBudget`** — a bundle of the exact knobs that already live in
-`rot.config.Config`:
+Verification depth is **full-strength for everyone** — there is **no tier** and
+**no license gate**.  A **`DepthBudget`** is a bundle of the exact knobs that
+already live in `rot.config.Config`:
 
 | knob | `Config` field | meaning |
 |------|----------------|---------|
@@ -288,20 +287,19 @@ named **`DepthBudget`** — a bundle of the exact knobs that already live in
 | abstraction bounds | `participant_bound` / `env_bound` | property-directed bounds that become recorded assumptions |
 | engine set | `engine` (`auto` / `symbolic` / `smt` / `tlc` / `apalache`) | which independent engines cross-check |
 
-The tiers (planned; the underlying knobs are shipped):
+By default, `resolve_budget()` returns the generous **full-strength** limits
+(`FREE_LIMITS`) — every user gets the same budget.  The only thing that can cap
+a run is a **user-set depth bound** (`--depth` on the CLI, or an explicit
+`DepthBudget` passed in), which may only *lower* the budget — it can never
+raise it.  That is a user choice, not a license.
 
-| tier | engines | budget | use |
-|------|---------|--------|-----|
-| `basic` | symbolic | small `max_states`, 1 re-check iter, short horizon | quick CI smoke, free tier |
-| `standard` | symbolic + SMT cross-check | medium `max_states`, bounded re-check, full horizon | default product tier |
-| `enterprise` | all three engines (+ TLC/Apalache when present) | large `max_states`, full re-check, longest horizon, compliance mapping | licensed / audit tier |
-
-**Contract:** the tier only ever *shrinks or grows the budget* — it never
-changes the verdict semantics. A `basic`-tier `UNKNOWN` is the same honest
-"we could not decide" as an `enterprise`-tier `UNKNOWN`; the difference is how
-much of the state space was explored, and that is recorded in the RTF
-`provenance` so the replay is always honest about its depth. Raising the tier
-can only turn an `UNKNOWN` into a `PROVEN`/`VIOLATED`, never the reverse.
+**Contract:** a depth bound only ever *shrinks the budget* — it never changes
+the verdict semantics.  A `--depth 1000` `UNKNOWN` is the same honest "we could
+not decide" as a full-strength `UNKNOWN`; the difference is how much of the
+state space was explored, and that is recorded in the RTF `provenance` (the
+`budget` block) so the replay is always honest about its depth.  Raising the
+depth bound can only turn an `UNKNOWN` into a `PROVEN`/`VIOLATED`, never the
+reverse.
 
 ---
 
@@ -380,7 +378,7 @@ The rules that make it fail-closed:
    imports stdlib only. Optional engines degrade gracefully.
 2. **Narrow waist.** Front-ends import only `rot.ir`; engines consume only a
    `ProtocolIR`. Enforced by `tests/test_narrow_waist.py`.
-3. **Deterministic.** Same `(policy, environment, tier)` → byte-identical,
+3. **Deterministic.** Same `(policy, environment, depth)` → byte-identical,
    hash-stable trace. Enforced by `tests/test_manifest.py`.
 4. **Fail-closed.** `UNKNOWN` ≠ `PROVEN`; violations need a definite,
    re-check-validated witness; exit codes `0/1/2/3`.

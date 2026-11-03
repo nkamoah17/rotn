@@ -4,7 +4,7 @@
 A *trace* is a self-contained, deterministic, hashable record of one
 verification run against an MCP Manifest v1. It is a strict **superset** of
 the Cedar-AR findings report (:mod:`rot.mcp_adapter`): it carries the
-provenance (schema, ``manifest_id``, source hash, policy, budget tier,
+provenance (schema, ``manifest_id``, source hash, policy, budget,
 horizon), the gate verdict, the engines that ran, the reasoning (graph,
 counterexample, decision tree, timeline), the blog-ready narration, and the
 findings (each with its SOC 2 / AIUC controls).
@@ -166,17 +166,15 @@ def _engines(report, trifecta=None):
     return engines
 
 
-def _budget_dict(budget, tier):
-    """The deterministic ``budget`` block (tier + source + limits).
+def _budget_dict(budget):
+    """The deterministic ``budget`` block (source + limits).
 
-    ``None`` budget -> the free-tier fail-closed floor (``lic.DepthBudget
+    ``None`` budget -> the full-strength fail-closed floor (``lic.DepthBudget
     .free()``), so a trace is always grounded in a concrete, known budget.
     """
     if budget is None:
         budget = lic.DepthBudget.free()
-    tier_val = tier or _infer_tier(budget)
     return {
-        "tier": tier_val,
         "source": budget.source,
         "limits": {
             "max_states": int(budget.max_states),
@@ -185,17 +183,6 @@ def _budget_dict(budget, tier):
             "max_tenant_scopes": int(budget.max_tenant_scopes),
         },
     }
-
-
-def _infer_tier(budget):
-    """Infer the tier (``free`` / ``paid``) from a budget (best effort).
-
-    The free tier is the fail-closed floor: any budget whose ``max_states``
-    is at or below the free maximum is ``free``; otherwise ``paid``.
-    """
-    if int(budget.max_states) <= int(lic.FREE_LIMITS["max_states"]):
-        return "free"
-    return "paid"
 
 
 def _n_states_manifest(manifest):
@@ -428,7 +415,7 @@ def _timeline(report, manifest):
     return steps
 
 
-def build_trace(manifest, report, budget=None, horizon=12, tier=None,
+def build_trace(manifest, report, budget=None, horizon=12,
                 source_path=None, trifecta=None):
     """Build an RTF v1 reasoning trace from a manifest + findings report.
 
@@ -445,12 +432,10 @@ def build_trace(manifest, report, budget=None, horizon=12, tier=None,
     report : rot.mcp_adapter.McpFindingsReport
         The findings report (from ``audit_manifest``).
     budget : rot.license.DepthBudget, optional
-        The resolved tier budget. When ``None``, the free-tier defaults are
-        used (fail-closed floor).
+        The resolved depth budget. When ``None``, the full-strength defaults
+        are used (fail-closed floor).
     horizon : int
         The bounded-liveness horizon (recorded for provenance; default 12).
-    tier : str, optional
-        ``"free"`` / ``"paid"``. When ``None``, inferred from the budget.
     source_path : str, optional
         The manifest file path (recorded for provenance).
     trifecta : rot.trifecta.TrifectaResult, optional
@@ -468,7 +453,7 @@ def build_trace(manifest, report, budget=None, horizon=12, tier=None,
     if not manifest_hash:
         manifest_hash = mcp._manifest_hash(manifest)
 
-    budget_dict = _budget_dict(budget, tier)
+    budget_dict = _budget_dict(budget)
     engines = _engines(report, trifecta)
     body = {
         "schema": SCHEMA,
@@ -829,7 +814,7 @@ def _spend_section(steps, amount, cap, max_inflight, reachable_states):
 
 
 def build_spendcap_trace(ir, status, witness=None, steps=None,
-                         n_states=None, budget=None, horizon=12, tier=None,
+                         n_states=None, budget=None, horizon=12,
                          source_path=None, coaching=None):
     """Build an RTF v1 reasoning trace for a spend-cap policy audit.
 
@@ -854,11 +839,9 @@ def build_spendcap_trace(ir, status, witness=None, steps=None,
         The number of reachable states explored. When ``None``, it is computed
         from the IR's reachable state space.
     budget : rot.license.DepthBudget, optional
-        The budget the audit ran under (defaults to the free-tier floor).
+        The budget the audit ran under (defaults to the full-strength floor).
     horizon : int, optional
         The bounded-liveness horizon (recorded for provenance; default 12).
-    tier : str, optional
-        The budget tier (``"free"`` / ``"paid"``); inferred when omitted.
     source_path : str, optional
         The policy file path (recorded for provenance).
     coaching : dict, optional
@@ -884,7 +867,7 @@ def build_spendcap_trace(ir, status, witness=None, steps=None,
         n_states = len(reachable_states)
 
     policy_hash = _ir_policy_hash(ir)
-    budget_dict = _budget_dict(budget, tier)
+    budget_dict = _budget_dict(budget)
     engines = ["symbolic"]
     horizon_complete = (status != "unknown")
 

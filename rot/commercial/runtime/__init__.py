@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""rot.commercial.runtime -- the Product 2 runtime **service** plane (SSPL).
+"""rot.commercial.runtime -- the Product 2 runtime **service** plane.
 
 The deterministic *decision* core -- :class:`~rot.runtime.core.RuntimeGuard`,
 the canonical rules, the hashable refusal shape, and the append-only ledger --

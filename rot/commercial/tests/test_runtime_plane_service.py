@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Tests for the Product 2 runtime **service** plane (SSPL / commercial).
+"""Tests for the Product 2 runtime **service** plane (Apache-2.0).
 
 The deterministic *core* of the runtime plane (B1 ``RuntimeGuard``, B2 refusal
 shape, B3 rules registry, B5 ledger, and the ``rot runtime eval`` CLI) is

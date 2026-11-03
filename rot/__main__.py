@@ -394,7 +394,7 @@ def _cmd_check_manifest(args):
     return report.exit_code()
 
 
-def _trace_manifest(manifest_path, budget, horizon, tier):
+def _trace_manifest(manifest_path, budget, horizon):
     """Build the RTF v1 trace for an MCP Manifest v1 audit.
 
     Returns ``(result, exit_code)``; ``result`` is ``None`` on error.
@@ -419,7 +419,6 @@ def _trace_manifest(manifest_path, budget, horizon, tier):
         manifest, report,
         budget=budget,
         horizon=horizon,
-        tier=tier,
         source_path=manifest_path,
     )
     return result, report.exit_code()
@@ -464,7 +463,7 @@ def _coach_artifact(policy_path, max_inflight=None, amount=None, cap=None,
     return artifact.to_dict()
 
 
-def _trace_policy(policy_path, args, budget, horizon, tier):
+def _trace_policy(policy_path, args, budget, horizon):
     """Build the RTF v1 trace for a spend-cap policy audit (AWS Dogwood).
 
     Verifies the pinned ``spendcap_within_cap`` safety property with the
@@ -511,7 +510,6 @@ def _trace_policy(policy_path, args, budget, horizon, tier):
         ir, status, witness, steps,
         budget=budget,
         horizon=horizon,
-        tier=tier,
         source_path=policy_path,
         coaching=coaching,
     )
@@ -545,15 +543,12 @@ def cmd_trace(args):
 
     budget = _resolve_budget(args)
 
-    tier = None
     horizon = getattr(args, "liveness_horizon", None) or 12
 
     if policy_path:
-        result, exit_code = _trace_policy(policy_path, args, budget, horizon,
-                                          tier)
+        result, exit_code = _trace_policy(policy_path, args, budget, horizon)
     else:
-        result, exit_code = _trace_manifest(manifest_path, budget, horizon,
-                                            tier)
+        result, exit_code = _trace_manifest(manifest_path, budget, horizon)
     if result is None:
         return exit_code
 
@@ -1131,7 +1126,7 @@ def cmd_site(args):
             amount=None, cap=None, window=None, kind=None,
             out=out_path,
             quiet=True,
-            tier=None, depth=None, license=None, key=None,
+            depth=None,
             liveness_horizon=None,
         )
         code = cmd_trace(a)
@@ -1638,7 +1633,7 @@ def cmd_demo(args):
     a = argparse.Namespace(policy=correct, kind=None, max_inflight=None,
                            amount=None, cap=None, window=None,
                            liveness_horizon=None)
-    trace_res, _ = _trace_policy(correct, a, budget, 12, "free")
+    trace_res, _ = _trace_policy(correct, a, budget, 12)
     if trace_res is not None:
         print("  manifest  : %s" % trace_res.manifest_id())
         print("  hash      : %s" % trace_res.hash)
@@ -1678,7 +1673,7 @@ def cmd_demo(args):
     a = argparse.Namespace(policy=buggy, kind=None, max_inflight=None,
                            amount=None, cap=None, window=None,
                            liveness_horizon=None)
-    trace_res, _ = _trace_policy(buggy, a, budget, 12, "free")
+    trace_res, _ = _trace_policy(buggy, a, budget, 12)
     if trace_res is None:
         print("  [WARN] could not build the buggy-policy trace",
               file=sys.stderr)
@@ -2204,7 +2199,7 @@ def cmd_attestation(args):
 
     # 1. The subject: the corrected policy's RTF v1 trace.
     budget = _resolve_budget(args)
-    correct, _code = _trace_policy(args.policy, args, budget, 12, None)
+    correct, _code = _trace_policy(args.policy, args, budget, 12)
     if correct is None:
         return EXIT_ERROR
     correct_dict = correct.to_dict()
@@ -2217,7 +2212,7 @@ def cmd_attestation(args):
     if args.finding_policy:
         if os.path.isfile(args.finding_policy):
             buggy, _bcode = _trace_policy(
-                args.finding_policy, args, budget, 12, None)
+                args.finding_policy, args, budget, 12)
             if buggy is not None:
                 buggy_dict = buggy.to_dict()
                 finding = {

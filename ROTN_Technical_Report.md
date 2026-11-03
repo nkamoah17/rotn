@@ -922,7 +922,7 @@ Format v1** (`rot/trace.py`, `data/*.trace.json`):
   of its own canonical body) that pins the exact reasoning, so a trace can be
   referenced, compared, and re-verified byte-for-byte.
 - **Self-contained.** It carries the provenance (schema, `manifest_id`, source
-  hash, policy, budget tier, horizon), the gate verdict, the engines that ran,
+  hash, policy, budget, horizon), the gate verdict, the engines that ran,
   the reasoning (graph, counterexample, decision tree, timeline), the
   blog-ready narration, and the findings (each with its SOC 2 / AIUC controls).
 - **Superset of the findings report.** It reuses `rot.mcp_adapter` (structural
@@ -939,7 +939,7 @@ never faked):
 
 | Panel | Module | Renders |
 |-------|--------|---------|
-| Verdict hero | `app.js` | the gate verdict (PROVEN / VIOLATED / UNKNOWN), the pinned invariant, budget tier, horizon, and the trace hash. |
+| Verdict hero | `app.js` | the gate verdict (PROVEN / VIOLATED / UNKNOWN), the pinned invariant, budget, horizon, and the trace hash. |
 | State-space / manifest graph | `graph.js` | the counterexample as an attack path (Cytoscape); an **animated replay** lights the path step by step so the in-flight amount visibly grows past the cap at the crossing moment. |
 | Audit timeline | `timeline.js` | the ordered, colour-coded audit steps. |
 | Spend-cap chart + decision tree | `spendcap.js` | total in-flight exposure (settled + in-flight · AMOUNT) vs. cap over the counterexample steps, crossing highlighted; plus the guard expression and per-step admit/deny checks. |
@@ -997,7 +997,7 @@ this without a server or build step:
 ## Appendix A — WP1–WP6 Evidence & Honest Fallbacks
 
 This appendix maps each work package to the **actual** tests and verdicts that
-evidence it (the 860-test product suite is authoritative; the count is pinned
+evidence it (the 814-test product suite is authoritative; the count is pinned
 by `tests/test_suite_count.py` so it cannot drift; the 80 service-plane tests
 live in the commercial layer under `rot/commercial/tests/`), and records the honest
 fallbacks we used where full automation was not feasible.

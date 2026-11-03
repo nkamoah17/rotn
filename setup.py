@@ -53,8 +53,9 @@ setup(
         "agent back in bounds when it does.*\n\n"
         "ROTN ingests an AI agent's tool policy (Dogwood *or* a standard "
         "MCP manifest), verifies it with three independent engines and a "
-        "bounded re-check loop, maps findings to SOC 2 / AIUC controls, gates "
-        "depth by tier, and emits a deterministic, hashed trace that "
+        "bounded re-check loop, maps findings to SOC 2 / AIUC controls, bounds "
+        "depth by a user-set `--depth` bound, and emits a deterministic, "
+        "hashed trace that "
         "replays as an interactive proof on GitHub Pages.\n\n"
         "Pure stdlib, zero external dependencies, Python 3.8+.\n\n"
         "Repository: [nkamoah17/rotn]"
@@ -74,7 +75,7 @@ setup(
         "tests", "tests.*",        # top-level test tree (not shipped)
         "rot.tests", "rot.tests.*",  # in-package Java-build integration tests
         # The **commercial** layer is a separate distribution (``rotn-commercial``,
-        # SSPL / commercial) -- it must NOT ship inside the free Apache-2.0 core.
+        # Apache-2.0) -- it ships on the Apache-2.0 core.
         "rot.commercial", "rot.commercial.*",
     ]),
     package_data={

@@ -6,7 +6,7 @@ masking core (``RuntimeGuard.enabled_tools`` / ``blocked_tools`` /
 ``rot runtime tools``) is covered by the **core** suite in
 ``tests/test_tool_masking.py`` (Apache-2.0).  Here we test the MCP
 ``tools/list`` gateway (``rot.commercial.runtime.mcp``), which is the
-**service** surface (SSPL / commercial -- see ``rot/commercial/LICENSE``).
+**service** surface (Apache-2.0).
 
 Requires the ``rotn-commercial`` distribution.
 

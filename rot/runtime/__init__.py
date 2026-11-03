@@ -61,7 +61,7 @@ from .ledger import (
 )
 # The *service* plane (B3 LangChain adapter, B4 MCP gateway, B5 fleet
 # aggregate) lives in the **commercial** layer ``rot.commercial.runtime``
-# (SSPL / commercial -- see ``rot/commercial/LICENSE``).  The core keeps the
+# (Apache-2.0).  The core keeps the
 # deterministic decision (:class:`RuntimeGuard`), the canonical rules, the
 # hashable refusal shape, and the append-only ledger -- the credibility wedge,
 # all pure stdlib, importable and runnable without the commercial layer.

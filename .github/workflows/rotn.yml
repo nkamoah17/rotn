@@ -78,8 +78,8 @@ jobs:
 
       - name: Full-strength MCP demo (Phase B)
         # Everyone is full-strength (max_tools=100), so the 6-tool catalog is
-        # in scope and PROVEN (exit 0).  A license, when given, is the only
-        # thing that can cap the budget (highest authority).
+        # in scope and PROVEN (exit 0).  A user-set --depth bound, when given,
+        # is the only thing that can cap the budget (and it can only lower it).
         run: |
           set -e
           echo "=== full-strength (expect PASS, exit 0) ==="

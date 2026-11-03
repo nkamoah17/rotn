@@ -65,8 +65,7 @@ class TestDemoNoResearch(unittest.TestCase):
         out = tempfile.mkdtemp(prefix="rotn_d5_")
         try:
             args = argparse.Namespace(
-                command="demo", beachhead="spendcap", out=out,
-                key=None, license=None, tier=None, depth=None)
+                command="demo", beachhead="spendcap", out=out, depth=None)
             code = m.cmd_demo(args)
         except ImportError as exc:  # a blocked module was reached
             self.fail("cmd_demo reached for the research plane: %s" % exc)

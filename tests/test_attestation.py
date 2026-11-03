@@ -48,10 +48,10 @@ def _build_trace(policy_path):
     truth the attestation is derived from)."""
     a = argparse.Namespace(
         policy=policy_path, kind=None, max_inflight=None, amount=None,
-        cap=None, out=None, quiet=True, liveness_horizon=None, tier=None,
-        depth=None, license=None, key=None)
+        cap=None, out=None, quiet=True, liveness_horizon=None,
+        depth=None)
     budget = m._resolve_budget(a)
-    result, _code = m._trace_policy(policy_path, a, budget, 12, None)
+    result, _code = m._trace_policy(policy_path, a, budget, 12)
     return result.to_dict()
 
 

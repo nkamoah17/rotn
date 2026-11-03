@@ -221,10 +221,10 @@ gate-affecting finding, matching the thesis's "flag this combination."
 | `unknown` | the state budget was exhausted before the space drained — an honest `OUT_OF_SCOPE`, never read as proven. |
 
 The audit is a **pure function** of the manifest + budget, so it is
-deterministic, JSON-serialisable, and hashable. It is tier-gated exactly
+deterministic, JSON-serialisable, and hashable. It is depth-bound exactly
 like the rest of the engine: the manifest's tenant-scope count must be
-within the tier's `max_tenant_scopes`, and the model-check respects the
-tier's `max_states` (a truncated search is an honest `unknown`).
+within the budget's `max_tenant_scopes`, and the model-check respects the
+budget's `max_states` (a truncated search is an honest `unknown`).
 
 The verdict is attached to the findings report (`report.behavioral`)
 and rendered in the narrative; a behavioral **violation blocks** even if

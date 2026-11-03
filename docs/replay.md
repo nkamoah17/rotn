@@ -14,7 +14,7 @@ two complementary forms:
    counterexample, the findings, and the controls.
 
 This page is the reader's guide to the second one — how to read a replay on the
-site, panel by panel — plus the trace format and the tier model behind it. For
+site, panel by panel — plus the trace format and the budget model behind it. For
 the CLI (`.dw` policy path, `rot replay`, `rot coach`), see
 [`spendcap-usage.md`](spendcap-usage.md). For the formal contract, see
 [`architecture.md`](architecture.md) §3.
@@ -29,7 +29,7 @@ Every replay opens with a **verdict hero**:
 |---------|---------|
 | **PROVEN / VIOLATED / UNKNOWN** | the gate outcome (below) |
 | `caravel.rtf/v1 · mf-…` | the schema tag + the `manifest_id` (integrity badge) |
-| chips: **engines · tier · horizon · K** | which engines ran, the budget tier, the bounded-search horizon, and the concurrency pool `K` (spend-cap only) |
+| chips: **engines · horizon · K** | which engines ran, the bounded-search horizon, and the concurrency pool `K` (spend-cap only) |
 | server / tenant scope / manifest hash | the audited policy and its content hash |
 | **Re-verify in your terminal** | the exact `rot trace …` command that reproduces this trace, with a copy button |
 
@@ -117,23 +117,24 @@ The **provenance** footer is the honest caveat that keeps a `PROVEN` honest:
 |-------|---------|
 | `n_states` | how many reachable states were explored |
 | `horizon` / `horizon_complete` | the bounded-search horizon, and whether it was fully explored |
-| `budget` / `tier` | the `DepthBudget` that applied (free / standard / enterprise) |
+| `budget` | the `DepthBudget` that applied (full-strength, or a user-set depth bound) |
 | `engines` | which independent engines ran (`symbolic`, `structural`, SMT, TLC, …) |
 | `policy_hash` / `policy_source` | the exact policy that was verified |
 
 **Soundness in the trace:** a `VIOLATED` is only ever accompanied by a
 counterexample re-validated as IR-feasible; an `UNKNOWN` is only ever
 accompanied by the budget that was exhausted and the honest `horizon_complete`
-flag. A `PROVEN` means *holds within the verified bound* — raising the tier can
+flag. A `PROVEN` means *holds within the verified bound* — raising the depth bound can
 only turn an `UNKNOWN` into a `PROVEN`/`VIOLATED`, never the reverse. The trace
 never hides a gap.
 
 ---
 
-## 8. The tier / budget model
+## 8. The budget model
 
-Verification depth is **gated by tier**. A tier resolves to a named
-**`DepthBudget`** — a bundle of the exact knobs that bound the search:
+Verification depth is **full-strength for everyone** — there is **no tier** and
+**no license gate**.  A **`DepthBudget`** is a bundle of the exact knobs that
+bound the search:
 
 | knob | meaning |
 |------|---------|
@@ -141,9 +142,13 @@ Verification depth is **gated by tier**. A tier resolves to a named
 | `max_horizon` | max steps for bounded liveness / the search horizon |
 | `max_tenant_scopes` / `max_tools` | abstraction bounds (recorded assumptions) |
 
-The tier only ever *shrinks or grows the budget* — it never changes the verdict
-semantics. A `free`-tier `UNKNOWN` is the same honest "we could not decide" as
-an `enterprise`-tier `UNKNOWN`; the difference is how much of the state space
+By default, `resolve_budget()` returns the generous **full-strength** limits —
+every user gets the same budget.  The only thing that can cap a run is a
+**user-set depth bound** (`--depth`), which may only *lower* the budget.
+
+The depth bound only ever *shrinks the budget* — it never changes the verdict
+semantics.  A `--depth 1000` `UNKNOWN` is the same honest "we could not decide"
+as a full-strength `UNKNOWN`; the difference is how much of the state space
 was explored, and that is recorded in the RTF `provenance` so the replay is
 always honest about its depth. See [`architecture.md`](architecture.md) §4.
 
@@ -193,7 +198,7 @@ compact separators, no timestamps, no random ids). It pins the *exact*
 reasoning, so a trace can be referenced, compared, and re-verified
 byte-for-byte. The `manifest_id` (`mf-…`) is derived from it.
 
-Two runs with the same `(policy, environment, tier)` produce **byte-identical**
+Two runs with the same `(policy, environment, depth)` produce **byte-identical**
 traces — that is the whole point of the "deterministic, hashed" claim.
 
 ---
@@ -202,7 +207,7 @@ traces — that is the whole point of the "deterministic, hashed" claim.
 
 Open the live replay of `spendcap-buggy` and read it in order:
 
-1. **Verdict hero** — `VIOLATED`, `K: 4`, tier `free`, engine `symbolic`,
+1. **Verdict hero** — `VIOLATED`, `K: 4`, engine `symbolic`,
    `manifest_id mf-4227160622359a2c`.
 2. **State-space graph** — the red path is three `spend_ok` approvals in a row
    (in-flight 1 → 2 → 3), no `respond` in between.

@@ -76,18 +76,26 @@ holds, counter = ModelFinder.from_ir(ir).forall_reachable(ir.pinned_property.eva
 # counter -> {"completed": 0, "inflight": 3}
 ```
 
-**CI**: the suite is pure-stdlib (no Java, no Z3, no network) and green in a bare Python env — **860 tests**, deterministic, exit-code aware. See `.github/workflows/rotn.yml` (tests) and `.github/workflows/publish.yml` (PyPI).
+**CI**: the suite is pure-stdlib (no Java, no Z3, no network) and green in a bare Python env — **814 tests**, deterministic, exit-code aware. See `.github/workflows/rotn.yml` (tests) and `.github/workflows/publish.yml` (PyPI).
 
-## License — open-core
+## License — all Apache-2.0, one product
 
-ROTN is **open-core**. The proof is open (the credibility wedge); the commercial layer is **source-available** (the business).
+ROTN is **all Apache-2.0** — every line of code in this repo (the proof core
+*and* the commercial service layer) is licensed under the same permissive
+Apache-2.0.  There is no open-core split, no source-available tier, and no
+local license gate.
 
-| Layer | What's in it | License |
-|-------|--------------|---------|
-| **Open core** | the bounded engine, the spend-cap policy class, the deterministic counterexample + K-sweep, the tests, the one-pager generator, the CI gate | **Apache-2.0** |
-| **Commercial** | the runtime coach as a service, fleet near-miss learning, risk forecasting, the agent-framework / payment / MCP integrations, attestation-as-a-service | **SSPL-1.0** or commercial |
+The paid product is not a license on this code — it is the **hosted service**
+(the cloud runtime coach, the fleet aggregate, and the signed attestations),
+which is not in this repo.
 
-`pip install rotn` (Apache-2.0 core) · `pip install rotn-commercial` (the commercial layer).
+| What | License |
+|------|---------|
+| This repo (the `rot` core **and** the `rot.commercial` layer) | **Apache-2.0** |
+| The hosted service (cloud runtime coach, fleet aggregate, signed attestations) | a **service**, not a license |
+
+`pip install rotn` (the core) · `pip install rotn-commercial` (the service layer).
+See [`docs/licensing.md`](docs/licensing.md) for the full position.
 
 ## Go deeper
 

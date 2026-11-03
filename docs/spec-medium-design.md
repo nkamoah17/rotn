@@ -217,8 +217,8 @@ emitted liveness `PROPERTY` is about a decided outcome.
 same system under test at every rung); we **weaken the environment** rung by
 rung and show the claim survives each weakening. Each rung *implies* the one
 above it: the same harness, a strictly larger environment, the same (stated)
-fairness on the harness. This generalizes the tier contract already in
-architecture.md — "raising the tier can only turn an `UNKNOWN` into a
+fairness on the harness. This generalizes the depth-bound contract already in
+architecture.md — "raising the depth bound can only turn an `UNKNOWN` into a
 `PROVEN`/`VIOLATED`, never the reverse."
 
 | rung | environment | claim shape | existing machinery |
@@ -423,7 +423,7 @@ A reviewer auditing this document must be unable to find:
 And the register: D1–D6 are LOCKED with rationale (§9).
 
 **This document changes no shipped contract** — the narrow waist, the RTF
-format, the tier model, the fail-closed verdict vocabulary, and the zero
+format, the budget model, the fail-closed verdict vocabulary, and the zero
 runtime-dependency rule are all inherited unchanged from architecture.md. It
 only *adds* the semantics above, and every addition is anchored to an
 existing module.

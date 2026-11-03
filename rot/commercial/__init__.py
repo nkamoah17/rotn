@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""rot.commercial -- the ROTN **commercial** layer (SSPL-1.0 / commercial).
+"""rot.commercial -- the ROTN **commercial** layer (Apache-2.0).
 
-This is the "thick" commercial layer -- **source-available** in this repo
-(the code is here to read and use), licensed separately under SSPL-1.0:
+This is the "thick" commercial layer -- the service plane that wraps the
+Apache-2.0 core:
 
   * :mod:`rot.commercial.runtime`  -- the Product 2 runtime coach **as a
     service**: the LangChain adapter, the MCP ``tools/call`` gateway
@@ -16,13 +16,10 @@ This is the "thick" commercial layer -- **source-available** in this repo
 
 Licensing
 ---------
-The **core** (:mod:`rot` -- the bounded engine, the spend-cap policy class,
-the deterministic counterexample, the tests, the one-pager generator, and the
-CI gate) is **Apache-2.0**.  This layer is **source-available** in the repo
-and licensed **separately** under SSPL-1.0 / commercial terms (see
-``rot/commercial/LICENSE`` and ``docs/licensing.md``): free to read, use, and
-self-host, but a hosted clone must open-source its entire stack or buy a
-license.
+All local code in this repo is **Apache-2.0** (the core and this layer).
+The paid product is the **hosted service** (the cloud version of
+``rot runtime serve`` + the signed attestations), which is NOT in this repo.
+There is no free/paid budget split and no local license gate.
 
 :mod:`rot.commercial` ships as the ``rotn-commercial`` distribution (which
 depends on the ``rotn`` core).  The core is fully importable and runnable

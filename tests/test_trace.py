@@ -6,7 +6,7 @@ Covers:
   * ``canonical_json`` / ``trace_hash`` / ``manifest_id`` -- the low-level
     determinism + hashing primitives;
   * ``build_trace`` -- the RTF v1 body: required fields, verdict mapping,
-    budget tier, source hash, findings + controls, graph, decision tree,
+    budget, source hash, findings + controls, graph, decision tree,
     timeline, narration, counterexample;
   * determinism -- the same input always yields the same trace hash;
   * hashability -- the top-level ``hash`` is the SHA-256 of the canonical
@@ -68,11 +68,11 @@ _REQUIRED = (
 )
 
 
-def _trace(manifest, budget=None, tier=None):
+def _trace(manifest, budget=None):
     """Build a trace for a manifest (helper for the tests below)."""
     report = mcp.audit_manifest(manifest, budget=budget)
     return trace.build_trace(
-        manifest, report, budget=budget, tier=tier,
+        manifest, report, budget=budget,
         source_path="test-manifest.json",
     )
 
@@ -133,19 +133,24 @@ class BuildTraceTests(unittest.TestCase):
             for field in _REQUIRED:
                 self.assertIn(field, body, "missing %r" % field)
 
-    def test_budget_tier_free(self):
+    def test_budget_block_full_strength(self):
+        # Everyone is full-strength: the budget block carries the source label
+        # and the full-strength limits (no "tier" field).
         body = _trace(_GOOD).body
-        self.assertEqual(body["budget"]["tier"], "free")
         self.assertEqual(body["budget"]["source"], "free")
-        self.assertIn("max_states", body["budget"]["limits"])
-
-    def test_budget_tier_paid(self):
-        paid = lic.DepthBudget.from_limits(lic.PAID_LIMITS, "action")
-        body = _trace(_GOOD, budget=paid, tier="paid").body
-        self.assertEqual(body["budget"]["tier"], "paid")
-        self.assertEqual(body["budget"]["source"], "action")
+        self.assertNotIn("tier", body["budget"])
         self.assertEqual(body["budget"]["limits"]["max_states"],
-                         int(lic.PAID_LIMITS["max_states"]))
+                         int(lic.FREE_LIMITS["max_states"]))
+
+    def test_budget_block_depth_bound(self):
+        # A user-set depth bound may only lower the budget (max_states=50).
+        bound = lic.DepthBudget.from_limits(
+            {"max_states": 50, "max_horizon": 3,
+             "max_tools": 7, "max_tenant_scopes": 2}, "depth-bound")
+        body = _trace(_GOOD, budget=bound).body
+        self.assertEqual(body["budget"]["source"], "depth-bound")
+        self.assertEqual(body["budget"]["limits"]["max_states"], 50)
+        self.assertEqual(body["budget"]["limits"]["max_tools"], 7)
 
     def test_findings_have_controls(self):
         findings = _trace(_BAD).body["findings"]

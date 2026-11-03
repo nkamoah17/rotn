@@ -282,7 +282,6 @@
     var findings = (t.findings || []).length;
     var engines = (t.engines || []).join(" \u00b7 ");
     var server = (t.policy && t.policy.server) || (t.source && t.source.schema) || "manifest";
-    var tier = (t.budget && t.budget.tier) || "?";
     return [
       '<a class="trace-card v-' + v.cls + '" href="#/replay/' + esc(id) + '">',
       '  <div class="card-top"><span class="badge b-' + v.cls + '">' + v.label +
@@ -290,7 +289,7 @@
       "  <h2>" + esc(server) + "</h2>",
       '  <p class="card-sub mono">' + esc(t.manifest_id || "") + "</p>",
       '  <p class="card-meta">engines: ' + esc(engines || "\u2014") +
-        " \u00b7 tier: " + esc(tier) + " \u00b7 " + findings +
+        " \u00b7 " + findings +
         " finding" + (findings === 1 ? "" : "s") + "</p>",
       '  <p class="card-hash">sha256 ' + esc(shortHash(t.hash, 16)) + "</p>",
       '  <span class="card-cta">Replay proof \u2192</span>',
@@ -410,7 +409,6 @@
       engines.map(function (e) {
         return '<span class="chip" title="engines">' + esc(e) + "</span>";
       }).join(""),
-      '<span class="chip chip-tier" title="budget tier">tier: ' + esc(budget.tier || "?") + "</span>",
       '<span class="chip" title="bounded-liveness horizon: the step bound of the explored state space (steps)">horizon (steps): ' +
         esc(t.horizon != null ? t.horizon : "?") + "</span>",
       (t.policy && t.policy.max_inflight != null)
