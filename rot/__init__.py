@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""ROTN -- the caravel/rot-verify temporal policy verification engine.
+"""ROTN -- the nkamoah17/rotn temporal policy verification engine.
 
 ROTN ingests an AI agent's tool policy (Dogwood *or* an MCP manifest),
 verifies it with three independent engines and a bounded re-check loop

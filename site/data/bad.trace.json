@@ -1,17 +1,17 @@
 {
   "budget": {
     "limits": {
-      "max_horizon": 4,
-      "max_states": 1000,
-      "max_tenant_scopes": 1,
-      "max_tools": 5
+      "max_horizon": 12,
+      "max_states": 1000000,
+      "max_tenant_scopes": 10,
+      "max_tools": 100
     },
     "source": "free",
     "tier": "free"
   },
   "compliance": {
     "controls": {
-      "AIUC-1": "Caravel AIUC-1 -- Autonomy (agent must not act beyond policy)",
+      "AIUC-1": "ROTN AIUC-1 -- Autonomy (agent must not act beyond policy)",
       "CC6.1": "SOC 2 CC6.1 -- Logical access security",
       "CC6.3": "SOC 2 CC6.3 -- Network security (tenant isolation)"
     },
@@ -220,10 +220,10 @@
     ],
     "tenant_scope": "tenant:acme"
   },
-  "hash": "1dbc7813443ce44cdf0ab245dfae3bdcd9054292cb4a5ae58aeb80dc35c6a430",
+  "hash": "1ab24ee05662692f8d450f33e0065171d0dd412ef40d37f9d931f2ccdd3435ed",
   "horizon": 12,
   "manifest_id": "mf-61c0c11ae7156e0d",
-  "narration": "ROTN MCP findings  (Cedar-AR vocabulary, temporal proof)\n====================================================\nmanifest server=caravel-agent-tools  version=1.0.0\n         tenant_scope=tenant:acme  allowed_write_fields=['account.balance']\ntools    leaky_balance\n\nbehavioral audit (adversarial agent, tool-call sequences):\n  (not run -- structural declaration checks only)\n\nRESULT: BLOCK -- 2 Cedar-AR finding(s)\n\n[ERROR] Overly Permissive\n    facet: policy   property: field_write_permission\n    controls: CC6.1, AIUC-1\n    tool 'leaky_balance' writes field(s) ['account.ssn'] not in the tenant's allowed write set ['account.balance']\n    witness: {\"allowed_write_fields\": [\"account.balance\"], \"over_permission\": [\"account.ssn\"], \"tool\": \"leaky_balance\", \"write_fields\": [\"account.balance\", \"account.ssn\"]}\n\n[ERROR] Overly Permissive\n    facet: policy   property: tenant_read_isolation\n    controls: CC6.3, AIUC-1\n    tool 'leaky_balance' reads cross-tenant field(s) ['tenant:globex.account.balance'] outside its tenant_scope 'tenant:acme'\n    witness: {\"cross_tenant_fields\": [\"tenant:globex.account.balance\"], \"read_fields\": [\"tenant:acme.account.balance\", \"tenant:globex.account.balance\"], \"tenant_scope\": \"...\n",
+  "narration": "ROTN MCP findings  (Cedar-AR vocabulary, temporal proof)\n====================================================\nmanifest server=caravel-agent-tools  version=1.0.0\n         tenant_scope=tenant:acme  allowed_write_fields=['account.balance']\ntools    leaky_balance\n\nbehavioral audit (adversarial agent, tool-call sequences):\n  status : VIOLATED -- a reachable tool-call sequence breaks the property\n  attack : leaky_balance\n  witness: {\"holding_private\": true, \"read_foreign\": true, \"used_outbound\": true, \"wrote_unapproved\": true}\n  broken : no_cross_tenant_read, no_unapproved_write\n  risk   : LETHAL TRIFECTA -- the agent can hold the tenant's private data AND reach an outbound channel (flag, per the thesis; not a hard violation)\n\nRESULT: BLOCK -- 2 Cedar-AR finding(s)\n\n[ERROR] Overly Permissive\n    facet: policy   property: field_write_permission\n    controls: CC6.1, AIUC-1\n    tool 'leaky_balance' writes field(s) ['account.ssn'] not in the tenant's allowed write set ['account.balance']\n    witness: {\"allowed_write_fields\": [\"account.balance\"], \"over_permission\": [\"account.ssn\"], \"tool\": \"leaky_balance\", \"write_fields\": [\"account.balance\", \"account.ssn\"]}\n\n[ERROR] Overly Permissive\n    facet: policy   property: tenant_read_isolation\n    controls: CC6.3, AIUC-1\n    tool 'leaky_balance' reads cross-tenant field(s) ['tenant:globex.account.balance'] outside its tenant_scope 'tenant:acme'\n    witness: {\"cross_tenant_fields\": [\"tenant:globex.account.balance\"], \"read_fields\": [\"tenant:acme.account.balance\", \"tenant:globex.account.balance\"], \"tenant_scope\": \"...\n",
   "policy": {
     "allowed_write_fields": [
       "account.balance"
@@ -236,10 +236,10 @@
   "provenance": {
     "budget": {
       "limits": {
-        "max_horizon": 4,
-        "max_states": 1000,
-        "max_tenant_scopes": 1,
-        "max_tools": 5
+        "max_horizon": 12,
+        "max_states": 1000000,
+        "max_tenant_scopes": 10,
+        "max_tools": 100
       },
       "source": "free",
       "tier": "free"

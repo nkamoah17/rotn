@@ -1,10 +1,11 @@
 ﻿<p align="center">
-  <img src="assets/caravel_logo.jpeg" alt="Caravel" width="160"/>
+  <img src="assets/caravel_logo.jpeg" alt="ROTN" width="160"/>
 </p>
 
-<h1 align="center">ROTN â€” Regression-detection Oracle via Trace Non-emptiness</h1>
+<h1 align="center">ROTN â€” Regression-detection Oracle via Trace Non-emptiness
+</h1>
 
-> **CARAVEL** â€” *Agents are replacing the software that used to enforce our rules. We make the rules explicit, prove the policy holds even when the model attempts to break it, and coach the agent back in bounds when it does.*
+> **ROTN** â€” *Agents are replacing the software that used to enforce our rules. We make the rules explicit, prove the policy holds even when the model attempts to break it, and coach the agent back in bounds when it does.*
 
 **ROTN** (R**o**gression-detection **O**racle via **T**race **N**on-emptiness) is a small, fully offline, **Python 3.6-compatible**, pure-stdlib verification platform for **agent tool policies**, led by the **spend-cap parallel-fire bug**: a payments policy that settles spend only against *settled* responses, so a parallel burst of in-flight requests overshoots the cap â€” invisible to a per-request monitor. ROTN checks a policy against a named invariant (`policy_conformance` safety, `policy_permits_request` non-vacuity, `bounded_eventually` bounded liveness within horizon B) with **three independent engines (SMT/Z3 + TLC + policy-direct)**, an **Apalache-ITF** trace engine that *refutes* a buggy policy (replays its counterexample) but **never proves** the corrected one, and a **bounded re-check** loop â€” on `unknown`, re-run the engine under a hard cap; that is bounded re-checking, *not* counterexample-guided abstraction refinement. Every target ships a *correct* variant (the invariant holds) and a *seeded-buggy* variant (the invariant is violated); the pipeline must discriminate them and, for the buggy one, hand back a **concrete, IR-feasible counterexample**. The protocol plane (2PC / ZAB / PBFT / Payment) is in the research repo (`rotn-research`), not this build.
 
@@ -88,7 +89,7 @@ from disk (`file://`) via a deterministic `data/traces.js` registry (`rot site`,
 `rot/sitegen.py`) and prefers `fetch('data/<id>.trace.json')` over HTTP â€” the
 JSON traces stay the source of truth.
 
-> **Live replay: [caravel.github.io/rot-verify](https://caravel.github.io/rot-verify/)**
+> **Live replay: [nkamoah17.github.io/rotn](https://nkamoah17.github.io/rotn/)**
 >
 > Published to GitHub Pages on every push to `main` (the **Ship plane** â€” a pure
 > function of the RTF trace; see `docs/architecture.md` Â§1.4 and

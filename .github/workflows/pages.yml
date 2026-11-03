@@ -6,7 +6,7 @@
 # uploads the ``site/`` bundle as the Pages artifact and deploys it.
 #
 # The deployed URL is a *project site*: ``<owner>.github.io/<repo>/`` -- e.g.
-# ``https://caravel.github.io/rot-verify/`` for the ``caravel/rot-verify``
+# ``https://nkamoah17.github.io/rotn/`` for the ``nkamoah17/rotn``
 # repo (the product identity referenced throughout the docs).  The workflow is
 # repo-agnostic: it deploys whatever ``site/`` bundle is in the checked-out
 # repo, and GitHub sets the live URL (exposed as the job's ``page_url``).

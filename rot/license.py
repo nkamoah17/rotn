@@ -67,7 +67,7 @@ HMAC_PREFIX = "hmac-sha256:"
 #: Environment variable that provides a license signing key. When unset, no
 #: license can be issued or verified (fail-closed): there is **no public
 #: default key**, so a "paid" license cannot be forged.
-KEY_ENV = "CARAVEL_LICENSE_KEY"
+KEY_ENV = "ROTN_LICENSE_KEY"
 
 
 class LicenseError(ValueError):
@@ -75,7 +75,7 @@ class LicenseError(ValueError):
 
 
 def key_from_env():
-    """The signing key: ``$CARAVEL_LICENSE_KEY`` if set, else ``None``.
+    """The signing key: ``$ROTN_LICENSE_KEY`` if set, else ``None``.
 
     There is no public default key. Without a key, signing/verification is
     simply unavailable (fail-closed) -- which is exactly what prevents a
@@ -177,7 +177,7 @@ def _validate_limits(limits):
 # ---------------------------------------------------------------------------
 
 class License(object):
-    """A validated Caravel license (D1).
+    """A validated ROTN license (D1).
 
     Attributes
     ----------
@@ -270,7 +270,7 @@ class License(object):
 # ---------------------------------------------------------------------------
 
 def make_license(org, tier, limits=None, issued=None, expiry=None, key=None):
-    """Issue a signed license dict (for testing / the Caravel backend).
+    """Issue a signed license dict (for testing / the ROTN backend).
 
     Parameters
     ----------
@@ -285,7 +285,7 @@ def make_license(org, tier, limits=None, issued=None, expiry=None, key=None):
     expiry : str, optional
         The expiry date (ISO-8601; defaults to one year from today).
     key : str or bytes, optional
-        The Caravel key (defaults to :func:`key_from_env`).
+        The ROTN key (defaults to :func:`key_from_env`).
 
     Returns
     -------
@@ -332,7 +332,7 @@ def check_license(license_dict, key=None, now=None):
     license_dict : dict
         The license JSON object.
     key : str or bytes, optional
-        The Caravel key (defaults to :func:`key_from_env`).
+        The ROTN key (defaults to :func:`key_from_env`).
     now : datetime.date, optional
         The reference date for the expiry check (defaults to today). Pass a
         fixed date for deterministic tests.

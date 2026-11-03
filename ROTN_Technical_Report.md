@@ -983,7 +983,7 @@ this without a server or build step:
   it regenerates the site's RTF trace data from the committed sample policies
   with the *current* engine (`python -m rot site`, pure stdlib — no Java, no Z3,
   no network, no package install), uploads the `site/` bundle, and deploys it to
-  GitHub Pages (`https://caravel.github.io/rot-verify/`).
+  GitHub Pages (`https://nkamoah17.github.io/rotn/`).
 - **Tests** — `tests/test_site.py` asserts the scaffold files exist, that
   `index.html` wires the vendored Cytoscape + app modules + registry, that
   `app.js` implements the `#/` and `#/replay/<id>` routes and the `file://`

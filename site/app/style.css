@@ -1,6 +1,6 @@
 /* ============================================================================
    ROTN replay site — Phase F.  No framework, no build step, no CDN.
-   Brand palette from the Caravel mark: deep navy ink + orbital blue accent.
+   Brand palette from the ROTN mark: deep navy ink + orbital blue accent.
    Verdict palette: proven (green) / violated (red) / unknown (amber).
    Light + dark themes via [data-theme] (JS) with a prefers-color-scheme
    fallback (no-JS).  All colors are design tokens, so the dark theme is a

@@ -4,7 +4,7 @@
 This is the *ingestion* half of the MCP adoption surface (Phase B, B1).
 An MCP manifest is a JSON document describing an MCP server's tool catalog
 in the shape defined by the Model Context Protocol (spec ``2025-06-18``),
-*plus* the Caravel policy/compliance fields that let :mod:`rot.mcp_adapter`
+*plus* the ROTN policy/compliance fields that let :mod:`rot.mcp_adapter`
 run structural checks (field permission, tenant isolation) without a
 runtime.
 
@@ -15,7 +15,7 @@ A manifest is a **superset** of the MCP ``tools/list`` result:
   ``description``, ``inputSchema``, ``outputSchema`` and ``annotations``
   (``readOnlyHint`` / ``destructiveHint`` / ``idempotentHint`` /
   ``openWorldHint``);
-* the Caravel additions are ``tenant_scope`` (which tenant a tool acts on),
+* the ROTN additions are ``tenant_scope`` (which tenant a tool acts on),
   ``read_fields`` / ``write_fields`` (the data fields it reads/writes), and
   the top-level ``allowed_write_fields`` (the tenant's write-permission set).
 
@@ -49,7 +49,7 @@ _ANNOTATION_KEYS = (
     "openWorldHint",
 )
 
-# The Caravel per-tool compliance keys.
+# The ROTN per-tool compliance keys.
 _TOOL_CARAVEL_KEYS = ("tenant_scope", "read_fields", "write_fields")
 
 # Top-level keys that are always present (required) in a manifest.
@@ -99,7 +99,7 @@ def _check_tool_annotations(annotations, where):
 def _check_input_schema(schema, where):
     """Validate the MCP ``inputSchema`` / ``outputSchema`` (JSON Schema).
 
-    We enforce the *shape* Caravel relies on (a JSON Schema object) without
+    We enforce the *shape* ROTN relies on (a JSON Schema object) without
     pulling in a full JSON-Schema validator (zero deps).  The minimum
     contract: a JSON object; if it declares ``type`` it must be ``"object"``
     (tool inputs are object-valued); ``properties`` (if present) is a mapping
@@ -138,7 +138,7 @@ def _check_input_schema(schema, where):
 
 
 def _check_field_list(v, key, where):
-    """Validate a Caravel ``read_fields`` / ``write_fields`` list."""
+    """Validate a ROTN ``read_fields`` / ``write_fields`` list."""
     if v is None:
         return None
     if not _is_str_list(v):
@@ -149,7 +149,7 @@ def _check_field_list(v, key, where):
 
 
 def _check_tenant_scope(v, where):
-    """Validate a Caravel ``tenant_scope`` value."""
+    """Validate a ROTN ``tenant_scope`` value."""
     if v is None:
         return None
     if not _is_nonempty_str(v):
@@ -163,7 +163,7 @@ class McpTool(object):
 
     This is a *superset* of the MCP ``tools/list`` tool object: the MCP
     fields (``name``, ``title``, ``description``, ``inputSchema``,
-    ``outputSchema``, ``annotations``) plus the Caravel compliance fields
+    ``outputSchema``, ``annotations``) plus the ROTN compliance fields
     (``tenant_scope``, ``read_fields``, ``write_fields``).
 
     Attributes
@@ -181,12 +181,12 @@ class McpTool(object):
     annotations : dict or None
         The MCP hint annotations (optional, MCP).
     tenant_scope : str or None
-        Caravel: which tenant this tool acts on (defaults to the manifest's
+        ROTN: which tenant this tool acts on (defaults to the manifest's
         top-level ``tenant_scope`` when omitted).
     read_fields : list[str]
-        Caravel: the data fields the tool reads (default ``[]``).
+        ROTN: the data fields the tool reads (default ``[]``).
     write_fields : list[str]
-        Caravel: the data fields the tool writes (default ``[]``).
+        ROTN: the data fields the tool writes (default ``[]``).
     """
 
     def __init__(self, name, title=None, description=None, input_schema=None,
@@ -235,7 +235,7 @@ class McpTool(object):
         output_schema = _check_input_schema(d.get("outputSchema"), where)
         annotations = _check_tool_annotations(d.get("annotations"), where)
 
-        # Caravel compliance fields.
+        # ROTN compliance fields.
         tenant_scope = _check_tenant_scope(d.get("tenant_scope"), where)
         read_fields = _check_field_list(d.get("read_fields"),
                                        "read_fields", where)
@@ -265,7 +265,7 @@ class McpTool(object):
 
     # -- serialisation -------------------------------------------------------
     def to_dict(self):
-        """A stable, JSON-serialisable dict (MCP + Caravel fields)."""
+        """A stable, JSON-serialisable dict (MCP + ROTN fields)."""
         d = {"name": self.name}
         if self.title is not None:
             d["title"] = self.title
@@ -302,10 +302,10 @@ class McpManifest(object):
     version : str or None
         The server/manifest version (optional, provenance).
     tenant_scope : str or None
-        The default tenant scope (Caravel). A tool that omits its own
+        The default tenant scope (ROTN). A tool that omits its own
         ``tenant_scope`` inherits this value.
     allowed_write_fields : list[str]
-        The tenant's write-permission set (Caravel). A tool whose
+        The tenant's write-permission set (ROTN). A tool whose
         ``write_fields`` is not a subset of this set is *overly permissive*
         (field permission).
     tools : list[McpTool]
@@ -360,7 +360,7 @@ class McpManifest(object):
             raise McpManifestError(
                 "'version' must be a non-empty string when present")
 
-        # Caravel top-level compliance fields.
+        # ROTN top-level compliance fields.
         tenant_scope = _check_tenant_scope(d.get("tenant_scope"), "manifest")
         allowed_write_fields = _check_field_list(
             d.get("allowed_write_fields"), "allowed_write_fields", "manifest")

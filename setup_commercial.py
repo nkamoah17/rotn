@@ -58,11 +58,11 @@ setup(
         "Pure stdlib core; LangChain and MCP are optional and imported lazily."
     ),
     long_description_content_type="text/markdown",
-    author="Caravel",
-    url="https://github.com/caravel/rot-verify",
+    author="ROTN",
+    url="https://github.com/nkamoah17/rotn",
     project_urls={
-        "Repository": "https://github.com/caravel/rot-verify",
-        "Licensing": "https://github.com/caravel/rot-verify/blob/main/docs/licensing.md",
+        "Repository": "https://github.com/nkamoah17/rotn",
+        "Licensing": "https://github.com/nkamoah17/rotn/blob/main/docs/licensing.md",
     },
     license="Server Side Public License (SSPL-1.0) / commercial",
     python_requires=">=3.6",

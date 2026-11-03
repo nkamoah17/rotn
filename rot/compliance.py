@@ -4,7 +4,7 @@
 A *compliance profile* is a pure, deterministic mapping from the Cedar-AR
 findings vocabulary (see :mod:`rot.mcp_adapter`) to the controls an auditor
 cares about -- **SOC 2** (AICPA TSC, CC6 = Logical & Physical Access) and
-**AIUC** (Caravel AI Usage Control, *autonomy*).
+**AIUC** (ROTN AI Usage Control, *autonomy*).
 
 The profile is a **leaf module**: it has no runtime dependencies and imports
 nothing from the rest of the package. :mod:`rot.mcp_adapter` imports it and
@@ -21,7 +21,7 @@ SOC 2 (AICPA TSC) -- CC6 = Logical & Physical Access:
     CC6.3   Network security (tenant isolation)
     CC6.6   Change management / provisioning
 
-AIUC (Caravel AI Usage Control) -- *autonomy*, **swappable**:
+AIUC (ROTN AI Usage Control) -- *autonomy*, **swappable**:
 
     AIUC-1  The agent must not act beyond its policy.
 
@@ -84,7 +84,7 @@ SOC2_CC61 = "CC6.1"
 SOC2_CC63 = "CC6.3"
 #: SOC 2 (AICPA TSC) CC6.6 -- Change management / provisioning.
 SOC2_CC66 = "CC6.6"
-#: Caravel AI Usage Control AIUC-1 -- Autonomy (the agent must not act beyond
+#: ROTN AI Usage Control AIUC-1 -- Autonomy (the agent must not act beyond
 #: its policy).
 AIUC_1 = "AIUC-1"
 
@@ -93,19 +93,19 @@ CONTROL_LABELS = {
     SOC2_CC61: "SOC 2 CC6.1 -- Logical access security",
     SOC2_CC63: "SOC 2 CC6.3 -- Network security (tenant isolation)",
     SOC2_CC66: "SOC 2 CC6.6 -- Change management / provisioning",
-    AIUC_1: "Caravel AIUC-1 -- Autonomy (agent must not act beyond policy)",
+    AIUC_1: "ROTN AIUC-1 -- Autonomy (agent must not act beyond policy)",
 }
 
-#: The AIUC-1 control definition (Caravel AI Usage Control, *autonomy*).
+#: The AIUC-1 control definition (ROTN AI Usage Control, *autonomy*).
 #:
-#: This is a **Caravel-defined, swappable** control set (not a published
+#: This is a **ROTN-defined, swappable** control set (not a published
 #: standard). The ``attributes`` below are its *default* values; an
 #: organization can swap in its own autonomy policy without changing the
 #: finding -> control mapping. ``AIUC-1`` is triggered by any finding in
 #: which the agent can act beyond its policy.
 AIUC_1_DEFINITION = {
     "id": AIUC_1,
-    "name": "Caravel AI Usage Control -- Autonomy",
+    "name": "ROTN AI Usage Control -- Autonomy",
     "swappable": True,
     "trigger": "any finding in which the agent can act beyond its policy",
     "attributes": {
@@ -234,7 +234,7 @@ def compliance_section(findings, result):
               "controls_touched": ["CC6.1", "AIUC-1"],
               "controls": {
                 "CC6.1": "SOC 2 CC6.1 -- Logical access security",
-                "AIUC-1": "Caravel AIUC-1 -- Autonomy (...)"
+                "AIUC-1": "ROTN AIUC-1 -- Autonomy (...)"
               },
               "evidence": {
                 "findings_total": 1,
@@ -302,7 +302,7 @@ def coaching_compliance(coaching):
               "frameworks": ["SOC2", "AIUC"],
               "result": "proven",
               "controls_touched": ["AIUC-1"],
-              "controls": {"AIUC-1": "Caravel AIUC-1 -- Autonomy (...)"},
+              "controls": {"AIUC-1": "ROTN AIUC-1 -- Autonomy (...)"},
               "evidence": {
                 "coaching": {"schema": ..., "status": "closed",
                               "recheck": "proven", "hash": ...},

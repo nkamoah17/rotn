@@ -39,7 +39,7 @@
     "CC6.1": "SOC 2 CC6.1 — Logical access security",
     "CC6.3": "SOC 2 CC6.3 — Network security (tenant isolation)",
     "CC6.6": "SOC 2 CC6.6 — Change management / provisioning",
-    "AIUC-1": "Caravel AIUC-1 — Autonomy (agent must not act beyond policy)"
+    "AIUC-1": "ROTN AIUC-1 — Autonomy (agent must not act beyond policy)"
   };
 
   /* Which framework a control id belongs to (derived from the id prefix). */

@@ -37,11 +37,11 @@ model needed), so the report covers the full Cedar-AR vocabulary:
     action/tool not referenced by the other  unreachable rules       warning
 
 Every finding is also mapped to the controls it touches -- **SOC 2** (AICPA
-TSC, CC6 = Logical & Physical Access) and **AIUC** (Caravel AI Usage Control,
+TSC, CC6 = Logical & Physical Access) and **AIUC** (ROTN AI Usage Control,
 *autonomy*) -- via :mod:`rot.compliance`. The mapping is attached to each
 finding (``controls``) and summarised in the report (``compliance``), so the
 ``--json`` artifact is directly consumable by a SOC 2 / AIUC audit. The AIUC
-control set is Caravel-defined and **swappable** (see ``docs/compliance.md``).
+control set is ROTN-defined and **swappable** (see ``docs/compliance.md``).
 
 Pure stdlib, Python 3.6 compatible.
 """

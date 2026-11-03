@@ -1,7 +1,7 @@
 # rot-verify — Architecture
 
 > **Single source of truth.** This document is the authoritative description of
-> the `caravel/rot-verify` architecture. Every other phase of the master plan
+> the `nkamoah17/rotn` architecture. Every other phase of the master plan
 > references the planes, contracts, and invariants defined here. If code and
 > this document disagree, this document — and the tests that pin it — win.
 >
@@ -155,7 +155,7 @@ support it:
 |----------|--------|-------|
 | `rot ci` — CI gate (verdict + JUnit XML + SARIF) | **shipped** | `rot ci --policy … --out ci`; exit-code aware; PR annotations |
 | static site (Cytoscape graph, verdict card, replay, findings, compliance) | **shipped** | a pure static bundle rendered from the RTF trace — no server, no runtime deps |
-| GitHub Pages deploy (`deploy-pages`) | **shipped** | `.github/workflows/pages.yml` rebuilds `rot site --out site/data` on push to `main` and publishes to `caravel.github.io/rot-verify` |
+| GitHub Pages deploy (`deploy-pages`) | **shipped** | `.github/workflows/pages.yml` rebuilds `rot site --out site/data` on push to `main` and publishes to `nkamoah17.github.io/rotn` |
 
 The Ship plane is a **pure function of the RTF trace**: it renders the verdict
 card, draws the counterexample graph (states = nodes, actions = edges) with
@@ -388,5 +388,5 @@ The rules that make it fail-closed:
 
 ---
 
-*This document is the single source of truth for `caravel/rot-verify`. Update
+*This document is the single source of truth for `nkamoah17/rotn`. Update
 it in the same change that changes the architecture it describes.*

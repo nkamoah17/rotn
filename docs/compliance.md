@@ -5,7 +5,7 @@
 
 A **compliance profile** maps the Cedar-AR findings vocabulary
 (`rot.mcp_adapter`) to the controls an auditor cares about — **SOC 2**
-(AICPA TSC, CC6 = Logical & Physical Access) and **AIUC** (Caravel AI Usage
+(AICPA TSC, CC6 = Logical & Physical Access) and **AIUC** (ROTN AI Usage
 Control, *autonomy*).
 
 The profile is a **pure leaf module**: no runtime dependencies, imports nothing
@@ -13,7 +13,7 @@ from the rest of the package. `rot.mcp_adapter` imports it and attaches the
 result to every finding (`controls`) and to the report (`compliance`), so the
 `--json` artifact is directly consumable by a SOC 2 / AIUC audit.
 
-The control set is **Caravel-defined and swappable**: swap the
+The control set is **ROTN-defined and swappable**: swap the
 `FINDING_CONTROLS` / `PROPERTY_CONTROLS` tables (or the `AIUC` framework) and
 the same findings re-map to a different control set without touching the
 finding logic.
@@ -30,13 +30,13 @@ finding logic.
 | `CC6.3` | Network security (tenant isolation) |
 | `CC6.6` | Change management / provisioning |
 
-### AIUC (Caravel AI Usage Control) — *autonomy*
+### AIUC (ROTN AI Usage Control) — *autonomy*
 
 | ID | Control |
 |----|---------|
 | `AIUC-1` | The agent must not act beyond its policy. |
 
-`AIUC-1` is a **Caravel-defined** control (not an external standard). It
+`AIUC-1` is a **ROTN-defined** control (not an external standard). It
 captures the *autonomy* property: any condition in which the agent can act
 beyond its policy is an autonomy concern, so it applies to **every** finding.
 
@@ -76,7 +76,7 @@ Every findings report (`--mcp` and `--manifest`) carries a top-level
   "controls_touched": ["CC6.1", "AIUC-1"],
   "controls": {
     "CC6.1": "SOC 2 CC6.1 -- Logical access security",
-    "AIUC-1": "Caravel AIUC-1 -- Autonomy (agent must not act beyond policy)"
+    "AIUC-1": "ROTN AIUC-1 -- Autonomy (agent must not act beyond policy)"
   },
   "evidence": {
     "findings_total": 1,

@@ -69,7 +69,7 @@ and "commercial" in this document refer to **which code is Apache‑2.0 vs SSPL*
 — they are *not* audit-budget tiers.  The bounded engine itself runs at
 **full strength for every user**: no license or tier unlocks a larger search
 budget, and there is no public default license key (signing/verification is
-simply unavailable without a `$CARAVEL_LICENSE_KEY`).  The only things that can
+simply unavailable without a `$ROTN_LICENSE_KEY`).  The only things that can
 cap a run are the user's own choices — an explicit `--depth` bound, or a
 license file the user supplies (the license is the highest authority and the
 only thing that can shrink the budget).  So a self‑hosted Apache‑2.0 user gets

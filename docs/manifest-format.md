@@ -5,7 +5,7 @@
 
 An **MCP Manifest** is a single JSON document that describes an MCP server's
 tool catalog in the shape defined by the Model Context Protocol
-(specification `2025-06-18`), *plus* the Caravel policy/compliance fields that
+(specification `2025-06-18`), *plus* the ROTN policy/compliance fields that
 let `rot check --manifest` run structural checks (field permission, tenant
 isolation) without a runtime.
 
@@ -14,7 +14,7 @@ A manifest is a **superset** of the MCP `tools/list` result:
 * the `tools` array is exactly the MCP `result.tools[]` shape — each tool
   carries `name` (required) and the optional `title`, `description`,
   `inputSchema`, `outputSchema`, and `annotations`;
-* the Caravel additions are `tenant_scope` (which tenant a tool acts on),
+* the ROTN additions are `tenant_scope` (which tenant a tool acts on),
   `read_fields` / `write_fields` (the data fields it reads/writes), and the
   top-level `allowed_write_fields` (the tenant's write-permission set).
 
@@ -54,7 +54,7 @@ Each `tools[]` entry is a **superset** of the MCP tool object.
 | `outputSchema` | object | no | JSON Schema for the tool's output (must be `type: "object"`). |
 | `annotations` | object | no | MCP hint annotations (see below). |
 
-### Caravel compliance fields
+### ROTN compliance fields
 
 | key | type | required | meaning |
 |-----|------|----------|---------|
@@ -80,7 +80,7 @@ All values are booleans. Only these keys are accepted:
 
 ## 3. `inputSchema` / `outputSchema`
 
-Caravel enforces the *shape* it relies on without pulling in a full
+ROTN enforces the *shape* it relies on without pulling in a full
 JSON-Schema validator (zero deps):
 
 * it is a JSON object;
@@ -117,9 +117,9 @@ JSON-Schema validator (zero deps):
         "idempotentHint": false,
         "openWorldHint": true
       },
-      "tenant_scope": "tenant:acme",           // Caravel: which tenant it acts on
-      "read_fields":  ["account.balance"],     // Caravel: fields it reads
-      "write_fields": ["account.balance"]      // Caravel: fields it writes
+      "tenant_scope": "tenant:acme",           // ROTN: which tenant it acts on
+      "read_fields":  ["account.balance"],     // ROTN: fields it reads
+      "write_fields": ["account.balance"]      // ROTN: fields it writes
     }
   ]
 }

@@ -1,10 +1,10 @@
 {
   "budget": {
     "limits": {
-      "max_horizon": 4,
-      "max_states": 1000,
-      "max_tenant_scopes": 1,
-      "max_tools": 5
+      "max_horizon": 12,
+      "max_states": 1000000,
+      "max_tenant_scopes": 10,
+      "max_tools": 100
     },
     "source": "free",
     "tier": "free"
@@ -87,7 +87,7 @@
   },
   "compliance": {
     "controls": {
-      "AIUC-1": "Caravel AIUC-1 -- Autonomy (agent must not act beyond policy)",
+      "AIUC-1": "ROTN AIUC-1 -- Autonomy (agent must not act beyond policy)",
       "CC6.1": "SOC 2 CC6.1 -- Logical access security"
     },
     "controls_touched": [
@@ -276,7 +276,7 @@
       "s100_2"
     ]
   },
-  "hash": "9343c837fd3b9efe98155c9d79afd07f925fbab1c36d03f8d80c991ef2939277",
+  "hash": "c9ab293816e242bd9d65e61898730f4dabb93f3c50e7208f8bd10f5604a2d787",
   "horizon": 12,
   "manifest_id": "mf-1030049f3b5c2797",
   "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 2 * 100 = 200 -- past the cap of 200. The counterexample is {'completed': 100, 'inflight': 2}. (9 reachable states explored.)",
@@ -291,10 +291,10 @@
   "provenance": {
     "budget": {
       "limits": {
-        "max_horizon": 4,
-        "max_states": 1000,
-        "max_tenant_scopes": 1,
-        "max_tools": 5
+        "max_horizon": 12,
+        "max_states": 1000000,
+        "max_tenant_scopes": 10,
+        "max_tools": 100
       },
       "source": "free",
       "tier": "free"

@@ -37,17 +37,17 @@ setup(
     name="rotn",
     version=_read_version(),
     description=(
-        "caravel/rot-verify -- verify an AI agent's tool policy (Dogwood or "
+        "nkamoah17/rotn -- verify an AI agent's tool policy (Dogwood or "
         "an MCP manifest) with three independent engines + bounded re-check; "
         "deterministic, hashed trace; SOC 2 / AIUC control mapping; zero "
         "runtime deps."
     ),
     long_description=(
         "<p align=\"center\">"
-        "<img src=\"assets/caravel_logo.jpeg\" alt=\"Caravel\" width=\"160\"/>"
+        "<img src=\"assets/caravel_logo.jpeg\" alt=\"ROTN\" width=\"160\"/>"
         "</p>\n\n"
         "# ROTN — Regression-detection Oracle via Trace Non-emptiness\n\n"
-        "**CARAVEL** — *Agents are replacing the software that used to "
+        "**ROTN** — *Agents are replacing the software that used to "
         "enforce our rules. We make the rules explicit, prove the policy "
         "holds even when the model attempts to break it, and coach the "
         "agent back in bounds when it does.*\n\n"
@@ -57,16 +57,16 @@ setup(
         "depth by tier, and emits a deterministic, hashed trace that "
         "replays as an interactive proof on GitHub Pages.\n\n"
         "Pure stdlib, zero external dependencies, Python 3.6+.\n\n"
-        "Repository: [caravel/rot-verify]"
-        "(https://github.com/caravel/rot-verify)\n"
+        "Repository: [nkamoah17/rotn]"
+        "(https://github.com/nkamoah17/rotn)\n"
     ),
     long_description_content_type="text/markdown",
-    author="Caravel",
-    url="https://github.com/caravel/rot-verify",
+    author="ROTN",
+    url="https://github.com/nkamoah17/rotn",
     project_urls={
-        "Repository": "https://github.com/caravel/rot-verify",
-        "Issues": "https://github.com/caravel/rot-verify/issues",
-        "Documentation": "https://caravel.github.io/rot-verify/",
+        "Repository": "https://github.com/nkamoah17/rotn",
+        "Issues": "https://github.com/nkamoah17/rotn/issues",
+        "Documentation": "https://nkamoah17.github.io/rotn/",
     },
     license="Apache-2.0",
     python_requires=">=3.6",

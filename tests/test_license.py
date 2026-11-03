@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Tests for the Caravel license model in :mod:`rot.license`.
+"""Tests for the ROTN license model in :mod:`rot.license`.
 
 ROTN is full-strength for everyone: there is no free/paid budget split. This
 suite covers:
@@ -34,7 +34,7 @@ import rot.license as lic  # noqa: E402
 import rot.mcp_adapter as mcp  # noqa: E402
 import rot.mcp_manifest as mm  # noqa: E402
 
-#: A fixed Caravel key for deterministic signing/verification tests.
+#: A fixed ROTN key for deterministic signing/verification tests.
 KEY = "test-caravel-key"
 
 #: A fixed reference date for deterministic expiry tests.
