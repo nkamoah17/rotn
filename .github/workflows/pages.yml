@@ -73,8 +73,9 @@ jobs:
 
       - name: Site smoke (the four-beat arc + hash-pinned attestation)
         # Gate every deploy: the E-section acceptance (E1-E4) must hold in
-        # the bundle that goes live -- beats, both climaxes, attestation
-        # body, and the hash-pinned share URL.
+        # the bundle that goes live -- beats, the K-sweep + to_proceed tags,
+        # the attestation (incl. the corrected policy + its re-proof status),
+        # and the hash-pinned share URL.
         run: |
           set -e
           node site/smoke_app.js

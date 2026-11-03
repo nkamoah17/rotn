@@ -36,7 +36,62 @@
   ],
   "findings": [],
   "graph": {
-    "edges": [],
+    "edges": [
+      {
+        "action": "spend_ok",
+        "from": "s0_0",
+        "to": "s0_1",
+        "witness": false
+      },
+      {
+        "action": "spend_ok",
+        "from": "s0_1",
+        "to": "s0_2",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s0_1",
+        "to": "s100_0",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s0_2",
+        "to": "s0_2",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s0_2",
+        "to": "s100_1",
+        "witness": false
+      },
+      {
+        "action": "spend_ok",
+        "from": "s100_0",
+        "to": "s100_1",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s100_1",
+        "to": "s100_1",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s100_1",
+        "to": "s200_0",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s200_0",
+        "to": "s200_0",
+        "witness": false
+      }
+    ],
     "kind": "state",
     "nodes": [
       {
@@ -90,7 +145,7 @@
     ],
     "witness_path": []
   },
-  "hash": "618df504da5a479195cceb6c7189f0ebb8558b08e785cc50f1ad26d22a05aeab",
+  "hash": "0ac029a32c2b0a56d4387df4b806bd16dcdda71840a3a0011a66111f778fa108",
   "horizon": 12,
   "manifest_id": "mf-a848e9a4e6c2a999",
   "narration": "The spend-cap policy is PROVEN. The ``spend_ok`` guard charges in-flight requests against the cap, so the settled + in-flight amount never exceeds 200 in any of the 6 reachable states.",

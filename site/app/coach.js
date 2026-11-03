@@ -1,6 +1,6 @@
 /* ROTN replay site -- coach panel (E1: the coach is the HERO).
  *
- * The coach is the centerpiece of the arc (beat 4 / the 2nd climax), and the
+ * The coach is the centerpiece of the arc (beat 4), and the
  * panel is re-sequenced around it:
  *
  *   blocked call  ->  the 5-field refusal  ->  to_proceed  ->  allowed_now
@@ -9,7 +9,7 @@
  * the *repair and re-proof that discharges the coaching* -- supporting
  * evidence for the refusal, not the headline.
  *
- * Data source: ``trace.coaching`` (the CoachingArtifact embedded in the RTF v1
+ * Data source: ``trace.coaching`` (the CoachingArtifact embedded in the caravel.rtf/v1
  * trace). The 5-field refusal is assembled from ``coaching.to_proceed`` (the
  * computed enabling condition) + ``coaching.policy`` + ``coaching.explain`` --
  * the exact shape the runtime emits (``blocked`` / ``rule`` / ``why`` /
@@ -66,6 +66,9 @@
     var action = tp.action || ((c.policy || {}).action || "");
     return (
       '<div class="coach-blocked">' +
+      (tp.instruction
+        ? '<div class="cb-instruction">' + esc(tp.instruction) + "</div>"
+        : "") +
       '<div class="cb-head">' +
       '<span class="cb-action mono">' + esc(action) + "</span>" +
       '<span class="cb-verdict">BLOCKED</span>' +
@@ -105,7 +108,7 @@
     );
   }
 
-  /* The to_proceed hero -- the 2nd climax of the arc. */
+  /* The to_proceed hero -- the computed enabling condition. */
   function tpHeroHTML(c) {
     var tp = c.to_proceed || {};
     var conds = tp.conditions || [];

@@ -45,6 +45,40 @@ check("registry has 10 traces", Object.keys(reg).length === 10);
   check("registry has " + id, !!reg[id]);
 });
 
+// ---- state-space graph contract (the engine emits the transitions) ----
+(function () {
+  const g = reg["spendcap-buggy"].graph;
+  const sp = reg["spendcap-buggy"].spend;
+  const ids = {};
+  (g.nodes || []).forEach(function (n) { ids[n.id] = true; });
+  check("graph (buggy): nodes = the FULL reachable state space",
+    (g.nodes || []).length === (sp.reachable_states || []).length &&
+    (sp.reachable_states || []).every(function (s) {
+      return ids["s" + s.completed + "_" + s.inflight] === true;
+    }));
+  check("graph (buggy): edges = engine's admitted transitions, endpoints in node set",
+    (g.edges || []).length >= 20 &&
+    (g.edges || []).every(function (e) {
+      return ids[e.from] && ids[e.to] && !!e.action;
+    }));
+  check("graph (buggy): no transition the buggy guard would not admit (settled=200, spend blocked)",
+    (g.edges || []).every(function (e) {
+      return !(e.from === "s200_0" && e.to === "s200_1");
+    }));
+  check("graph (buggy): counterexample path highlighted (nodes + edges)",
+    (g.witness_path || []).length >= 2 &&
+    (g.nodes || []).some(function (n) { return n.witness === true; }) &&
+    (g.edges || []).some(function (e) { return e.witness === true; }));
+  const gc = reg["spendcap-correct"].graph;
+  const cids = {};
+  (gc.nodes || []).forEach(function (n) { cids[n.id] = true; });
+  check("graph (correct): full state space + admitted edges, no witness path",
+    (gc.nodes || []).length >= 5 &&
+    (gc.edges || []).length >= 5 &&
+    (gc.witness_path || []).length === 0 &&
+    (gc.edges || []).every(function (e) { return cids[e.from] && cids[e.to]; }));
+})();
+
 // ---- compliance summary: spendcap buggy ----
 const buggy = reg["spendcap-buggy"];
 const sBuggy = ROT.ROTCompliance.summary(buggy);
@@ -152,6 +186,13 @@ check("coach (buggy): corrected policy (request-sum) shown",
   coachHTML.indexOf("request") >= 0 && coachHTML.indexOf("coach-guard") >= 0);
 check("coach (buggy): re-check proven", coachHTML.indexOf("proven") >= 0);
 check("coach (buggy): SHA-256 hash shown", coachHTML.indexOf("SHA-256") >= 0);
+check("coach (buggy): hero -- blocked call + instruction",
+  coachHTML.indexOf("coach-blocked") >= 0 &&
+  coachHTML.indexOf("Your policy would allow this call") >= 0);
+check("coach (buggy): hero -- five-field refusal table",
+  coachHTML.indexOf("refusal-table") >= 0 && coachHTML.indexOf("rf-key") >= 0);
+check("coach (buggy): hero -- to_proceed enabling condition",
+  coachHTML.indexOf("tp-hero") >= 0 && coachHTML.indexOf("TO PROCEED") >= 0);
 
 // Proven / non-coachable traces must NOT render the panel.
 const coachClean = { innerHTML: "" };

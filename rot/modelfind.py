@@ -162,16 +162,35 @@ class ModelFinder(object):
         This mirrors what TLC explores (states reachable from Init), unlike
         ``_iter_states`` which enumerates the full Cartesian product.
         """
+        return self.reachable_with_transitions(max_states=max_states)[0]
+
+    def reachable_with_transitions(self, max_states=None):
+        """BFS from the initial state; return ``(states, edges)``.
+
+        ``states`` is the list of reachable state dicts (deterministic BFS
+        order, as :meth:`reachable_states`).  ``edges`` is every ADMITTED
+        transition of the model -- one per (reachable source state, action)
+        whose guard holds at the source and whose effects are concrete -- in
+        the same deterministic order, each as::
+
+            {"from": <pre-state>, "to": <post-state>, "action": <name>}
+
+        The engine owns the guards, so this transition set is the
+        authoritative one: the ship plane (site) renders it as-is instead of
+        re-deriving transitions from action effects (which would mis-model a
+        guard that also constrains the budget, not just the pool).
+        """
         budget = self.max_states if max_states is None else int(max_states)
         init_actions = [a for a in self.ir.actions if getattr(a, "is_initial", False)]
         if not init_actions:
-            return []
+            return [], []
         start = self._apply_effects({}, init_actions[0].effects)
         if start is None:
-            return []
+            return [], []
         seen = {tuple(sorted(start.items()))}
         frontier = [start]
         out = [start]
+        edges = []
         idx = 0
         while idx < len(frontier):
             cur = frontier[idx]
@@ -187,12 +206,13 @@ class ModelFinder(object):
                 ns = self._apply_effects(cur, a.effects)
                 if ns is None:
                     continue
+                edges.append({"from": cur, "to": ns, "action": a.name})
                 key = tuple(sorted(ns.items()))
                 if key not in seen:
                     seen.add(key)
                     frontier.append(ns)
                     out.append(ns)
-        return out
+        return out, edges
 
     def exists_reachable(self, predicate, max_states=None):
         """Return (SAT, witness) | (UNSAT, None) over reachable states only."""

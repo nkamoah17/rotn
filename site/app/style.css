@@ -440,9 +440,9 @@ code.mono { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; }
 .sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; background: var(--accent); vertical-align: -2px; }
 .sw-tool { background: #0b5cad; border-radius: 4px; }
 .sw-field { background: #6e7781; border-radius: 50%; }
-.sw-state { background: #0b5cad; border-radius: 50%; }
-.sw-state-hl { background: var(--violated); border-radius: 50%; }
-.sw-state-active { background: #ff7b00; border-radius: 50%; }
+.sw-state-ok { background: #1a7f37; border-radius: 50%; }
+.sw-state-over { background: var(--violated); border-radius: 50%; }
+.sw-state-hl { background: #ff7b00; border-radius: 50%; }
 .sw-cross { background: var(--violated); border-radius: 50%; width: 12px; height: 12px; }
 .sw-proven { background: var(--proven); border-radius: 50%; width: 12px; height: 12px; }
 .ln { display: inline-block; width: 18px; height: 0; vertical-align: 2px; }
@@ -490,6 +490,61 @@ code.mono { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; }
 .coach-discharge { margin: 0; line-height: 1.55; }
 .coach-closed { color: var(--proven); }
 .coach-open { color: var(--unknown); font-weight: 600; }
+
+/* ---------------- coach hero (blocked -> refusal -> to_proceed) ---------------- */
+
+.coach-blocked {
+  border: 1px solid var(--violated-line);
+  background: var(--violated-bg);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 0 0 12px;
+}
+.cb-instruction {
+  font-weight: 600;
+  color: var(--violated);
+  margin: 0 0 8px;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.cb-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.cb-action { font-size: 14px; font-weight: 600; }
+.cb-verdict {
+  font-weight: 700; letter-spacing: .5px; font-size: 11px;
+  color: var(--violated); background: var(--panel); border: 1px solid var(--violated-line);
+  border-radius: 4px; padding: 1px 6px;
+}
+.cb-state { font-size: 12.5px; margin-top: 6px; }
+.cb-guard { font-size: 12.5px; margin-top: 2px; }
+
+.refusal-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 0 0 12px; }
+.refusal-table th, .refusal-table td {
+  border: 1px solid var(--line); padding: 7px 12px; text-align: left; vertical-align: top;
+}
+.refusal-table .rf-key {
+  width: 90px; font-family: var(--mono); font-size: 12px; background: var(--panel-2);
+}
+.rf-true { color: var(--violated); font-weight: 700; }
+.rf-false { color: var(--proven); font-weight: 700; }
+
+.tp-hero {
+  border: 1px solid var(--accent-line);
+  background: var(--accent-softer);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 0 0 12px;
+}
+.tp-kicker {
+  font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 8px;
+}
+.tp-conds { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.tp-cond {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 5px;
+  padding: 3px 8px; font-size: 12.5px;
+}
+.tp-explain { margin: 0 0 8px; font-size: 13px; line-height: 1.5; }
+.tp-allowed { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
 
 /* ---------------- compliance (SOC 2 / AIUC controls) ---------------- */
 
@@ -678,7 +733,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-vis
 .beat-body .graph-box, .beat-body #rot-spendcap, .beat-body #rot-timeline, .beat-body #rot-coach, .beat-body #rot-narration { margin: 0 0 14px; }
 .beat-body > :last-child { margin-bottom: 0; }
 
-/* ---------------- the climaxes ---------------- */
+/* ---------------- the K-sweep + to_proceed callouts ---------------- */
 
 .climax { margin: 6px 0 14px; }
 .climax-tag {

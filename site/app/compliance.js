@@ -2,7 +2,7 @@
  *
  * Renders the SOC 2 / AIUC controls a trace touched, with the evidence that
  * links each control to the findings that triggered it. The data contract is
- * the RTF v1 ``compliance`` block (see ``rot/trace.py`` + ``rot/compliance.py``):
+ * the caravel.rtf/v1 ``compliance`` block (see ``rot/trace.py`` + ``rot/compliance.py``):
  *
  *     compliance: {
  *       result:         "proven" | "violated" | ...

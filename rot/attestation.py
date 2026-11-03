@@ -378,6 +378,27 @@ def build_attestation(trace_dict, coverage=None):
         # D4: the corpus coverage metric (N of M SAFE/UNSAFE/UNKNOWN) is
         # first-class in the attestation (not a footnote).
         body["corpus_coverage"] = summarize_coverage(coverage)
+
+    # The corrected policy, ATTESTED by its re-proof (the coaching loop):
+    # status, the HONEST engine list (the engines that actually discharged
+    # it -- the symbolic engine here, not the full engine family), the
+    # buggy vs corrected guard, and the discharge.  A pure re-assembly of
+    # fields already present in the trace (no verification logic); carried
+    # only when the coaching re-check actually re-proved (fail-closed).
+    coaching = trace_dict.get("coaching") or {}
+    recheck = coaching.get("recheck") or {}
+    if recheck.get("status") == "proven":
+        correct = coaching.get("correct") or {}
+        close = coaching.get("close") or {}
+        body["corrected_policy"] = {
+            "status": "proven",
+            "engines": [recheck["engine"]] if recheck.get("engine") else [],
+            "n_states": recheck.get("n_states"),
+            "buggy_guard": correct.get("buggy_guard"),
+            "guard": correct.get("guard"),
+            "delta": correct.get("delta"),
+            "discharge": close.get("discharge"),
+        }
     return Attestation(body)
 
 
@@ -530,6 +551,25 @@ def render_markdown(att):
         lines.append("_none -- the verdict holds over the explored state "
                      "space_")
     lines.append("")
+    cp = att.get("corrected_policy")
+    if cp:
+        lines.append("## Corrected policy (attested by re-proof)")
+        lines.append("")
+        lines.append("- Status: **PROVEN** by engine(s): %s"
+                     % (", ".join("`%s`" % e for e in (cp.get("engines") or []))
+                        or "n/a"))
+        if cp.get("n_states") is not None:
+            lines.append("- Re-proof state space: n_states = %s"
+                         % cp.get("n_states"))
+        if cp.get("buggy_guard"):
+            lines.append("- Buggy guard: `%s`" % cp.get("buggy_guard"))
+        if cp.get("guard"):
+            lines.append("- Corrected guard: `%s`" % cp.get("guard"))
+        if cp.get("delta"):
+            lines.append("- Delta: %s" % cp.get("delta"))
+        if cp.get("discharge"):
+            lines.append("- Discharge: %s" % cp.get("discharge"))
+        lines.append("")
     lines.append("## Controls (SOC 2 / AIUC)")
     lines.append("")
     lines.extend(_md_controls(controls))
@@ -663,7 +703,7 @@ view (this artifact) &rarr; site = demo view.</div>
 %(corpus)s
 <h2>Counterexample</h2>
 %(counterexample)s
-<h2>Controls (SOC 2 / AIUC)</h2>
+%(corrected_policy)s<h2>Controls (SOC 2 / AIUC)</h2>
 %(controls)s
 <h2>Bounded caveat</h2>
 <p>%(caveat)s</p>
@@ -712,6 +752,32 @@ def render_html(att):
         ce_html = ("<p><em>none -- the verdict holds over the explored "
                    "state space</em></p>")
 
+    # The corrected policy (attested by re-proof) -- carried only when the
+    # coaching re-check re-proved (fail-closed; see build_attestation).
+    cp = att.get("corrected_policy")
+    if cp:
+        engines = (", ".join("<code>%s</code>" % _esc(e)
+                             for e in (cp.get("engines") or []))
+                   or "<em>n/a</em>")
+        corrected_html = (
+            "<h2>Corrected policy (attested by re-proof)</h2>\n"
+            "<p><strong>PROVEN</strong> by engine(s): %s%s</p>"
+            % (engines,
+               ("; n_states = %s" % cp.get("n_states"))
+               if cp.get("n_states") is not None else "")
+            + (("<p><strong>Buggy guard:</strong> <code>%s</code></p>"
+                % _esc(cp.get("buggy_guard"))) if cp.get("buggy_guard") else "")
+            + (("<p><strong>Corrected guard:</strong> <code>%s</code></p>"
+                % _esc(cp.get("guard"))) if cp.get("guard") else "")
+            + (("<p><strong>Delta:</strong> %s</p>" % _esc(cp.get("delta")))
+               if cp.get("delta") else "")
+            + (("<p><strong>Discharge:</strong> %s</p>" % _esc(cp.get("discharge")))
+               if cp.get("discharge") else "")
+            + "\n"
+        )
+    else:
+        corrected_html = ""
+
     stale_html = ("<p class='stale'><strong>STALE</strong> -- policy or engine "
                   "changed; a re-issue is required.</p>"
                   if att.get("stale")
@@ -744,6 +810,7 @@ def render_html(att):
         "corpus": coverage_html,
         "out_of_scope": _html_list(att.get("out_of_scope") or []),
         "counterexample": ce_html,
+        "corrected_policy": corrected_html,
         "controls": _html_controls(controls),
         "caveat": _esc(att.get("bounded_caveat")),
         "reverify_cmd": _esc(reverify.get("command")),

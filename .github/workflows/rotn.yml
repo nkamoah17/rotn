@@ -49,7 +49,8 @@ jobs:
       - name: Site smoke (rule -> attack -> proof -> coach + attestation)
         # The site (site/) is a zero-dependency plain-JS bundle; its smoke
         # tests run under Node with a browser stub (no browser needed) and
-        # pin the E-section acceptance: the four-beat arc, the two climaxes,
+        # pin the E-section acceptance: the four-beat arc, the K-sweep +
+        # to_proceed tags,
         # the attestation body, and the hash-pinned share URL (E1-E4).
         run: |
           node site/smoke_app.js

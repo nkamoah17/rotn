@@ -47,7 +47,7 @@
         "inflight": 3
       }
     },
-    "hash": "7f61d3534eb8bb7d5bc0e347200894f36a1c3c7354f86610b74d123198cf5f75",
+    "hash": "1f849a0190e9ccaa88bab88e600ad344f3cb0edd04cb6d12054be1f6e111541d",
     "policy": {
       "action": "Transfer",
       "amount": 100,
@@ -79,6 +79,7 @@
       ],
       "explanation": "to proceed with 'spend_ok' from state {'completed': 0, 'inflight': 3}, the guard's currently-false condition(s) must hold: completed + inflight * 100 + 100 <= 200; inflight < 3",
       "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 3",
+      "instruction": "Your policy would allow this call. ROTN's verified guard blocks it.",
       "state": {
         "completed": 0,
         "inflight": 3
@@ -199,19 +200,141 @@
     "edges": [
       {
         "action": "spend_ok",
+        "from": "s0_0",
+        "to": "s0_1",
+        "witness": false
+      },
+      {
+        "action": "spend_ok",
         "from": "s0_1",
         "to": "s0_2",
         "witness": true
+      },
+      {
+        "action": "respond",
+        "from": "s0_1",
+        "to": "s100_0",
+        "witness": false
       },
       {
         "action": "spend_ok",
         "from": "s0_2",
         "to": "s0_3",
         "witness": true
+      },
+      {
+        "action": "respond",
+        "from": "s0_2",
+        "to": "s100_1",
+        "witness": false
+      },
+      {
+        "action": "spend_ok",
+        "from": "s100_0",
+        "to": "s100_1",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s0_3",
+        "to": "s100_2",
+        "witness": false
+      },
+      {
+        "action": "spend_ok",
+        "from": "s100_1",
+        "to": "s100_2",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s100_1",
+        "to": "s200_0",
+        "witness": false
+      },
+      {
+        "action": "spend_ok",
+        "from": "s100_2",
+        "to": "s100_3",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s100_2",
+        "to": "s200_1",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s200_0",
+        "to": "s200_0",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s100_3",
+        "to": "s200_2",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s200_1",
+        "to": "s200_1",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s200_1",
+        "to": "s300_0",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s200_2",
+        "to": "s200_2",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s200_2",
+        "to": "s300_1",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s300_0",
+        "to": "s300_0",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s300_1",
+        "to": "s300_1",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s300_1",
+        "to": "s400_0",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s400_0",
+        "to": "s400_0",
+        "witness": false
       }
     ],
     "kind": "state",
     "nodes": [
+      {
+        "completed": 0,
+        "cumulative": 0,
+        "id": "s0_0",
+        "inflight": 0,
+        "kind": "state",
+        "witness": false
+      },
       {
         "completed": 0,
         "cumulative": 100,
@@ -229,12 +352,92 @@
         "witness": true
       },
       {
+        "completed": 100,
+        "cumulative": 100,
+        "id": "s100_0",
+        "inflight": 0,
+        "kind": "state",
+        "witness": false
+      },
+      {
         "completed": 0,
         "cumulative": 300,
         "id": "s0_3",
         "inflight": 3,
         "kind": "state",
         "witness": true
+      },
+      {
+        "completed": 100,
+        "cumulative": 200,
+        "id": "s100_1",
+        "inflight": 1,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 100,
+        "cumulative": 300,
+        "id": "s100_2",
+        "inflight": 2,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 200,
+        "cumulative": 200,
+        "id": "s200_0",
+        "inflight": 0,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 100,
+        "cumulative": 400,
+        "id": "s100_3",
+        "inflight": 3,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 200,
+        "cumulative": 300,
+        "id": "s200_1",
+        "inflight": 1,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 200,
+        "cumulative": 400,
+        "id": "s200_2",
+        "inflight": 2,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 300,
+        "cumulative": 300,
+        "id": "s300_0",
+        "inflight": 0,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 300,
+        "cumulative": 400,
+        "id": "s300_1",
+        "inflight": 1,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 400,
+        "cumulative": 400,
+        "id": "s400_0",
+        "inflight": 0,
+        "kind": "state",
+        "witness": false
       }
     ],
     "witness_path": [
@@ -243,7 +446,7 @@
       "s0_3"
     ]
   },
-  "hash": "fc9be14b0aa70d4be86885ad6b4a66d520d492fdb7ecaf36819903d32beb27e5",
+  "hash": "25a81b19c62d842d0a28de8e7f8291459d1936e2b300339849c906070ce41f81",
   "horizon": 12,
   "manifest_id": "mf-ba311c76ea6f5884",
   "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 3 * 100 = 300 -- past the cap of 200. The counterexample is {'completed': 0, 'inflight': 3}. (14 reachable states explored.)",

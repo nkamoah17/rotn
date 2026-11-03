@@ -103,8 +103,8 @@ check("gallery: >= 10 trace cards", (viewEl.innerHTML.match(/trace-card/g) || []
   ["rule", "attack", "proof", "coach"].forEach(function (b) {
     check("E2: beat section " + b, viewEl.innerHTML.indexOf('id="beat-' + b + '"') >= 0);
   });
-  check("E2: climax 1 tagged (K-sweep)", viewEl.innerHTML.indexOf("climax 1: the K-sweep") >= 0);
-  check("E2: climax 2 tagged (to_proceed)", viewEl.innerHTML.indexOf("climax 2: to_proceed") >= 0);
+  check("E2: K-sweep beat tagged", viewEl.innerHTML.indexOf('beat-tag">the K-sweep') >= 0);
+  check("E2: to_proceed beat tagged", viewEl.innerHTML.indexOf('beat-tag">to_proceed') >= 0);
   check("E2: coach panel mount point (the hero)", viewEl.innerHTML.indexOf('id="rot-coach"') >= 0);
 
   // E4: the hero carries the hash-pinned attestation link.
@@ -123,6 +123,10 @@ check("gallery: >= 10 trace cards", (viewEl.innerHTML.match(/trace-card/g) || []
   check("E3: scope section", viewEl.innerHTML.indexOf(">Scope<") >= 0);
   check("E3: coverage conditions", viewEl.innerHTML.indexOf("Assumptions (coverage conditions)") >= 0);
   check("E3: out of scope stated", viewEl.innerHTML.indexOf("Out of scope") >= 0);
+  check("E3: corrected policy attested by re-proof",
+    viewEl.innerHTML.indexOf("Corrected policy (attested by re-proof)") >= 0);
+  check("E3: corrected policy PROVEN by the re-proof engine",
+    viewEl.innerHTML.indexOf("<strong>PROVEN</strong> by engine(s): <code class=\"mono\">symbolic</code>") >= 0);
   check("E3: bounded caveat", viewEl.innerHTML.indexOf("Bounded caveat") >= 0);
   check("E3: defensible claim (the moat)", viewEl.innerHTML.indexOf("Defensible claim") >= 0);
   check("E3: what we do NOT claim", viewEl.innerHTML.indexOf("What we do NOT claim") >= 0);

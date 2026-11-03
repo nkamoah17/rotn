@@ -186,7 +186,7 @@
     return "";
   }
 
-  /* Does this sweep expose the masking (the arc's climax-1 shape)?
+  /* Does this sweep expose the masking (the K=1 proven / K>=2 violated shape)?
    *
    * True when some K masks the bug (buggy proves clean) and some K exposes
    * it (buggy violated) -- the K=1 trap the whole story is built around.

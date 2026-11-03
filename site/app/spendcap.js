@@ -121,7 +121,11 @@
     /* Annotation: the crossing moment, or a "no crossing" note. */
     if (hasPath && crossing != null) {
       var cp = pts[crossing];
-      svg.push('<text x="' + x(cp.x) + '" y="' + (y(cp.y) + 22) +
+      /* Clamp the label into the plot (it used to overflow the right edge at
+         K = max in-flight) and flip it above the point near the x-axis. */
+      var labelX = Math.max(mL + 40, Math.min(W - mR - 40, x(cp.x)));
+      var labelY = (y(cp.y) + 22) > (H - mB - 2) ? y(cp.y) - 12 : y(cp.y) + 22;
+      svg.push('<text x="' + labelX + '" y="' + labelY +
         '" class="spend-cross-label" text-anchor="middle">crosses cap</text>');
     } else if (!hasPath) {
       svg.push('<text x="' + (mL + pw / 2) + '" y="' + (capY - 14) +

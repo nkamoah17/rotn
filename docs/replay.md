@@ -9,7 +9,7 @@ two complementary forms:
 1. **`rot replay`** (CLI) — re-derives a recorded counterexample
    (`attack.jsonl`) against a policy and reports whether it still holds. This is
    the verification loop that closes the "is this attack real?" question.
-2. **The hosted replay** (site) — renders a deterministic, hashed trace (RTF v1)
+2. **The hosted replay** (site) — renders a deterministic, hashed trace (caravel.rtf/v1)
    as an **interactive proof**: the verdict, the state-space graph, the
    counterexample, the findings, and the controls.
 
@@ -28,7 +28,7 @@ Every replay opens with a **verdict hero**:
 | element | meaning |
 |---------|---------|
 | **PROVEN / VIOLATED / UNKNOWN** | the gate outcome (below) |
-| `RTF v1 · caravel.rtf/v1 · mf-…` | the schema tag + the `manifest_id` (integrity badge) |
+| `caravel.rtf/v1 · mf-…` | the schema tag + the `manifest_id` (integrity badge) |
 | chips: **engines · tier · horizon · K** | which engines ran, the budget tier, the bounded-search horizon, and the concurrency pool `K` (spend-cap only) |
 | server / tenant scope / manifest hash | the audited policy and its content hash |
 | **Re-verify in your terminal** | the exact `rot trace …` command that reproduces this trace, with a copy button |

@@ -1,6 +1,6 @@
 /* ROTN replay site -- state-space + manifest graph (Phase F/G, vendored Cytoscape).
  *
- * Two graph kinds (both RTF v1, rendered from trace.graph):
+ * Two graph kinds (both caravel.rtf/v1, rendered from trace.graph):
  *   - manifest (MCP Manifest v1 audit): nodes = tools/fields, edges = reads/writes;
  *     the counterexample highlights the violating tool + field edges.
  *   - state (spend-cap / .dw policy audit): nodes = concrete states, edges = the
@@ -103,6 +103,17 @@
         style: { "shape": "ellipse", "width": "data(size)", "height": "data(size)",
                  "background-color": "#0b5cad", "border-width": 1.5, "border-color": "#0b5cad" }
       },
+      /* Cap status: safe (within cap) vs over-cap. The counterexample path
+         is highlighted on top (node[kind = 'state'][hl = 1] wins: same
+         specificity, later rule). */
+      {
+        selector: "node[kind = 'state'][ok = 1]",
+        style: { "background-color": "#1a7f37", "border-color": "#0a7d33" }
+      },
+      {
+        selector: "node[kind = 'state'][ok = 0]",
+        style: { "background-color": "#cf222e", "border-color": "#a40e26" }
+      },
       {
         selector: "edge",
         style: { "width": 1.5, "line-color": "#8c959f", "target-arrow-color": "#8c959f",
@@ -116,7 +127,9 @@
       { selector: "edge[kind = 'write']",
         style: { "line-style": "solid", "line-color": "#0b5cad", "target-arrow-color": "#0b5cad" } },
       { selector: "node[hl = 1]",
-        style: { "background-color": "#cf222e", "border-color": "#a40e26", "border-width": 2.5 } },
+        style: { "background-color": "#ff7b00", "border-color": "#c2410c", "border-width": 2.5 } },
+      { selector: "node[kind = 'state'][hl = 1]",
+        style: { "background-color": "#ff7b00", "border-color": "#c2410c", "border-width": 3 } },
       { selector: "edge[hl = 1]",
         style: { "line-color": "#cf222e", "target-arrow-color": "#cf222e", "width": 2.5, "line-style": "solid" } },
       /* G1: the active step of the animated replay (the "hot" node / edge). */
@@ -163,9 +176,9 @@
   function legendHTML(state) {
     if (state) {
       return [
-        '<span class="lg"><i class="sw sw-state"></i>state (in-flight / cumulative)</span>',
-        '<span class="lg"><i class="sw sw-state-hl"></i>counterexample</span>',
-        '<span class="lg"><i class="sw sw-state-active"></i>replay step</span>'
+        '<span class="lg"><i class="sw sw-state-ok"></i>within cap (safe)</span>',
+        '<span class="lg"><i class="sw sw-state-over"></i>over cap</span>',
+        '<span class="lg"><i class="sw sw-state-hl"></i>counterexample path (replay)</span>'
       ].join("");
     }
     return [
@@ -185,11 +198,15 @@
       replayBtn = '<button type="button" data-g="replay" class="btn-replay" ' +
         'aria-label="Replay the attack path">\u25b6 Replay attack path</button>';
     }
-    controls.innerHTML =
-      '<button type="button" data-g="in" aria-label="Zoom in">+</button>' +
-      '<button type="button" data-g="out" aria-label="Zoom out">\u2212</button>' +
-      '<button type="button" data-g="fit" aria-label="Fit graph">fit</button>' +
-      replayBtn;
+    /* State graph: the zoom is LOCKED at 100% (the proof is read at a fixed
+       scale); "fit" (pan/centre) is the only view adjustment.
+       Manifest graph: the usual zoom buttons. */
+    var viewBtns = state
+      ? '<button type="button" data-g="fit" aria-label="Fit graph">fit</button>'
+      : '<button type="button" data-g="in" aria-label="Zoom in">+</button>' +
+        '<button type="button" data-g="out" aria-label="Zoom out">\u2212</button>' +
+        '<button type="button" data-g="fit" aria-label="Fit graph">fit</button>';
+    controls.innerHTML = viewBtns + replayBtn;
     return controls;
   }
 
@@ -209,27 +226,75 @@
 
     var nodeEls, fieldEls = [], edgeEls;
     if (state) {
-      /* Deterministic grid layout (path order preserved). */
-      var cols = Math.max(1, Math.ceil(Math.sqrt(nodes.length)));
-      nodeEls = nodes.map(function (n, i) {
-        var col = i % cols, row = Math.floor(i / cols);
-        var size = 26 + Math.min(34, (n.cumulative || 0) / 20);
+      /* The FULL reachable state space (not just the counterexample path):
+         every node is a (completed, inflight) state, colored by cap status
+         (safe = within cap, over = over cap); the counterexample path is
+         highlighted on top (G1 replay).
+         The edge set is the ENGINE's admitted transitions
+         (trace.graph.edges) -- the engine owns the guards, so the ship
+         plane renders them as-is (no re-derivation from action effects). */
+      var rs = (trace.spend && trace.spend.reachable_states) || [];
+      var states = rs.length ? rs : nodes;
+      function stId(s) {
+        if (s.completed != null && s.inflight != null) {
+          return "s" + s.completed + "_" + s.inflight;
+        }
+        return s.id || "";
+      }
+      function stField(s, name) {
+        if (s[name] != null) { return s[name]; }
+        var m = /^s(\d+)_(\d+)$/.exec(s.id || "");
+        return m ? parseInt(name === "completed" ? m[1] : m[2], 10) : null;
+      }
+      var byId = {};
+      var maxCum = 1;
+      states.forEach(function (s) {
+        byId[stId(s)] = true;
+        if ((s.cumulative || 0) > maxCum) { maxCum = s.cumulative || 0; }
+      });
+      nodeEls = states.map(function (s) {
+        var id = stId(s);
         return {
           data: {
-            id: n.id,
-            label: "in=" + n.inflight + "\n$" + n.cumulative,
+            id: id,
+            label: "in=" + stField(s, "inflight") + "\n$" + (s.cumulative || 0),
             kind: "state",
-            size: size,
-            hl: hl.nodes[n.id] ? 1 : 0
+            size: 26 + Math.min(34, (s.cumulative || 0) / 20),
+            ok: s.within_cap === true ? 1 : (s.within_cap === false ? 0 : null),
+            hl: hl.nodes[id] ? 1 : 0
           },
-          position: { x: col * 190, y: row * 150 }
+          position: {
+            x: (stField(s, "inflight") || 0) * 190,
+            y: -((s.cumulative || 0) / maxCum) * 480
+          }
         };
       });
-      edgeEls = edges.map(function (e, i) {
+      /* Edges: the engine's admitted transitions, as-is (the guard is
+         evaluated by the engine, not re-derived here); the counterexample
+         path edges are highlighted. Drop any edge whose endpoints are not
+         in the rendered state set (defensive -- the engine emits both
+         from the same walk). */
+      var edgeList = [];
+      var seenEdges = {};
+      edges.forEach(function (e) {
+        if (!byId[e.from] || !byId[e.to]) { return; }
+        var k = e.from + ">" + e.to;
+        if (seenEdges[k]) { return; }
+        seenEdges[k] = true;
+        edgeList.push({ source: e.from, target: e.to, label: e.action || "",
+                        hl: e.witness === true || isViolatingEdge(e, hl) });
+      });
+      if (!edgeList.length) {
+        edgeList = edges.map(function (e) {
+          return { source: e.from, target: e.to, label: e.action || "",
+                   hl: isViolatingEdge(e, hl) };
+        });
+      }
+      edgeEls = edgeList.map(function (e, i) {
         return {
           data: {
-            id: "e" + i, source: e.from, target: e.to,
-            kind: "", label: e.action || "", hl: isViolatingEdge(e, hl) ? 1 : 0
+            id: "e" + i, source: e.source, target: e.target,
+            kind: "", label: e.label, hl: e.hl ? 1 : 0
           }
         };
       });
@@ -296,8 +361,14 @@
       elements: nodeEls.concat(fieldEls, edgeEls),
       style: baseStyle(),
       layout: { name: "preset" },
-      minZoom: 0.3,
-      maxZoom: 3
+      /* State graph: the zoom is LOCKED at 100% (min = max = 1) -- the
+         state space is read at a fixed scale; pan/fit still work.
+         Manifest graph: the usual zoom range. */
+      minZoom: state ? 1 : 0.3,
+      maxZoom: state ? 1 : 3,
+      /* The fit button is the view affordance; the mouse wheel must
+         not silently rescale the proof (it also fights the page scroll). */
+      userZoomingEnabled: false
     });
     ROTGraph.cy = cy;
     cy.fit({ padded: true });

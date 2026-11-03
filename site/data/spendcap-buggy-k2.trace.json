@@ -47,7 +47,7 @@
         "inflight": 2
       }
     },
-    "hash": "5b83d90e2830cb84aa3cb7a6a565a1e102cd666c8d0da11487baf6cb172a2fa3",
+    "hash": "fab4a4d7b637076def19b020cb086e566ce83bcef1230276a4fd0922b8f815d7",
     "policy": {
       "action": "Transfer",
       "amount": 100,
@@ -79,6 +79,7 @@
       ],
       "explanation": "to proceed with 'spend_ok' from state {'completed': 100, 'inflight': 2}, the guard's currently-false condition(s) must hold: completed + inflight * 100 + 100 <= 200; inflight < 2",
       "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 2",
+      "instruction": "Your policy would allow this call. ROTN's verified guard blocks it.",
       "state": {
         "completed": 100,
         "inflight": 2
@@ -217,9 +218,21 @@
     "edges": [
       {
         "action": "spend_ok",
+        "from": "s0_0",
+        "to": "s0_1",
+        "witness": false
+      },
+      {
+        "action": "spend_ok",
         "from": "s0_1",
         "to": "s0_2",
         "witness": true
+      },
+      {
+        "action": "respond",
+        "from": "s0_1",
+        "to": "s100_0",
+        "witness": false
       },
       {
         "action": "respond",
@@ -229,13 +242,63 @@
       },
       {
         "action": "spend_ok",
+        "from": "s100_0",
+        "to": "s100_1",
+        "witness": false
+      },
+      {
+        "action": "spend_ok",
         "from": "s100_1",
         "to": "s100_2",
         "witness": true
+      },
+      {
+        "action": "respond",
+        "from": "s100_1",
+        "to": "s200_0",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s100_2",
+        "to": "s200_1",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s200_0",
+        "to": "s200_0",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s200_1",
+        "to": "s200_1",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s200_1",
+        "to": "s300_0",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s300_0",
+        "to": "s300_0",
+        "witness": false
       }
     ],
     "kind": "state",
     "nodes": [
+      {
+        "completed": 0,
+        "cumulative": 0,
+        "id": "s0_0",
+        "inflight": 0,
+        "kind": "state",
+        "witness": false
+      },
       {
         "completed": 0,
         "cumulative": 100,
@@ -254,6 +317,14 @@
       },
       {
         "completed": 100,
+        "cumulative": 100,
+        "id": "s100_0",
+        "inflight": 0,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 100,
         "cumulative": 200,
         "id": "s100_1",
         "inflight": 1,
@@ -267,6 +338,30 @@
         "inflight": 2,
         "kind": "state",
         "witness": true
+      },
+      {
+        "completed": 200,
+        "cumulative": 200,
+        "id": "s200_0",
+        "inflight": 0,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 200,
+        "cumulative": 300,
+        "id": "s200_1",
+        "inflight": 1,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 300,
+        "cumulative": 300,
+        "id": "s300_0",
+        "inflight": 0,
+        "kind": "state",
+        "witness": false
       }
     ],
     "witness_path": [
@@ -276,7 +371,7 @@
       "s100_2"
     ]
   },
-  "hash": "7aff3db15dde4fa1cbdf168b6b05066ebd40cdf9865e390e89d6f25274854ef9",
+  "hash": "119a00dea7a30b3918b995e5cc4a2e4c65ce39a99186e1e30b8bf53a72e318ab",
   "horizon": 12,
   "manifest_id": "mf-1030049f3b5c2797",
   "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 2 * 100 = 200 -- past the cap of 200. The counterexample is {'completed': 100, 'inflight': 2}. (9 reachable states explored.)",

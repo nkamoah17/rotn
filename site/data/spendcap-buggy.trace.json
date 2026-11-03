@@ -47,7 +47,7 @@
         "inflight": 3
       }
     },
-    "hash": "650b18bcdbbb21042157867f3590f0b4f5660eee5a07873199de89d9573078ff",
+    "hash": "1a6b0eedcfed24b8c4280c91384efabefa554febda0afd598a671494da929d7a",
     "policy": {
       "action": "Transfer",
       "amount": 100,
@@ -77,6 +77,7 @@
       ],
       "explanation": "to proceed with 'spend_ok' from state {'completed': 0, 'inflight': 3}, the guard's currently-false condition(s) must hold: completed + inflight * 100 + 100 <= 200",
       "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 4",
+      "instruction": "Your policy would allow this call. ROTN's verified guard blocks it.",
       "state": {
         "completed": 0,
         "inflight": 3
@@ -197,19 +198,207 @@
     "edges": [
       {
         "action": "spend_ok",
+        "from": "s0_0",
+        "to": "s0_1",
+        "witness": false
+      },
+      {
+        "action": "spend_ok",
         "from": "s0_1",
         "to": "s0_2",
         "witness": true
+      },
+      {
+        "action": "respond",
+        "from": "s0_1",
+        "to": "s100_0",
+        "witness": false
       },
       {
         "action": "spend_ok",
         "from": "s0_2",
         "to": "s0_3",
         "witness": true
+      },
+      {
+        "action": "respond",
+        "from": "s0_2",
+        "to": "s100_1",
+        "witness": false
+      },
+      {
+        "action": "spend_ok",
+        "from": "s100_0",
+        "to": "s100_1",
+        "witness": false
+      },
+      {
+        "action": "spend_ok",
+        "from": "s0_3",
+        "to": "s0_4",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s0_3",
+        "to": "s100_2",
+        "witness": false
+      },
+      {
+        "action": "spend_ok",
+        "from": "s100_1",
+        "to": "s100_2",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s100_1",
+        "to": "s200_0",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s0_4",
+        "to": "s100_3",
+        "witness": false
+      },
+      {
+        "action": "spend_ok",
+        "from": "s100_2",
+        "to": "s100_3",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s100_2",
+        "to": "s200_1",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s200_0",
+        "to": "s200_0",
+        "witness": false
+      },
+      {
+        "action": "spend_ok",
+        "from": "s100_3",
+        "to": "s100_4",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s100_3",
+        "to": "s200_2",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s200_1",
+        "to": "s200_1",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s200_1",
+        "to": "s300_0",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s100_4",
+        "to": "s200_3",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s200_2",
+        "to": "s200_2",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s200_2",
+        "to": "s300_1",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s300_0",
+        "to": "s300_0",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s200_3",
+        "to": "s200_3",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s200_3",
+        "to": "s300_2",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s300_1",
+        "to": "s300_1",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s300_1",
+        "to": "s400_0",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s300_2",
+        "to": "s300_2",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s300_2",
+        "to": "s400_1",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s400_0",
+        "to": "s400_0",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s400_1",
+        "to": "s400_1",
+        "witness": false
+      },
+      {
+        "action": "respond",
+        "from": "s400_1",
+        "to": "s500_0",
+        "witness": false
+      },
+      {
+        "action": "spend_deny",
+        "from": "s500_0",
+        "to": "s500_0",
+        "witness": false
       }
     ],
     "kind": "state",
     "nodes": [
+      {
+        "completed": 0,
+        "cumulative": 0,
+        "id": "s0_0",
+        "inflight": 0,
+        "kind": "state",
+        "witness": false
+      },
       {
         "completed": 0,
         "cumulative": 100,
@@ -227,12 +416,140 @@
         "witness": true
       },
       {
+        "completed": 100,
+        "cumulative": 100,
+        "id": "s100_0",
+        "inflight": 0,
+        "kind": "state",
+        "witness": false
+      },
+      {
         "completed": 0,
         "cumulative": 300,
         "id": "s0_3",
         "inflight": 3,
         "kind": "state",
         "witness": true
+      },
+      {
+        "completed": 100,
+        "cumulative": 200,
+        "id": "s100_1",
+        "inflight": 1,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 0,
+        "cumulative": 400,
+        "id": "s0_4",
+        "inflight": 4,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 100,
+        "cumulative": 300,
+        "id": "s100_2",
+        "inflight": 2,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 200,
+        "cumulative": 200,
+        "id": "s200_0",
+        "inflight": 0,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 100,
+        "cumulative": 400,
+        "id": "s100_3",
+        "inflight": 3,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 200,
+        "cumulative": 300,
+        "id": "s200_1",
+        "inflight": 1,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 100,
+        "cumulative": 500,
+        "id": "s100_4",
+        "inflight": 4,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 200,
+        "cumulative": 400,
+        "id": "s200_2",
+        "inflight": 2,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 300,
+        "cumulative": 300,
+        "id": "s300_0",
+        "inflight": 0,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 200,
+        "cumulative": 500,
+        "id": "s200_3",
+        "inflight": 3,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 300,
+        "cumulative": 400,
+        "id": "s300_1",
+        "inflight": 1,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 300,
+        "cumulative": 500,
+        "id": "s300_2",
+        "inflight": 2,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 400,
+        "cumulative": 400,
+        "id": "s400_0",
+        "inflight": 0,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 400,
+        "cumulative": 500,
+        "id": "s400_1",
+        "inflight": 1,
+        "kind": "state",
+        "witness": false
+      },
+      {
+        "completed": 500,
+        "cumulative": 500,
+        "id": "s500_0",
+        "inflight": 0,
+        "kind": "state",
+        "witness": false
       }
     ],
     "witness_path": [
@@ -241,7 +558,7 @@
       "s0_3"
     ]
   },
-  "hash": "2207f820e063e565d2758ec66eaec28fb86aed644010a3e349a035b43916d2ff",
+  "hash": "234d648becff57bbffdf671dd1ef9da628a27d04b65b2cab6f81a8d644fd2af7",
   "horizon": 12,
   "manifest_id": "mf-4227160622359a2c",
   "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 3 * 100 = 300 -- past the cap of 200. The counterexample is {'completed': 0, 'inflight': 3}. (20 reachable states explored.)",

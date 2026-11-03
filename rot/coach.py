@@ -95,6 +95,25 @@ SCHEMA = "caravel.coach/v1"
 CLOSED = "closed"  # re-check PROVEN: the coaching is discharged.
 OPEN = "open"      # re-check failed: the coaching is NOT discharged.
 
+#: The runtime-facing instruction that accompanies the computed to_proceed
+#: condition: it states the decision the condition encodes -- the (buggy)
+#: policy would allow the call, and the verified guard blocks it.
+INSTRUCTION = (
+    "Your policy would allow this call. ROTN's verified guard blocks it."
+)
+
+
+def _with_instruction(to_proceed):
+    """Attach the runtime-facing instruction to the to_proceed record.
+
+    A pure re-assembly: the computed condition (G7 -- read straight from the
+    corrected guard at the blocked state) is unchanged; a fixed instruction
+    stating the decision it encodes is added.
+    """
+    rec = dict(to_proceed or {})
+    rec["instruction"] = INSTRUCTION
+    return rec
+
 
 def canonical_json(obj, indent=None):
     """Deterministic JSON (sorted keys, stable separators).
@@ -365,7 +384,7 @@ def coach(policy, max_inflight=None, amount=None, cap=None, window=None,
             "n_states": corrected_n_states,
             "engine": "symbolic",
         },
-        "to_proceed": to_proceed,
+        "to_proceed": _with_instruction(to_proceed),
         "close": {
             "status": status,
             "discharge": discharge,
@@ -509,7 +528,7 @@ def coach_exfiltration(max_states=100000, corrected=None):
             "n_states": corrected_n_states,
             "engine": "symbolic",
         },
-        "to_proceed": to_proceed,
+        "to_proceed": _with_instruction(to_proceed),
         "close": {
             "status": status,
             "discharge": discharge,

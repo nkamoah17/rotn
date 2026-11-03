@@ -538,12 +538,32 @@ def _reachable_states(ir, max_states=200000):
         return []
 
 
-def _spendcap_graph(steps, reachable_states, amount):
+def _reachable_space(ir, max_states=200000):
+    """The reachable state space: ``(states, transitions)``.
+
+    ``states`` is as :func:`_reachable_states`; ``transitions`` is every
+    ADMITTED transition of the model (guard holds at the source, effects
+    concrete), in the same deterministic BFS order.  The engine owns the
+    guards, so this is the authoritative transition set the site renders
+    (the JS side derives no transitions of its own).
+    """
+    from rot.modelfind import ModelFinder, ProductTooLarge
+    mf = ModelFinder.from_ir(ir, max_states=max_states)
+    try:
+        return mf.reachable_with_transitions()
+    except ProductTooLarge:
+        return [], []
+
+
+def _spendcap_graph(steps, reachable_states, amount, transitions=None):
     """The state-space graph (nodes = states, edges = transitions).
 
-    For a violated verdict the graph is the counterexample path (the attack
-    path the replay animation travels, G1). For a proven verdict it is the
-    reachable state space (showing every state stays within the cap).
+    The node set is the FULL reachable state space (safe states + the states
+    the counterexample passes through); the edge set is the engine's admitted
+    transitions (``transitions``) merged with the counterexample path.  The
+    violating path is marked ``witness: True`` (nodes + edges) so the replay
+    animation can travel it while the rest of the state space stays visible
+    (G1: every reachable state, safe and over-cap alike).
     """
     def _state_id(s):
         return "s%d_%d" % (s.get("completed", 0), s.get("inflight", 0))
@@ -560,30 +580,14 @@ def _spendcap_graph(steps, reachable_states, amount):
             "witness": witness,
         }
 
-    if steps:
-        nodes = []
-        seen = set()
-        for step in steps:
-            s = step.get("state") or {}
-            sid = _state_id(s)
-            if sid not in seen:
-                seen.add(sid)
-                nodes.append(_node(s, True))
-        edges = []
-        for i in range(1, len(steps)):
-            edges.append({
-                "from": _state_id(steps[i - 1].get("state") or {}),
-                "to": _state_id(steps[i].get("state") or {}),
-                "action": steps[i].get("action"),
-                "witness": True,
-            })
-        return {
-            "kind": "state",
-            "nodes": nodes,
-            "edges": edges,
-            "witness_path": [_state_id(step.get("state") or {})
-                             for step in steps],
-        }
+    steps = list(steps or [])
+
+    witness_ids = set()
+    for step in steps:
+        witness_ids.add(_state_id(step.get("state") or {}))
+
+    # Nodes: the reachable state space, with the counterexample states
+    # included even if the state-space walk was unavailable.
     nodes = []
     seen = set()
     for s in (reachable_states or [])[:200]:
@@ -591,8 +595,58 @@ def _spendcap_graph(steps, reachable_states, amount):
         if sid in seen:
             continue
         seen.add(sid)
-        nodes.append(_node(s, False))
-    return {"kind": "state", "nodes": nodes, "edges": [], "witness_path": []}
+        nodes.append(_node(s, sid in witness_ids))
+    for step in steps:
+        s = step.get("state") or {}
+        sid = _state_id(s)
+        if sid in seen:
+            continue
+        seen.add(sid)
+        nodes.append(_node(s, True))
+
+    # Edges: the engine's admitted transitions (authoritative -- the guard is
+    # evaluated by the engine, not re-derived), merged with the
+    # counterexample path edges (which are admitted transitions as well).
+    witness_edge_keys = set()
+    for i in range(1, len(steps)):
+        witness_edge_keys.add((
+            _state_id(steps[i - 1].get("state") or {}),
+            _state_id(steps[i].get("state") or {}),
+            steps[i].get("action"),
+        ))
+    edges = []
+    seen_edges = set()
+    for e in transitions or []:
+        key = (_state_id(e.get("from") or {}), _state_id(e.get("to") or {}),
+               e.get("action"))
+        if key in seen_edges:
+            continue
+        seen_edges.add(key)
+        edges.append({
+            "from": key[0],
+            "to": key[1],
+            "action": e.get("action"),
+            "witness": key in witness_edge_keys,
+        })
+    for i in range(1, len(steps)):
+        key = (_state_id(steps[i - 1].get("state") or {}),
+               _state_id(steps[i].get("state") or {}),
+               steps[i].get("action"))
+        if key in seen_edges:
+            continue
+        seen_edges.add(key)
+        edges.append({
+            "from": key[0],
+            "to": key[1],
+            "action": key[2],
+            "witness": True,
+        })
+    return {
+        "kind": "state",
+        "nodes": nodes,
+        "edges": edges,
+        "witness_path": [_state_id(step.get("state") or {}) for step in steps],
+    }
 
 
 def _spendcap_counterexample(witness, steps):
@@ -825,7 +879,7 @@ def build_spendcap_trace(ir, status, witness=None, steps=None,
     max_inflight = (ir.metadata or {}).get("max_inflight")
     buggy = bool((ir.metadata or {}).get("buggy", False))
 
-    reachable_states = _reachable_states(ir)
+    reachable_states, transitions = _reachable_space(ir)
     if n_states is None:
         n_states = len(reachable_states)
 
@@ -855,7 +909,7 @@ def build_spendcap_trace(ir, status, witness=None, steps=None,
             "max_inflight": max_inflight,
             "buggy": buggy,
         },
-        "graph": _spendcap_graph(steps, reachable_states, amount),
+        "graph": _spendcap_graph(steps, reachable_states, amount, transitions),
         "counterexample": _spendcap_counterexample(witness, steps),
         "decision_tree": _spendcap_decision_tree(steps, status, buggy),
         "timeline": _spendcap_timeline(steps, status, amount, cap),

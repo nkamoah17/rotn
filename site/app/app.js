@@ -4,9 +4,8 @@
  * No framework, no build step, no CDN:
  *   - hash routing:   #/                    -> landing + gallery
  *                     #/replay/<id>         -> replay: RULE -> ATTACK ->
- *                                              PROOF -> COACH (the arc; the
- *                                              K-sweep and to_proceed are the
- *                                              two climaxes)
+ *                                              PROOF -> COACH (the four-beat
+ *                                              arc)
  *                     #/compare/<a>/<b>     -> side-by-side + K-sweep
  *                     #/attestation/<id>?h= -> the B3 attestation (one-pager)
  *                                              from the SAME trace data; the
@@ -18,7 +17,7 @@
  *                     data/traces.js (window.ROT_TRACES) as the offline
  *                     file:// fallback (where browsers block local fetch).
  *
- * The RTF v1 trace is the single data contract (see rot/trace.py); this
+ * The caravel.rtf/v1 trace is the single data contract (see rot/trace.py); this
  * module renders it and adds no verification logic. The attestation view is
  * the JS twin of rot/attestation.py (same fields, same bounded discipline).
  */
@@ -185,7 +184,7 @@
     return {
       schema: "caravel.attestation/v1",
       artifact_hierarchy: [
-        { artifact: "RTF v1 trace", schema: "caravel.rtf/v1",
+        { artifact: "caravel.rtf/v1 trace", schema: "caravel.rtf/v1",
           role: "source of truth (hash-pinned)" },
         { artifact: "one-pager", schema: "caravel.attestation/v1",
           role: "underwriter view (a pure function of the trace)" },
@@ -209,6 +208,25 @@
           (nStates != null ? nStates : "unknown") + ")"
       ],
       counterexample: t.counterexample || null,
+      /* The corrected policy, ATTESTED by its re-proof (the coaching loop):
+         carried only when the re-check actually re-proved (fail-closed) --
+         the same discipline as rot/attestation.py. */
+      corrected_policy: (function () {
+        var coaching = t.coaching || null;
+        var recheck = coaching && coaching.recheck || null;
+        if (!recheck || recheck.status !== "proven") { return null; }
+        var correct = coaching.correct || {};
+        var close = coaching.close || {};
+        return {
+          status: "proven",
+          engines: recheck.engine ? [recheck.engine] : [],
+          n_states: recheck.n_states != null ? recheck.n_states : null,
+          buggy_guard: correct.buggy_guard || null,
+          guard: correct.guard || null,
+          delta: correct.delta || null,
+          discharge: close.discharge || null
+        };
+      })(),
       controls: { soc2: soc2, aiuc: aiuc, labels: (compliance && compliance.controls) || {} },
       bounded_caveat: (nStates != null
         ? "This is a BOUNDED proof: it holds over the reachable state space explored (n_states = " +
@@ -288,7 +306,7 @@
       '<section class="hero">',
       "  <h1>Replay the proof.</h1>",
       "  <p class=\"lede\">ROTN verifies an AI agent's tool policy with independent " +
-        "engines and emits a deterministic, hashed trace (RTF v1). Every trace " +
+        "engines and emits a deterministic, hashed trace (caravel.rtf/v1). Every trace " +
         "below is a self-contained proof \u2014 open one to inspect the verdict, the " +
         "state-space graph, and the counterexample.</p>",
       "</section>"
@@ -353,7 +371,7 @@
     return [
       '<section class="verdict-hero v-' + v.cls + '" aria-label="Verdict">',
       "  <div class=\"vh-main\">",
-      '    <span class="vh-kicker">RTF v1 \u00b7 ' + esc(t.schema || "caravel.rtf/v1") +
+      '    <span class="vh-kicker">' + esc(t.schema || "caravel.rtf/v1") +
         " \u00b7 " + esc(t.manifest_id || "") + "</span>",
       "    <h1 class=\"vh-verdict\">" + v.label + "</h1>",
       "    <p class=\"vh-desc\">" + esc(v.desc) + "</p>",
@@ -362,7 +380,7 @@
         return '<span class="chip" title="engines">' + esc(e) + "</span>";
       }).join(""),
       '<span class="chip chip-tier" title="budget tier">tier: ' + esc(budget.tier || "?") + "</span>",
-      '<span class="chip" title="bounded search horizon">horizon: ' +
+      '<span class="chip" title="bounded-liveness horizon: the step bound of the explored state space (steps)">horizon (steps): ' +
         esc(t.horizon != null ? t.horizon : "?") + "</span>",
       (t.policy && t.policy.max_inflight != null)
         ? '<span class="chip chip-tier" title="concurrency pool K (max in-flight requests)">K: ' +
@@ -435,13 +453,13 @@
    *
    *   BEAT 1 RULE    -- the policy as written (bounds, fields, hash)
    *   BEAT 2 ATTACK  -- the counterexample in the state space, the cap
-   *                     crossing, and the K-sweep (CLIMAX 1)
+   *                     crossing, and the K-sweep
    *   BEAT 3 PROOF   -- what the engine discharged, under what bounds, and
    *                     the buggy/corrected pair
    *   BEAT 4 COACH   -- blocked call -> five-field refusal -> to_proceed
-   *                     (CLIMAX 2) -> the repair, discharged by proof
+   *                     -> the repair, discharged by proof
    *
-   * Every beat renders from the SAME RTF v1 trace; the attestation view
+   * Every beat renders from the SAME caravel.rtf/v1 trace; the attestation view
    * (E3) is a pure function of it.
    */
 
@@ -505,7 +523,7 @@
   }
 
   /* BEAT 2 -- the attack: state space, counterexample path, cap crossing,
-   * and (spend-cap) the K-sweep: CLIMAX 1. */
+   * and (spend-cap) the K-sweep. */
   function attackBeat(t) {
     var spend = isSpendcap(t);
     var parts = [];
@@ -518,7 +536,7 @@
       var series = ROT.ROTCompare.ksweepSeries();
       parts.push(
         '<div class="climax climax-1" id="rot-sweep">' +
-        '<div class="climax-tag">CLIMAX 1 &mdash; the K-sweep</div>' +
+        '<div class="climax-tag">the K-sweep</div>' +
         ROT.ROTCompare.sweepHTML(series) +
         "</div>"
       );
@@ -544,7 +562,7 @@
     }
     f("engines", (t.engines || []).join(" \u00b7 "));
     f("states explored (bounded)", prov.n_states != null ? prov.n_states : null);
-    f("horizon", t.horizon != null ? t.horizon : null);
+    f("horizon (steps)", t.horizon != null ? t.horizon : null);
     f("horizon complete", prov.horizon_complete == null ? null : (prov.horizon_complete ? "yes" : "no"));
     f("policy hash", prov.policy_hash || (t.source && t.source.hash));
     if (facts.length) {
@@ -571,7 +589,7 @@
     return parts.join("\n");
   }
 
-  /* BEAT 4 -- the coach: blocked call -> refusal -> to_proceed (CLIMAX 2).
+  /* BEAT 4 -- the coach: blocked call -> refusal -> to_proceed.
    * The coach panel (coach.js) is the hero when the trace carries coaching;
    * the idle note is rendered here so the beat is never empty. */
   function coachIdleHTML(id, t) {
@@ -599,7 +617,7 @@
     var parts = [];
     if (t.coaching && t.coaching.schema) {
       parts.push(
-        '<div class="climax climax-2"><div class="climax-tag">CLIMAX 2 &mdash; to_proceed</div></div>'
+        '<div class="climax climax-2"><div class="climax-tag">to_proceed</div></div>'
       );
       parts.push('<div id="rot-coach"></div>');
     } else {
@@ -618,14 +636,14 @@
       '<nav class="crumbs" aria-label="Breadcrumb"><a href="#/">gallery</a> / <span>' + esc(id) + "</span></nav>",
       heroHTML(id, t, v),
       '<p class="arc-lede">This page walks four beats: <strong>RULE</strong> &rarr; ' +
-        "<strong>ATTACK</strong> (the K-sweep &mdash; climax 1) &rarr; <strong>PROOF</strong> " +
-        "&rarr; <strong>COACH</strong> (<code class=\"mono\">to_proceed</code> &mdash; climax 2).",
+        "<strong>ATTACK</strong> (the K-sweep) &rarr; <strong>PROOF</strong> " +
+        "&rarr; <strong>COACH</strong> (<code class=\"mono\">to_proceed</code>).",
       beat("rule", "RULE", "the rule as written",
         spend
           ? "The spend-cap policy, with the exact bounds the proof holds under."
           : "The MCP manifest: which server, which tenant scope, which writes are permitted.",
         ruleBeat(t)),
-      beat("attack", "ATTACK", spend ? "climax 1: the K-sweep" : "the counterexample path",
+      beat("attack", "ATTACK", spend ? "the K-sweep" : "the counterexample path",
         spend
           ? "The counterexample in the state space, the cap crossing, and the K-sweep that exposes the concurrency bound."
           : "The counterexample path through the state space.",
@@ -633,7 +651,7 @@
       beat("proof", "PROOF", "bounded, re-derivable",
         "What the engine discharged, under what bounds, and how to re-derive it byte-for-byte.",
         proofBeat(id, t)),
-      beat("coach", "COACH", "climax 2: to_proceed",
+      beat("coach", "COACH", "to_proceed",
         "The blocked call, the five-field refusal, and the computed enabling condition &mdash; the repair discharged by proof.",
         coachBeat(id, t)),
       '<section class="panel evidence" aria-label="Evidence and controls">',
@@ -803,6 +821,27 @@
       parts.push(sec("Counterexample", '<p class="mono">' + esc(ceTxt.join(" \u00b7 ")) + "</p>"));
     }
 
+    if (b.corrected_policy) {
+      var cp = b.corrected_policy;
+      var cpRows = [];
+      if (cp.buggy_guard) {
+        cpRows.push('<tr><th>buggy</th><td><code class="mono">' + esc(cp.buggy_guard) + "</code></td></tr>");
+      }
+      if (cp.guard) {
+        cpRows.push('<tr><th>corrected</th><td><code class="mono">' + esc(cp.guard) + "</code></td></tr>");
+      }
+      parts.push(
+        sec("Corrected policy (attested by re-proof)",
+          '<p><strong>PROVEN</strong> by engine(s): ' +
+          (cp.engines || []).map(function (e) {
+            return '<code class="mono">' + esc(e) + "</code>";
+          }).join(" \u00b7 ") +
+          (cp.n_states != null ? "; re-proof state space n_states = " + cp.n_states : "") + "</p>" +
+          (cp.delta ? '<p class="muted">' + esc(cp.delta) + "</p>" : "") +
+          (cpRows.length ? '<table class="att-table">' + cpRows.join("") + "</table>" : "") +
+          (cp.discharge ? "<p>" + esc(cp.discharge) + "</p>" : "")));
+    }
+
     var cLabels = b.controls.labels || {};
     var ctrlRows = b.controls.soc2.concat(b.controls.aiuc).map(function (c) {
       return '<tr><th class="mono">' + esc(c) + "</th><td>" + esc(cLabels[c] || "") + "</td></tr>";
@@ -851,7 +890,7 @@
 
     parts.push(
       '<footer class="att-foot">' +
-      '<p class="muted">caravel.attestation/v1 &middot; RTF v1 = source of truth (hash-pinned) ' +
+      '<p class="muted">caravel.attestation/v1 &middot; caravel.rtf/v1 = source of truth (hash-pinned) ' +
       "&rarr; one-pager = underwriter view &rarr; site = demo view.</p>" +
       "</footer>"
     );
