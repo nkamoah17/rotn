@@ -302,15 +302,40 @@
     var view = document.getElementById("view");
     if (!view) { return; }
     var ids = ROT.traceIds();
+    var reg = registry();
     var html = [
-      '<section class="hero">',
-      "  <h1>Replay the proof.</h1>",
+      '<section class="hero story-hero" aria-label="The story">',
+      "  <h1>rule &middot; attack &middot; proof &middot; coach</h1>",
       "  <p class=\"lede\">ROTN verifies an AI agent's tool policy with independent " +
-        "engines and emits a deterministic, hashed trace (caravel.rtf/v1). Every trace " +
-        "below is a self-contained proof \u2014 open one to inspect the verdict, the " +
-        "state-space graph, and the counterexample.</p>",
-      "</section>"
+        "engines and emits a deterministic, hashed trace (caravel.rtf/v1) you can " +
+        "replay, inspect, and pin by hash. One spend-cap policy, one bug, one fix " +
+        "— told in four beats:</p>",
+      '  <ol class="story-beats">',
+      '    <li><span class="sb-k">rule</span>a spend-cap policy: up to K concurrent ' +
+        "$100 calls under a $200 cap, one shared pool</li>",
+      '    <li><span class="sb-k">attack</span>a bounded state-space model attacks ' +
+        "it; the concurrency pool K exposes — or masks — the bug</li>",
+      '    <li><span class="sb-k">proof</span>the verdict is a hashed, re-derivable ' +
+        "state-space proof: bounded, never an unbounded theorem</li>",
+      '    <li><span class="sb-k">coach</span>the corrected policy is re-proven and ' +
+        "ships with a to_proceed guard the engine verified</li>",
+      "  </ol>"
     ];
+    /* P9: the K-sweep table moves up top -- the single most informative view of
+       the pair, above the gallery (the same widget as the compare view). */
+    if (window.ROT.ROTCompare && reg["spendcap-buggy"] && reg["spendcap-correct"]) {
+      var series = ROT.ROTCompare.ksweepSeries();
+      if (series && series.length >= 2) {
+        html.push(
+          '<section class="sweep-hero" aria-label="K-sweep">',
+          ROT.ROTCompare.sweepHTML(series),
+          '  <p class="sweep-hero-cta">' +
+          '    <a class="btn" href="#/replay/spendcap-buggy">Replay the full arc: ' +
+          "rule &rarr; attack &rarr; proof &rarr; coach &rarr;</a>" +
+          "  </p>"
+        );
+      }
+    }
     if (!ids.length) {
       html.push(
         '<section class="empty-state">',
@@ -331,7 +356,6 @@
     }
 
     /* Compare affordance: the spend-cap buggy vs correct pair (if present). */
-    var reg = registry();
     var pairs = [];
     if (reg["spendcap-buggy"] && reg["spendcap-correct"]) {
       pairs.push(["spendcap-buggy", "spendcap-correct"]);
@@ -355,6 +379,13 @@
     }
 
     view.innerHTML = html.join("\n");
+    /* Bind the landing K-sweep slider/play (same widget as the compare view). */
+    if (window.ROT.ROTCompare) {
+      var sweepRoot = view.querySelector(".sweep-hero");
+      if (sweepRoot) {
+        ROT.ROTCompare.bindSweep(sweepRoot, ROT.ROTCompare.ksweepSeries());
+      }
+    }
   }
   /* ---------------- verdict hero (F2) ---------------- */
 
@@ -535,8 +566,8 @@
     if (spend && window.ROT.ROTCompare) {
       var series = ROT.ROTCompare.ksweepSeries();
       parts.push(
-        '<div class="climax climax-1" id="rot-sweep">' +
-        '<div class="climax-tag">the K-sweep</div>' +
+        '<div class="callout callout-1" id="rot-sweep">' +
+        '<div class="callout-tag">the K-sweep</div>' +
         ROT.ROTCompare.sweepHTML(series) +
         "</div>"
       );
@@ -617,7 +648,7 @@
     var parts = [];
     if (t.coaching && t.coaching.schema) {
       parts.push(
-        '<div class="climax climax-2"><div class="climax-tag">to_proceed</div></div>'
+        '<div class="callout callout-2"><div class="callout-tag">to_proceed</div></div>'
       );
       parts.push('<div id="rot-coach"></div>');
     } else {

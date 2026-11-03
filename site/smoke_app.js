@@ -69,6 +69,10 @@ function fireHashchange() {
 /* ---------------- tests ---------------- */
 
 load(path.join("data", "traces.js"));
+/* compare.js BEFORE app.js: app.js boots (route()) at load time, and the
+   landing K-sweep section needs ROT.ROTCompare -- mirroring index.html,
+   where compare.js (line 52) loads ahead of app.js (line 53). */
+load("app/compare.js");
 load("app/app.js");
 
 const ROT = global.window.ROT;
@@ -86,7 +90,17 @@ if (skipClick) {
 }
 
 // Gallery (initial hash "") rendered synchronously into #view.
-check("gallery: hero present", viewEl.innerHTML.indexOf("Replay the proof") >= 0);
+check("gallery: story hero present (rule / attack / proof / coach)",
+  viewEl.innerHTML.indexOf("story-beats") >= 0 &&
+  viewEl.innerHTML.indexOf("sb-k") >= 0 &&
+  viewEl.innerHTML.indexOf(">rule<") >= 0 &&
+  viewEl.innerHTML.indexOf(">attack<") >= 0 &&
+  viewEl.innerHTML.indexOf(">proof<") >= 0 &&
+  viewEl.innerHTML.indexOf(">coach<") >= 0);
+check("P9: K-sweep table moved up top (above the gallery)",
+  viewEl.innerHTML.indexOf("sweep-hero") >= 0 &&
+  viewEl.innerHTML.indexOf("ksweep") >= 0 &&
+  viewEl.innerHTML.indexOf("sweep-hero") < viewEl.innerHTML.indexOf("class=\"gallery\""));
 check("gallery: >= 10 trace cards", (viewEl.innerHTML.match(/trace-card/g) || []).length >= 10);
 
 (async function () {
@@ -165,7 +179,9 @@ check("gallery: >= 10 trace cards", (viewEl.innerHTML.match(/trace-card/g) || []
   global.location.hash = "";
   fireHashchange();
   await nextTick();
-  check("gallery: re-rendered after navigation", viewEl.innerHTML.indexOf("Replay the proof") >= 0);
+  check("gallery: re-rendered after navigation",
+    viewEl.innerHTML.indexOf("story-beats") >= 0 &&
+    viewEl.innerHTML.indexOf("trace-card") >= 0);
 
   console.log("");
   console.log(failures === 0 ? "ALL APP SMOKE CHECKS PASSED" : failures + " CHECK(S) FAILED");

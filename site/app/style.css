@@ -200,6 +200,22 @@ main.wrap { flex: 1; padding-top: 30px; padding-bottom: 56px; }
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .lede { color: var(--muted); max-width: 760px; margin: 0; font-size: 16px; position: relative; }
+
+/* P9: landing story hero -- the four beats, then the K-sweep table up top. */
+.story-beats { list-style: none; margin: 16px 0 0; padding: 0; position: relative; }
+.story-beats li {
+  position: relative; padding: 7px 0 7px 74px;
+  border-bottom: 1px dashed var(--line-soft); font-size: 14.5px; line-height: 1.5;
+}
+.story-beats li:last-child { border-bottom: 0; }
+.story-beats .sb-k {
+  position: absolute; left: 0; top: 9px; width: 62px; text-align: right;
+  font-family: var(--mono); font-size: 11.5px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--accent-strong);
+}
+.sweep-hero { margin: 4px 0 26px; }
+.sweep-hero .ksweep { margin-top: 8px; }
+.sweep-hero-cta { margin: 14px 0 0; }
 .hero-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; position: relative; }
 .hbadge {
   display: inline-flex; align-items: center; gap: 7px;
@@ -735,16 +751,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-vis
 
 /* ---------------- the K-sweep + to_proceed callouts ---------------- */
 
-.climax { margin: 6px 0 14px; }
-.climax-tag {
+.callout { margin: 6px 0 14px; }
+.callout-tag {
   display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .8px;
   text-transform: uppercase; color: var(--ink);
   background: var(--amber-bg); border: 1px solid var(--unknown-line);
   border-radius: 999px; padding: 3px 10px; margin-bottom: 10px;
 }
-.climax-1 { border-left: 3px solid var(--amber); padding-left: 12px; }
-.climax-2 { border-left: 3px solid var(--proven); padding-left: 12px; }
-.climax-2 .climax-tag {
+.callout-1 { border-left: 3px solid var(--amber); padding-left: 12px; }
+.callout-2 { border-left: 3px solid var(--proven); padding-left: 12px; }
+.callout-2 .callout-tag {
   background: var(--proven-bg); border-color: var(--proven-line); color: var(--proven);
 }
 
@@ -862,7 +878,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, [tabindex]:focus-vis
 }
 
 @media (forced-colors: active) {
-  .att-pin-ok, .att-pin-bad, .climax-tag, .beat-tag, .att-verdict, .att-caveat,
+  .att-pin-ok, .att-pin-bad, .callout-tag, .beat-tag, .att-verdict, .att-caveat,
   .chip-buggy, .chip-fix {
     border: 1px solid CanvasText;
   }
