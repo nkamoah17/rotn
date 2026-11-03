@@ -56,7 +56,9 @@
 
   /* ---------------- E1: the hero (blocked -> refusal -> to_proceed) --------- */
 
-  /* The blocked call card: which action, in which state, under which guard. */
+  /* The blocked call card: which action, in which state, under which guard.
+   * Leads with the product sentence (the statement), then the actionable
+   * to_proceed instruction. */
   function blockedCallHTML(c) {
     var tp = c.to_proceed || {};
     var st = tp.state || {};
@@ -66,6 +68,9 @@
     var action = tp.action || ((c.policy || {}).action || "");
     return (
       '<div class="coach-blocked">' +
+      (c.statement
+        ? '<div class="cb-statement">' + esc(c.statement) + "</div>"
+        : "") +
       (tp.instruction
         ? '<div class="cb-instruction">' + esc(tp.instruction) + "</div>"
         : "") +
@@ -86,8 +91,11 @@
     return '<tr><th class="rf-key">' + esc(key) + "</th><td>" + content + "</td></tr>";
   }
 
-  /* The 5-field refusal -- the exact shape the runtime emits, assembled from
-   * the coaching data (the same decision, read from the trace). */
+  /* The refusal -- the exact shape the runtime emits, assembled from the
+   * coaching data (the same decision, read from the trace).  The rule is
+   * labelled as the policy *as written* (the buggy one); the verified guard
+   * (the corrected one) is the row that actually blocks; and to_proceed is
+   * the actionable instruction (not the raw inequality). */
   function refusalHTML(c) {
     var tp = c.to_proceed || {};
     var p = c.policy || {};
@@ -100,20 +108,32 @@
     return (
       '<table class="refusal-table">' +
       refusalRow("blocked", '<span class="rf-true">TRUE</span>') +
-      refusalRow("rule", rule) +
+      refusalRow("your policy (as written)", rule) +
+      refusalRow("ROTN\u2019s verified guard", tp.guard
+        ? '<code class="mono rf-cond">' + esc(tp.guard) + "</code>"
+        : "<em>\u2014</em>") +
       refusalRow("why", esc(explain.rationale || "\u2014")) +
-      refusalRow("to_proceed", '<code class="mono rf-cond">' + esc(conds || "\u2014") + "</code>") +
+      refusalRow("to_proceed",
+        '<div class="rf-instruction">' + esc(tp.instruction || "\u2014") + "</div>" +
+        (conds
+          ? '<div class="rf-cond-detail">condition: <code class="mono rf-cond">' +
+            esc(conds) + "</code></div>"
+          : "")) +
       refusalRow("allowed_now", '<span class="rf-false">FALSE</span>') +
       "</table>"
     );
   }
 
-  /* The to_proceed hero -- the computed enabling condition. */
+  /* The to_proceed hero -- the actionable instruction first, then the
+   * computed enabling condition (the spec) that it encodes. */
   function tpHeroHTML(c) {
     var tp = c.to_proceed || {};
     var conds = tp.conditions || [];
     return (
       '<div class="tp-hero">' +
+      (tp.instruction
+        ? '<div class="tp-instruction">' + esc(tp.instruction) + "</div>"
+        : "") +
       '<div class="tp-kicker">TO PROCEED &mdash; the computed enabling condition</div>' +
       '<div class="tp-conds">' +
       conds.map(function (x) {

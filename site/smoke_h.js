@@ -186,11 +186,17 @@ check("coach (buggy): corrected policy (request-sum) shown",
   coachHTML.indexOf("request") >= 0 && coachHTML.indexOf("coach-guard") >= 0);
 check("coach (buggy): re-check proven", coachHTML.indexOf("proven") >= 0);
 check("coach (buggy): SHA-256 hash shown", coachHTML.indexOf("SHA-256") >= 0);
-check("coach (buggy): hero -- blocked call + instruction",
+check("coach (buggy): hero -- blocked call + statement (the product sentence)",
   coachHTML.indexOf("coach-blocked") >= 0 &&
+  coachHTML.indexOf("cb-statement") >= 0 &&
   coachHTML.indexOf("Your policy would allow this call") >= 0);
-check("coach (buggy): hero -- five-field refusal table",
-  coachHTML.indexOf("refusal-table") >= 0 && coachHTML.indexOf("rf-key") >= 0);
+check("coach (buggy): hero -- to_proceed is an instruction (not an inequality)",
+  coachHTML.indexOf("cb-instruction") >= 0 &&
+  coachHTML.indexOf("Cap exhausted") >= 0);
+check("coach (buggy): hero -- refusal labels the policy as-written + the verified guard",
+  coachHTML.indexOf("refusal-table") >= 0 && coachHTML.indexOf("rf-key") >= 0 &&
+  coachHTML.indexOf("your policy (as written)") >= 0 &&
+  coachHTML.indexOf("verified guard") >= 0);
 check("coach (buggy): hero -- to_proceed enabling condition",
   coachHTML.indexOf("tp-hero") >= 0 && coachHTML.indexOf("TO PROCEED") >= 0);
 

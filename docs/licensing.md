@@ -79,7 +79,7 @@ the same proof, at the same strength, as anyone else.
 
 **In** the free core (Apache‑2.0): `rot demo` end-to-end, the bounded engine,
 the spend‑cap policy class, the deterministic counterexample + K‑sweep, the
-one‑pager generator, the attestation hash + re‑verify command, the 844-test
+one‑pager generator, the attestation hash + re‑verify command, the 848-test
 product suite (count pinned by `tests/test_suite_count.py`), and the CI gate.
 
 **Not** in the free core (commercial, SSPL‑1.0): `rot coach --aggregate`

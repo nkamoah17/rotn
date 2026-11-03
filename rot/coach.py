@@ -80,6 +80,8 @@ from rot.to_proceed import compute_to_proceed  # the computed to_proceed list (G
 __all__ = [
     "SCHEMA",
     "CLOSED", "OPEN",
+    "STATEMENT", "SPENDCAP_INSTRUCTION", "EXFILTRATION_INSTRUCTION",
+    "INSTRUCTION",  # backward-compat alias for STATEMENT
     "CoachingArtifact",
     "coach",
     "coach_exfiltration",
@@ -95,23 +97,44 @@ SCHEMA = "caravel.coach/v1"
 CLOSED = "closed"  # re-check PROVEN: the coaching is discharged.
 OPEN = "open"      # re-check failed: the coaching is NOT discharged.
 
-#: The runtime-facing instruction that accompanies the computed to_proceed
-#: condition: it states the decision the condition encodes -- the (buggy)
-#: policy would allow the call, and the verified guard blocks it.
-INSTRUCTION = (
+#: The plain statement that is the product: the (buggy) policy would allow
+#: the call, and the verified guard is what blocks it.  Shown as the headline
+#: of the refusal (the ``statement`` field of the artifact) -- not the
+#: actionable to_proceed instruction.
+STATEMENT = (
     "Your policy would allow this call. ROTN's verified guard blocks it."
 )
 
+#: The actionable instruction for the spend-cap shape: what the agent must do
+#: to proceed (the cap is exhausted -- wait for the window to roll over, or
+#: request a cap increase).  Attached to the ``to_proceed`` record.
+SPENDCAP_INSTRUCTION = (
+    "Cap exhausted: $300 already committed against a $200 limit. "
+    "Wait for the window to roll over, or request a cap increase."
+)
 
-def _with_instruction(to_proceed):
+#: The actionable instruction for the exfiltration shape: what the agent must
+#: do to proceed (release the private data before sending, or route the send
+#: through an approved channel).
+EXFILTRATION_INSTRUCTION = (
+    "Release the private data you're holding before any send, or route the "
+    "send through an approved channel."
+)
+
+# Backward-compat alias: the product sentence used to be the to_proceed
+# instruction; it is now the top-level ``statement``.
+INSTRUCTION = STATEMENT
+
+
+def _with_instruction(to_proceed, instruction):
     """Attach the runtime-facing instruction to the to_proceed record.
 
     A pure re-assembly: the computed condition (G7 -- read straight from the
-    corrected guard at the blocked state) is unchanged; a fixed instruction
-    stating the decision it encodes is added.
+    corrected guard at the blocked state) is unchanged; a shape-specific
+    actionable instruction (what to do to proceed) is added.
     """
     rec = dict(to_proceed or {})
-    rec["instruction"] = INSTRUCTION
+    rec["instruction"] = instruction
     return rec
 
 
@@ -354,6 +377,7 @@ def coach(policy, max_inflight=None, amount=None, cap=None, window=None,
         "schema": SCHEMA,
         "rot_version": rot.__version__,
         "status": status,
+        "statement": STATEMENT,
         "policy": {
             "policy_id": policy.policy_id,
             "action": policy.action,
@@ -384,7 +408,7 @@ def coach(policy, max_inflight=None, amount=None, cap=None, window=None,
             "n_states": corrected_n_states,
             "engine": "symbolic",
         },
-        "to_proceed": _with_instruction(to_proceed),
+        "to_proceed": _with_instruction(to_proceed, SPENDCAP_INSTRUCTION),
         "close": {
             "status": status,
             "discharge": discharge,
@@ -508,6 +532,7 @@ def coach_exfiltration(max_states=100000, corrected=None):
         "schema": SCHEMA,
         "rot_version": rot.__version__,
         "status": status,
+        "statement": STATEMENT,
         "policy": {
             "shape": "exfiltration",
             "action": "send_unapproved",
@@ -528,7 +553,7 @@ def coach_exfiltration(max_states=100000, corrected=None):
             "n_states": corrected_n_states,
             "engine": "symbolic",
         },
-        "to_proceed": _with_instruction(to_proceed),
+        "to_proceed": _with_instruction(to_proceed, EXFILTRATION_INSTRUCTION),
         "close": {
             "status": status,
             "discharge": discharge,

@@ -204,6 +204,29 @@ class ToProceedSpendcapTests(unittest.TestCase):
         a2 = coach(_buggy_policy(), max_inflight=3)
         self.assertEqual(a1.body["to_proceed"], a2.body["to_proceed"])
 
+    def test_statement_is_the_product_sentence(self):
+        # The top-level statement is the plain product sentence -- the (buggy)
+        # policy would allow the call, and the verified guard blocks it -- not
+        # the actionable to_proceed instruction.
+        a = coach(_buggy_policy(), max_inflight=3)
+        self.assertIn("statement", a.body)
+        self.assertEqual(
+            a.body["statement"],
+            "Your policy would allow this call. "
+            "ROTN's verified guard blocks it.")
+
+    def test_to_proceed_instruction_is_actionable(self):
+        # to_proceed.instruction is the actionable remediation (what to do to
+        # proceed), NOT the raw enabling inequality.
+        a = coach(_buggy_policy(), max_inflight=3)
+        tp = a.body["to_proceed"]
+        self.assertIn("instruction", tp)
+        self.assertIn("Cap exhausted", tp["instruction"])
+        self.assertIn("cap increase", tp["instruction"])
+        # The raw inequality is demoted to `conditions` (still present).
+        self.assertIn("completed + inflight * 100 + 100 <= 200",
+                      tp["conditions"])
+
 
 class ExfiltrationCoachTests(unittest.TestCase):
     """The generalized coach over the exfiltration (NoExfiltration) shape."""
@@ -244,6 +267,20 @@ class ExfiltrationCoachTests(unittest.TestCase):
     def test_deterministic(self):
         self.assertEqual(coach_exfiltration().hash,
                          coach_exfiltration().hash)
+
+    def test_statement_is_the_product_sentence(self):
+        a = coach_exfiltration()
+        self.assertEqual(
+            a.body["statement"],
+            "Your policy would allow this call. "
+            "ROTN's verified guard blocks it.")
+
+    def test_to_proceed_instruction_is_actionable(self):
+        a = coach_exfiltration()
+        tp = a.body["to_proceed"]
+        self.assertIn("instruction", tp)
+        self.assertIn("Release the private data", tp["instruction"])
+        self.assertIn("approved channel", tp["instruction"])
 
 
 if __name__ == "__main__":

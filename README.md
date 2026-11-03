@@ -76,7 +76,7 @@ holds, counter = ModelFinder.from_ir(ir).forall_reachable(ir.pinned_property.eva
 # counter -> {"completed": 0, "inflight": 3}
 ```
 
-**CI**: the suite is pure-stdlib (no Java, no Z3, no network) and green in a bare Python env — **844 tests**, deterministic, exit-code aware. See `.github/workflows/rotn.yml` (tests) and `.github/workflows/publish.yml` (PyPI).
+**CI**: the suite is pure-stdlib (no Java, no Z3, no network) and green in a bare Python env — **848 tests**, deterministic, exit-code aware. See `.github/workflows/rotn.yml` (tests) and `.github/workflows/publish.yml` (PyPI).
 
 ## License — open-core
 

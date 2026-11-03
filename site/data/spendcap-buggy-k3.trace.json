@@ -47,7 +47,7 @@
         "inflight": 3
       }
     },
-    "hash": "1f849a0190e9ccaa88bab88e600ad344f3cb0edd04cb6d12054be1f6e111541d",
+    "hash": "9e60774ba31b5bf6e76ead9fac1c932324fc49540bd52d2dfa71a9ee7c5ad608",
     "policy": {
       "action": "Transfer",
       "amount": 100,
@@ -65,6 +65,7 @@
     },
     "rot_version": "0.2.0",
     "schema": "caravel.coach/v1",
+    "statement": "Your policy would allow this call. ROTN's verified guard blocks it.",
     "status": "closed",
     "to_proceed": {
       "action": "spend_ok",
@@ -79,7 +80,7 @@
       ],
       "explanation": "to proceed with 'spend_ok' from state {'completed': 0, 'inflight': 3}, the guard's currently-false condition(s) must hold: completed + inflight * 100 + 100 <= 200; inflight < 3",
       "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 3",
-      "instruction": "Your policy would allow this call. ROTN's verified guard blocks it.",
+      "instruction": "Cap exhausted: $300 already committed against a $200 limit. Wait for the window to roll over, or request a cap increase.",
       "state": {
         "completed": 0,
         "inflight": 3
@@ -446,7 +447,7 @@
       "s0_3"
     ]
   },
-  "hash": "25a81b19c62d842d0a28de8e7f8291459d1936e2b300339849c906070ce41f81",
+  "hash": "9ddddc16bb93e6c940146bbf0e2dc5c8cadd31640f6092e572f80757f71d9ae9",
   "horizon": 12,
   "manifest_id": "mf-ba311c76ea6f5884",
   "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 3 * 100 = 300 -- past the cap of 200. The counterexample is {'completed': 0, 'inflight': 3}. (14 reachable states explored.)",
