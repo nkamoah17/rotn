@@ -425,11 +425,11 @@ def build_attestation(trace_dict, coverage=None):
 def cryptography_available():
     """True when the optional ``cryptography`` package is importable.
 
-    The asymmetric-signature path is *optional*: when ``cryptography`` is
-    absent, the attestation degrades to a clearly-labeled content-hash-only
-    block (the SHA-256 content hash is the pin).  This lets the product run
-    with zero dependencies while still offering a real signature when the
-    dependency is present.
+    Ed25519 signing/verification uses the zero-dependency
+    :mod:`rot.ed25519` and does NOT require ``cryptography``; the package is
+    only needed for ECDSA P-256 keys.  When it is absent, an ECDSA key
+    degrades to a clearly-labeled content-hash-only block (the SHA-256
+    content hash is the pin).
     """
     try:
         import cryptography  # noqa: F401
@@ -441,23 +441,33 @@ def cryptography_available():
 def _sign_bytes(canonical_bytes, private_key_pem):
     """Sign ``canonical_bytes`` with a PEM private key.
 
-    Prefers Ed25519; falls back to ECDSA P-256.  Returns a tuple
-    ``(algorithm, public_key_pem, signature_bytes)`` -- the public key is
-    embedded so the artifact is self-contained for verification.
+    Ed25519 keys are signed with :mod:`rot.ed25519` (pure stdlib,
+    deterministic, **zero-dependency**) -- this is the default and needs no
+    ``cryptography`` package.  Other key types (ECDSA P-256) fall back to
+    ``cryptography``.  Returns a tuple ``(algorithm, public_key_pem,
+    signature_bytes)`` where ``public_key_pem`` is a ``str`` -- the public key
+    is embedded so the artifact is self-contained for verification.
 
-    Raises ``ValueError`` for an unsupported key type.
+    Raises ``ValueError`` for an unsupported key type (or an ECDSA key when
+    ``cryptography`` is not installed).
     """
+    import rot.ed25519 as _ed
+    if _ed.is_ed25519_pem(private_key_pem):
+        seed = _ed.load_private_key_pem(private_key_pem)
+        public_pem = _ed.public_key_pem(_ed.public_key_from_seed(seed))
+        return "ed25519", public_pem, _ed.sign(seed, canonical_bytes)
+
+    # A non-Ed25519 key (e.g. ECDSA P-256) needs the optional `cryptography`.
+    if not cryptography_available():
+        raise ValueError(
+            "unsupported key type (not Ed25519) and `cryptography` is not "
+            "installed")
     from cryptography.hazmat.primitives.serialization import (
         load_pem_private_key, Encoding, PublicFormat)
     private_key = load_pem_private_key(private_key_pem, password=None)
     public_key = private_key.public_key()
     public_pem = public_key.public_bytes(
-        Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
-
-    from cryptography.hazmat.primitives.asymmetric.ed25519 import (
-        Ed25519PrivateKey)
-    if isinstance(private_key, Ed25519PrivateKey):
-        return "ed25519", public_pem, private_key.sign(canonical_bytes)
+        Encoding.PEM, PublicFormat.SubjectPublicKeyInfo).decode("utf-8")
 
     from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.hazmat.primitives import hashes
@@ -474,13 +484,15 @@ def sign_attestation(body, signer=None, private_key_pem=None):
     The SHA-256 ``attestation_hash`` (``signed_over``) is KEPT as the stable
     *content* hash.  This function adds a distinct signature layer:
 
-      * when a PEM private key is supplied AND ``cryptography`` is installed,
-        an asymmetric signature (Ed25519 preferred, ECDSA P-256 fallback) over
-        the body's canonical bytes, with the public key embedded for
-        self-contained verification;
-      * otherwise a clearly-labeled content-hash-only block (``degraded`` is
-        true, ``signature`` / ``public_key`` are null) -- the content hash is
-        the pin, and the block says so plainly.
+      * when a PEM private key is supplied, an asymmetric signature over the
+        body's canonical bytes, with the public key embedded for
+        self-contained verification.  Ed25519 keys sign with zero dependencies
+        (:mod:`rot.ed25519`); ECDSA P-256 keys use the optional
+        ``cryptography`` package.
+      * otherwise (no key, or a key type that cannot be used without
+        ``cryptography``) a clearly-labeled content-hash-only block
+        (``degraded`` is true, ``signature`` / ``public_key`` are null) -- the
+        content hash is the pin, and the block says so plainly.
 
     Deterministic for a given body + key (the signature is a pure function of
     the canonical bytes).  Returns the ``signature`` block dict.
@@ -488,13 +500,28 @@ def sign_attestation(body, signer=None, private_key_pem=None):
     content_hash = attestation_hash(body)
     canonical_bytes = trace.canonical_json(body, indent=None).encode("utf-8")
 
-    if private_key_pem is not None and cryptography_available():
-        algorithm, public_pem, signature = _sign_bytes(
-            canonical_bytes, private_key_pem)
+    if private_key_pem is not None:
+        try:
+            algorithm, public_pem, signature = _sign_bytes(
+                canonical_bytes, private_key_pem)
+        except Exception as exc:  # noqa: BLE001 -- degrade, don't crash
+            return {
+                "algorithm": "content-hash-only",
+                "signer": signer,
+                "public_key": None,
+                "signature": None,
+                "signed_over": content_hash,
+                "degraded": True,
+                "verify_command": "rot attestation --verify <this-attestation.json>",
+                "note": ("DEGRADED -- a key was supplied but it could not be "
+                         "used (%s). The SHA-256 content hash (signed_over) "
+                         "is the pin; it is NOT a cryptographic signature."
+                         % exc),
+            }
         return {
             "algorithm": algorithm,
             "signer": signer,
-            "public_key": public_pem.decode("utf-8"),
+            "public_key": public_pem,
             "signature": base64.b64encode(signature).decode("ascii"),
             "signed_over": content_hash,
             "degraded": False,
@@ -504,7 +531,7 @@ def sign_attestation(body, signer=None, private_key_pem=None):
                      % algorithm),
         }
 
-    # Degraded: no key supplied, or ``cryptography`` not installed.
+    # Degraded: no key supplied.
     return {
         "algorithm": "content-hash-only",
         "signer": signer,
@@ -513,10 +540,9 @@ def sign_attestation(body, signer=None, private_key_pem=None):
         "signed_over": content_hash,
         "degraded": True,
         "verify_command": "rot attestation --verify <this-attestation.json>",
-        "note": ("DEGRADED -- no asymmetric signature (no key supplied and/or "
-                 "`cryptography` not installed). The SHA-256 content hash "
-                 "(signed_over) is the pin; it is NOT a cryptographic "
-                 "signature."),
+        "note": ("DEGRADED -- no asymmetric signature (no key supplied). "
+                 "The SHA-256 content hash (signed_over) is the pin; it is "
+                 "NOT a cryptographic signature."),
     }
 
 
@@ -559,26 +585,37 @@ def verify_signature(attestation_dict):
         return True, ("content-hash-only (DEGRADED): content hash verified -- "
                       "this is NOT a cryptographic signature")
 
-    if not cryptography_available():
-        return False, "cannot verify: `cryptography` is not installed"
-    try:
-        from cryptography.hazmat.primitives.serialization import (
-            load_pem_public_key)
-        public_key = load_pem_public_key(sig["public_key"].encode("utf-8"))
-        signature = base64.b64decode(sig["signature"])
-        algorithm = sig.get("algorithm")
-        if algorithm == "ed25519":
-            public_key.verify(signature, canonical_bytes)
-        elif algorithm == "ecdsa-p256":
+    algorithm = sig.get("algorithm")
+    signature = base64.b64decode(sig["signature"])
+
+    if algorithm == "ed25519":
+        # Zero-dependency path (rot.ed25519); no `cryptography` required.
+        import rot.ed25519 as _ed
+        try:
+            point = _ed.load_public_key_pem(sig["public_key"])
+            _ed.verify(point, signature, canonical_bytes)
+        except Exception as exc:
+            return False, "signature verification failed: %s" % (exc,)
+        return True, "asymmetric signature verified (ed25519)"
+
+    if algorithm == "ecdsa-p256":
+        if not cryptography_available():
+            return False, ("cannot verify ecdsa-p256: `cryptography` is not "
+                           "installed")
+        try:
+            from cryptography.hazmat.primitives.serialization import (
+                load_pem_public_key)
             from cryptography.hazmat.primitives.asymmetric import ec
             from cryptography.hazmat.primitives import hashes
+            public_key = load_pem_public_key(
+                sig["public_key"].encode("utf-8"))
             public_key.verify(signature, canonical_bytes,
                               ec.ECDSA(hashes.SHA256()))
-        else:
-            return False, "unknown signature algorithm: %r" % (algorithm,)
-    except Exception as exc:
-        return False, "signature verification failed: %s" % (exc,)
-    return True, "asymmetric signature verified (%s)" % (sig.get("algorithm"),)
+        except Exception as exc:
+            return False, "signature verification failed: %s" % (exc,)
+        return True, "asymmetric signature verified (ecdsa-p256)"
+
+    return False, "unknown signature algorithm: %r" % (algorithm,)
 
 
 def _normalize_crosscheck(crosscheck):
@@ -654,8 +691,10 @@ def build_underwriter_attestation(trace_dict, crosscheck=None, coverage=None,
     signer : str, optional
         The signer identity (recorded in the signature block).
     private_key_pem : str, optional
-        A PEM private key for the asymmetric signature (when ``cryptography``
-        is installed); otherwise the signature block is clearly-labeled
+        A PEM private key for the asymmetric signature.  Ed25519 keys sign
+        with zero dependencies (:mod:`rot.ed25519`); ECDSA P-256 keys need
+        the optional ``cryptography`` package.  When no key is supplied (or
+        the key cannot be used), the signature block is clearly-labeled
         content-hash-only.
     finding : dict, optional
         The buggy-policy finding (its verdict, guard, counterexample, fix).

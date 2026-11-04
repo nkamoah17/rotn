@@ -1230,7 +1230,7 @@ def cmd_doctor(args):
 
     # 3) Core modules import cleanly.
     for mod in ("rot.trace", "rot.sitegen", "rot.ir", "rot.tlc",
-                "rot.smtz3", "rot.policy_smt", "rot.cegar"):
+                "rot.smtz3", "rot.policy_smt", "rot.cegar", "rot.ed25519"):
         try:
             __import__(mod)
             record("import %s" % mod, True, "ok")
@@ -2342,6 +2342,56 @@ def _run_crosscheck(policy_path, args):
         return None, "cross-check failed: %s" % (exc,)
 
 
+def _default_attest_key_path():
+    """The default Ed25519 attestation key location (generate-or-supply).
+
+    Overridable with the ``ROTN_ATT_KEY`` env var (tests pin a temp path);
+    otherwise a stable user-level location so a ``pip install rotn`` user gets
+    the *same* key on every run -- and therefore a byte-identical signature.
+    """
+    return os.environ.get("ROTN_ATT_KEY") or os.path.expanduser(
+        os.path.join("~", ".rotn", "attest-key.pem"))
+
+
+def _resolve_attest_key(args):
+    """Resolve the signing key for ``rot attestation`` (generate-or-supply).
+
+    Precedence:
+
+      1. ``--key FILE`` (explicit) -- used if it exists; otherwise ``None``
+         (the caller degrades to a content-hash-only block, as before).
+      2. the default key (``ROTN_ATT_KEY`` env / ``~/.rotn/attest-key.pem``) --
+         used if it already exists.
+      3. a freshly generated Ed25519 keypair, persisted to the default
+         location, then used (the "generate" half of generate-or-supply).
+
+    Returns ``(key_pem, key_path, generated)`` where ``generated`` is True only
+    when a brand-new key was created this run.  Uses :mod:`rot.ed25519`, so
+    this needs no ``cryptography`` package.
+    """
+    import rot.ed25519 as ed
+
+    if args.key:
+        if os.path.isfile(args.key):
+            with open(args.key, "r") as f:
+                return f.read(), args.key, False
+        return None, args.key, False
+
+    default_path = _default_attest_key_path()
+    if os.path.isfile(default_path):
+        with open(default_path, "r") as f:
+            return f.read(), default_path, False
+
+    seed, _public = ed.generate_keypair()
+    private_pem = ed.private_key_pem(seed)
+    key_dir = os.path.dirname(default_path)
+    if key_dir and not os.path.isdir(key_dir):
+        os.makedirs(key_dir)
+    with open(default_path, "w") as f:
+        f.write(private_pem)
+    return private_pem, default_path, True
+
+
 def cmd_attestation(args):
     """``rot attestation`` -- cross-check the corrected policy (3 engines),
     build + sign the underwriter attestation (v2), and verify it.
@@ -2419,15 +2469,11 @@ def cmd_attestation(args):
             print("warning: finding policy not found: %s" % args.finding_policy,
                   file=sys.stderr)
 
-    # 4. The signing key (if supplied).
-    key_pem = None
-    if args.key:
-        if os.path.isfile(args.key):
-            with open(args.key, "r") as f:
-                key_pem = f.read()
-        else:
-            print("warning: key file not found: %s (degraded signature)"
-                  % args.key, file=sys.stderr)
+    # 4. The signing key (generate-or-supply -- a real signature by default).
+    key_pem, key_path, key_generated = _resolve_attest_key(args)
+    if key_pem is None:
+        print("warning: key file not found: %s (degraded signature)"
+              % args.key, file=sys.stderr)
 
     # 5. Build the underwriter attestation (v2).
     att = attmod.build_underwriter_attestation(
@@ -2468,12 +2514,59 @@ def cmd_attestation(args):
         sig = body.get("signature") or {}
         print("  signature : %s (degraded=%s)"
               % (sig.get("algorithm"), sig.get("degraded")))
+        if key_path:
+            print("  key       : %s%s"
+                  % (key_path, " (generated this run)" if key_generated else ""))
         print("  verify    : %s -- %s" % ("OK" if ok else "REJECTED", detail))
         print("  json      : %s" % (base + ".json"))
         print("  md        : %s" % (base + ".md"))
         print("  html      : %s" % (base + ".html"))
         print(bar)
     return EXIT_PROVEN if ok else EXIT_ERROR
+
+
+def cmd_keygen(args):
+    """``rot keygen`` -- generate an Ed25519 signing keypair (zero deps).
+
+    Writes the private key (PKCS#8 PEM) to a file and prints the public key.
+    The private key is the signing secret (keep it safe); the public key is
+    what gets embedded in attestations so anyone can verify them.  Uses
+    :mod:`rot.ed25519`, so it needs no ``cryptography`` package.
+    """
+    import rot.ed25519 as ed
+    seed, public_point = ed.generate_keypair()
+    private_pem = ed.private_key_pem(seed)
+    public_pem = ed.public_key_pem(public_point)
+
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    out_path = args.out or os.path.join(
+        repo_root, "out", "rot-attest-key.pem")
+
+    if os.path.isfile(out_path) and not args.overwrite:
+        print("error: key file already exists: %s "
+              "(use --overwrite to replace)" % out_path, file=sys.stderr)
+        return EXIT_ERROR
+    out_dir = os.path.dirname(out_path)
+    if out_dir and not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
+    with open(out_path, "w") as f:
+        f.write(private_pem)
+
+    if not args.quiet:
+        bar = "=" * 56
+        print(bar)
+        print("  ROTN keygen -- Ed25519 signing key (zero dependencies)")
+        print(bar)
+        print("  private key : %s" % out_path)
+        print("  public key  :")
+        for line in public_pem.splitlines():
+            print("    %s" % line)
+        print("  sign with   : rot attestation --policy CORRECTED.dw --key %s"
+              % out_path)
+        print("  verify with : rot attestation --verify --attestation ATT.json")
+        print(bar)
+        print("  NOTE: the private key is the signing secret -- keep it safe.")
+    return EXIT_PROVEN
 
 
 def main(argv=None):
@@ -2787,7 +2880,11 @@ def main(argv=None):
                         "block)")
     p.add_argument("--key", default=None, metavar="FILE",
                    help="PEM private key file for the asymmetric signature "
-                        "(requires the `cryptography` package)")
+                        "(Ed25519 works with zero dependencies; ECDSA keys "
+                        "need the `cryptography` package). [default: "
+                        "~/.rotn/attest-key.pem -- auto-generated on first "
+                        "run, so `rot attestation` signs with a real Ed25519 "
+                        "key out of the box]")
     p.add_argument("--max-inflight", type=int, default=None, metavar="K",
                    help="bounded concurrency pool K (spend-cap policies)")
     p.add_argument("--out", default=None, metavar="DIR",
@@ -2800,6 +2897,18 @@ def main(argv=None):
     p.add_argument("--attestation", default=None, metavar="FILE",
                    help="an existing attestation JSON to verify (with "
                         "--verify)")
+
+    p = sub.add_parser(
+        "keygen",
+        help="generate an Ed25519 signing keypair (zero dependencies) for "
+             "signing attestations")
+    p.add_argument("--out", default=None, metavar="FILE",
+                   help="write the private key here [default: "
+                        "<repo>/out/rot-attest-key.pem]")
+    p.add_argument("--overwrite", action="store_true",
+                   help="replace the key file if it already exists")
+    p.add_argument("--quiet", action="store_true",
+                   help="suppress the human summary")
 
     # RESEARCH commands: `ladder` and `ab` live in the rotn-research repo.
     # They are registered HIDDEN (absent from `rot --help`) so the product
@@ -2821,6 +2930,7 @@ def main(argv=None):
             "trace": cmd_trace,
             "report": cmd_report,
             "attestation": cmd_attestation,
+            "keygen": cmd_keygen,
             "coach": cmd_coach, "runtime": cmd_runtime,
             "site": cmd_site,
             "doctor": cmd_doctor,

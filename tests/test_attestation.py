@@ -344,5 +344,145 @@ class UnderwriterAttestationTests(unittest.TestCase):
             self.assertIn(section, md)
 
 
+class Ed25519ZeroDepSignatureTests(unittest.TestCase):
+    """GAP 3 -- the asymmetric signature works with ZERO dependencies.
+
+    ``cryptography`` is NOT installed in this environment (that is the whole
+    point: ``pip install rotn`` must sign out of the box).  So a real Ed25519
+    signature -- not the degraded content-hash-only block -- must be produced
+    and verified using only the stdlib (:mod:`rot.ed25519`).
+    """
+
+    def _signed(self, private_pem):
+        return att.build_underwriter_attestation(
+            _build_trace(_CORRECT),
+            crosscheck=dict(UnderwriterAttestationTests._CC),
+            finding=dict(UnderwriterAttestationTests._FINDING),
+            private_key_pem=private_pem)
+
+    def test_signs_ed25519_without_cryptography(self):
+        import rot.ed25519 as ed
+        seed, _ = ed.generate_keypair()
+        sig = self._signed(ed.private_key_pem(seed)).body["signature"]
+        self.assertFalse(sig["degraded"])
+        self.assertEqual(sig["algorithm"], "ed25519")
+        self.assertIsNotNone(sig["signature"])
+        self.assertIn("BEGIN PUBLIC KEY", sig["public_key"])
+
+    def test_verify_ed25519_signature(self):
+        import rot.ed25519 as ed
+        seed, _ = ed.generate_keypair()
+        ok, detail = att.verify_signature(
+            self._signed(ed.private_key_pem(seed)).to_dict())
+        self.assertTrue(ok, detail)
+
+    def test_signature_is_deterministic(self):
+        import rot.ed25519 as ed
+        seed, _ = ed.generate_keypair()
+        pem = ed.private_key_pem(seed)
+        s1 = self._signed(pem).body["signature"]["signature"]
+        s2 = self._signed(pem).body["signature"]["signature"]
+        self.assertEqual(s1, s2)
+
+    def test_wrong_public_key_fails(self):
+        import rot.ed25519 as ed
+        seed_a, _ = ed.generate_keypair()
+        seed_b, _ = ed.generate_keypair()
+        d = self._signed(ed.private_key_pem(seed_a)).to_dict()
+        # Swap in a DIFFERENT public key: verification must now fail.
+        d["signature"]["public_key"] = ed.public_key_pem(
+            ed.public_key_from_seed(seed_b))
+        ok, _detail = att.verify_signature(d)
+        self.assertFalse(ok)
+
+    def test_tampered_body_fails(self):
+        import rot.ed25519 as ed
+        seed, _ = ed.generate_keypair()
+        d = self._signed(ed.private_key_pem(seed)).to_dict()
+        d["verdict"] = "violated"
+        ok, _detail = att.verify_signature(d)
+        self.assertFalse(ok)
+
+
+class AttestationCliSignByDefaultTests(unittest.TestCase):
+    """GAP 3 item 8 -- ``rot attestation`` signs by default (generate-or-supply).
+
+    With no ``--key`` given, the command must produce a REAL asymmetric Ed25519
+    signature (not the degraded content-hash-only block), using a key it
+    auto-generates on first run and reuses (deterministically) thereafter.  The
+    default key location is pinned via ``ROTN_ATT_KEY`` so the test never
+    touches the real ``~/.rotn`` key.
+    """
+
+    def _run_attestation(self, out_dir, key_path):
+        import rot.__main__ as m
+        old = os.environ.get("ROTN_ATT_KEY")
+        os.environ["ROTN_ATT_KEY"] = key_path
+        try:
+            a = argparse.Namespace(
+                policy=_CORRECT, finding_policy=None, signer=None,
+                key=None, max_inflight=4, out=out_dir, quiet=True,
+                kind=None, amount=None, cap=None, liveness_horizon=None,
+                depth=None, verify=False, attestation=None)
+            code = m.cmd_attestation(a)
+            with open(os.path.join(
+                    out_dir, "attestation-spendcap-correct.json"), "r") as f:
+                return code, json.load(f)
+        finally:
+            if old is None:
+                os.environ.pop("ROTN_ATT_KEY", None)
+            else:
+                os.environ["ROTN_ATT_KEY"] = old
+
+    def test_signs_by_default_without_key(self):
+        tmp = tempfile.mkdtemp()
+        key_path = os.path.join(tmp, "attest-key.pem")
+        code, d = self._run_attestation(tmp, key_path)
+        self.assertEqual(code, 0)
+        sig = d["signature"]
+        self.assertFalse(sig["degraded"])
+        self.assertEqual(sig["algorithm"], "ed25519")
+        self.assertIsNotNone(sig["signature"])
+        self.assertIn("BEGIN PUBLIC KEY", sig["public_key"])
+        self.assertTrue(os.path.isfile(key_path))  # the key was generated
+
+    def test_verify_by_default_signature(self):
+        tmp = tempfile.mkdtemp()
+        _code, d = self._run_attestation(tmp, os.path.join(tmp, "attest-key.pem"))
+        ok, _detail = att.verify_signature(d)
+        self.assertTrue(ok, _detail)
+
+    def test_deterministic_reuse_of_generated_key(self):
+        tmp = tempfile.mkdtemp()
+        key_path = os.path.join(tmp, "attest-key.pem")
+        _c1, d1 = self._run_attestation(tmp, key_path)
+        _c2, d2 = self._run_attestation(tmp, key_path)
+        self.assertEqual(d1["signature"]["signature"],
+                         d2["signature"]["signature"])
+
+    def test_explicit_key_overrides_default(self):
+        import rot.ed25519 as ed
+        tmp = tempfile.mkdtemp()
+        # A key the user explicitly supplies (--key) must be the one used.
+        seed, _ = ed.generate_keypair()
+        explicit = os.path.join(tmp, "explicit-key.pem")
+        with open(explicit, "w") as f:
+            f.write(ed.private_key_pem(seed))
+        a = argparse.Namespace(
+            policy=_CORRECT, finding_policy=None, signer=None,
+            key=explicit, max_inflight=4, out=tmp, quiet=True,
+            kind=None, amount=None, cap=None, liveness_horizon=None,
+            depth=None, verify=False, attestation=None)
+        import rot.__main__ as m
+        code = m.cmd_attestation(a)
+        self.assertEqual(code, 0)
+        with open(os.path.join(tmp, "attestation-spendcap-correct.json"), "r") as f:
+            d = json.load(f)
+        self.assertEqual(d["signature"]["algorithm"], "ed25519")
+        self.assertFalse(d["signature"]["degraded"])
+        ok, _detail = att.verify_signature(d)
+        self.assertTrue(ok, _detail)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
