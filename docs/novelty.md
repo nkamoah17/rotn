@@ -332,7 +332,9 @@ deterministically.
 far?"; ROTN answers "can this policy, under concurrency, ever reach a state
 that violates it?" — by lowering the policy into a bounded model and
 checking *all* reachable states with **three independent engines (SMT/Z3 +
-TLC + policy-direct)**, the buggy variant **independently refuted by
+TLC + policy-direct)** — the two independent model checkers decide, with the
+spend-cap-specific policy-direct engine as the third, model-independent leg
+(and offline fallback) — the buggy variant **independently refuted by
 Apalache-ITF** (which never proves the corrected one), and by honestly
 reporting `OUT_OF_SCOPE`
 when it cannot — and when it *does* find a violating state, it coaches the

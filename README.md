@@ -6,7 +6,7 @@
 
 > **Agents are replacing the software that used to enforce our rules. ROTN makes the rules explicit, proves the policy holds even when the model tries to break it, and coaches the agent back in bounds when it does.**
 
-**ROTN** (R**o**gression-detection **O**racle via **T**race **N**on-emptiness) is a small, fully offline, pure-stdlib (Python 3.8+) verification engine for **AI agent tool policies**. It checks a policy against a named invariant with **three independent engines** (SMT/Z3, TLC, and policy-direct) and a **bounded re-check** loop; on a finding it hands back a **concrete, replayable counterexample** and a **coach** that tells the agent exactly what to do to get back in bounds.
+**ROTN** (R**o**gression-detection **O**racle via **T**race **N**on-emptiness) is a small, fully offline, pure-stdlib (Python 3.8+) verification engine for **AI agent tool policies**. It checks a policy against a named invariant with **three independent engines** (SMT/Z3, TLC, and policy-direct — the two independent model checkers decide, with the spend-cap-specific policy-direct engine as the third, model-independent leg and offline fallback) and a **bounded re-check** loop; on a finding it hands back a **concrete, replayable counterexample** and a **coach** that tells the agent exactly what to do to get back in bounds.
 
 The beachhead is the **spend-cap parallel-fire bug** — a payments policy that settles spend only against *settled* responses, so a parallel burst of in-flight requests overshoots the cap, invisible to a per-request monitor.
 
@@ -104,7 +104,7 @@ holds, counter = ModelFinder.from_ir(ir).forall_reachable(ir.pinned_property.eva
 # counter -> {"completed": 0, "inflight": 3}
 ```
 
-**CI**: the suite is pure-stdlib (no Java, no Z3, no network) and green in a bare Python env — **977 tests**, deterministic, exit-code aware. See `.github/workflows/rotn.yml` (tests) and `.github/workflows/publish.yml` (PyPI).
+**CI**: the suite is pure-stdlib (no Java, no Z3, no network) and green in a bare Python env — **988 tests**, deterministic, exit-code aware. See `.github/workflows/rotn.yml` (tests) and `.github/workflows/publish.yml` (PyPI).
 
 ## License — all Apache-2.0, one product
 

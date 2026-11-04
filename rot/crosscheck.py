@@ -4,9 +4,22 @@ A single engine can suffer a soundness leak: a solver bug, an encoding
 mismatch, or an unsound abstraction can all let one engine mint a PROVEN
 (or a VIOLATED) verdict on its own.  ``CrossChecker`` defends against
 that by running the property on THREE engines and only issuing a
-PROVEN/VIOLATED verdict when all three *agree*.  Any disagreement, or an
-UNKNOWN/ERROR/UNSOUND answer from any engine, is conservatively
-downgraded to UNKNOWN.
+PROVEN/VIOLATED verdict when the decision engines *agree*.  Any
+disagreement, or an UNKNOWN/ERROR/UNSOUND answer from a decision engine,
+is conservatively downgraded to UNKNOWN.
+
+The join mode is **shape-aware by default** (``mode=auto``): the
+policy-direct engine is spendcap-specific (it needs the per-request
+``amount`` and the spend ``cap``), so for a spendcap IR the join is
+``strict`` (all three engines must agree -- the strongest, and still
+decisive because the policy-direct leg can decide).  For any other shape
+the join is ``primary`` (the two independent model checkers, SMT/Z3 and
+TLC, decide; policy-direct is only the offline fallback when TLC is
+absent) -- because for a non-spendcap IR the policy-direct leg is
+structurally ``UNKNOWN`` and, under ``strict``, would force the whole join
+to ``UNKNOWN`` (the "3 independent engines" over-claim for the non-spendcap
+APW classes).  An explicit ``mode`` (``strict`` / ``primary``) overrides
+the shape-aware default.
 
 The three engines span two axes of independence:
 
@@ -53,6 +66,7 @@ from . import verdicts as v
 
 __all__ = ["CrossChecker", "join_status", "join_status3",
            "join_mode", "minted_by", "MODE_STRICT", "MODE_PRIMARY", "MODES",
+           "MODE_AUTO", "default_mode_for", "spendcap_params",
            "witness_match", "witness_match3", "REPORT_VERSION",
            "build_crosscheck_report", "add_witness",
            "format_side_by_side", "main",
@@ -129,6 +143,60 @@ MODE_PRIMARY = "primary"
 
 #: The full set of selectable join modes.
 MODES = (MODE_STRICT, MODE_PRIMARY)
+
+#: ``auto`` -- the shape-aware default (GAP 2, rigor parity): the join mode is
+#: chosen from the IR's shape.  A spendcap-shaped IR (the policy-direct model
+#: family applies -- the metadata carries both ``amount`` and ``cap``) joins
+#: ``strict`` (all three engines must agree: the strongest join, and still
+#: decisive because the policy-direct leg can actually decide).  Any other
+#: shape joins ``primary`` (the two independent model checkers decide;
+#: policy-direct is only the offline fallback, since it is structurally
+#: ``UNKNOWN`` for non-spendcap IRs and would otherwise force the whole join
+#: to ``UNKNOWN`` under ``strict``).  This is what makes the advertised
+#: "Z3 + TLC + policy-direct agreement" decisive for the non-spendcap APW
+#: classes instead of structurally ``UNKNOWN``.
+MODE_AUTO = "auto"
+
+
+def spendcap_params(ir):
+    """The policy-direct (spendcap) parameters, or ``None`` if the IR is not
+    spendcap-shaped.
+
+    The policy-direct engine (:mod:`rot.policy_smt`) is spendcap-specific: it
+    encodes the policy obligation over a bounded event sequence and needs the
+    per-request ``amount`` and the spend ``cap``.  An IR whose metadata
+    carries **both** is a spendcap-shaped IR (the policy-direct model family
+    applies); anything else is out of scope for that model family, and the
+    policy-direct leg is structurally ``UNKNOWN`` for it.  This is the single
+    source of truth for "does the policy-direct leg apply?" -- it drives both
+    the policy-direct engine dispatch and the shape-aware join mode.
+    """
+    meta = getattr(ir, "metadata", None) or {}
+    if "amount" not in meta or "cap" not in meta:
+        return None
+    return {
+        "amount": meta.get("amount", 100),
+        "cap": meta.get("cap", 200),
+        "buggy": meta.get("buggy", False),
+        "max_inflight": meta.get("max_inflight", 4),
+    }
+
+
+def default_mode_for(ir):
+    """The shape-aware default join mode for an IR (the ``auto`` resolution).
+
+    * spendcap-shaped IR (:func:`spendcap_params` is not ``None``) ->
+      :data:`MODE_STRICT` -- the policy-direct leg can decide, so the
+      all-three-agree join is the strongest (and still decisive) choice.
+    * any other IR -> :data:`MODE_PRIMARY` -- the policy-direct leg is
+      structurally ``UNKNOWN`` (the direct policy model does not apply), so
+      the two independent model checkers decide and policy-direct is only the
+      offline fallback when TLC is absent; under ``strict`` that UNKNOWN leg
+      would force the whole join to ``UNKNOWN`` (the GAP 2 over-claim).
+
+    Pure function of the IR metadata -- unit-testable without any engine.
+    """
+    return MODE_STRICT if spendcap_params(ir) is not None else MODE_PRIMARY
 
 
 def join_mode(smt_status, tlc_status, pd_status, mode=MODE_STRICT):
@@ -438,24 +506,41 @@ def witness_match3(smt_ce, tlc_witness, policy_direct_witness, joined=None):
 
 
 class CrossChecker:
-    """Run a safety property on SMT (Z3), TLC, and the policy-direct engine;
-    verdict only when ALL THREE agree.
+    """Run a safety property on SMT (Z3), TLC, and the policy-direct engine.
+
+    The join mode is shape-aware by default (``mode=auto``): a spendcap IR
+    joins ``strict`` (all three engines must agree) and any other IR joins
+    ``primary`` (the two independent model checkers decide; policy-direct is
+    the offline fallback), so a non-spendcap class is never forced to
+    ``UNKNOWN`` just because the spendcap-specific policy-direct leg does not
+    apply.  An explicit ``mode`` (``strict`` / ``primary``) overrides.
 
     Parameters mirror the pipeline's safety dispatch: ``ir`` (the
     ``ProtocolIR`` the Z3 backend encodes), ``linear_model`` (the
-    ``LinearModel`` TLC checks), ``prop`` (the ``Invariant`` under test)
-    and ``cfg`` (engine config, used to locate the TLC jar).
+    ``LinearModel`` TLC checks), ``prop`` (the ``Invariant`` under test),
+    ``cfg`` (engine config, used to locate the TLC jar) and ``mode`` (the
+    join mode; ``auto`` by default).
     """
 
-    def __init__(self, ir, linear_model, prop, cfg, mode=MODE_STRICT):
+    def __init__(self, ir, linear_model, prop, cfg, mode=MODE_AUTO):
         self.ir = ir
         self.linear_model = linear_model
         self.prop = prop
         self.cfg = cfg
-        #: The join mode (``strict`` = all-three, the default; ``primary`` =
-        #: two independent model checkers with policy_direct as the offline
-        #: fallback when TLC is absent).  See :func:`join_mode`.
-        self.mode = mode
+        #: The requested join mode.  ``auto`` (the default, the GAP 2 fix) is
+        #: shape-aware; an explicit ``strict`` / ``primary`` overrides it.
+        self.requested_mode = mode
+        #: The resolved join mode.  ``auto`` resolves to ``strict`` for a
+        #: spendcap-shaped IR (all three engines apply) and ``primary`` for
+        #: any other IR (the two independent model checkers decide;
+        #: policy-direct is only the offline fallback, since it is structurally
+        #: UNKNOWN for non-spendcap IRs).  See :func:`default_mode_for`.
+        self.mode = (default_mode_for(ir)
+                     if mode in (None, MODE_AUTO) else mode)
+        if self.mode not in MODES:
+            raise ValueError(
+                "unknown crosscheck mode %r (expected one of %r or %r)"
+                % (mode, list(MODES), MODE_AUTO))
 
     # -- engine seams (patchable in tests) ---------------------------------
     def _smt_verdict(self):
@@ -540,21 +625,21 @@ class CrossChecker:
         """
         from .policy_smt import policy_direct_check
 
-        # Extract the policy parameters from the IR metadata.  The
-        # policy-direct model is spendcap-specific; if the IR is not a
-        # spendcap IR (no metadata), return UNKNOWN with a note.
-        meta = getattr(self.ir, "metadata", None) or {}
-        if "amount" not in meta or "cap" not in meta:
+        # The policy-direct model is spendcap-specific: it needs the
+        # per-request amount and the spend cap.  If the IR is not a
+        # spendcap-shaped IR (the policy-direct leg does not apply), return
+        # UNKNOWN with a note.  ``spendcap_params`` is the single source of
+        # truth for this (it also drives the shape-aware join mode).
+        params = spendcap_params(self.ir)
+        if params is None:
             from .symbolic import EngineResult, UNKNOWN
             return EngineResult(
                 status=UNKNOWN,
                 note="policy_direct: IR is not a spendcap IR; "
                      "the direct policy model does not apply")
-        amount = meta.get("amount", 100)
-        cap = meta.get("cap", 200)
-        buggy = meta.get("buggy", False)
-        max_inflight = meta.get("max_inflight", 4)
-        return policy_direct_check(amount, cap, max_inflight, buggy)
+        return policy_direct_check(
+            params["amount"], params["cap"],
+            params["max_inflight"], params["buggy"])
 
     # -- join ---------------------------------------------------------------
     def check(self):
@@ -578,8 +663,13 @@ class CrossChecker:
             smt.counterexample, tlc.witness, policy_direct.witness, joined)
 
         cross = {
-            "policy": ("PROVEN/VIOLATED require ALL THREE engines to agree; "
-                       "disagreement or UNKNOWN -> UNKNOWN"),
+            "policy": (
+                "PROVEN/VIOLATED require ALL THREE engines to agree; "
+                "disagreement or UNKNOWN -> UNKNOWN"
+                if self.mode == MODE_STRICT else
+                "PROVEN/VIOLATED require the two independent model checkers "
+                "(SMT/Z3, TLC) to agree; policy-direct is the offline "
+                "fallback when TLC is absent (shape-aware mode=primary)"),
             "smt": {
                 "engine": "smtz3",
                 "model": "ir_state_machine",
@@ -668,14 +758,28 @@ class CrossChecker:
                            policy_direct.status)),
         }
 
+        # The cross-check policy, stated for the resolved join mode: strict
+        # requires all three engines to agree; primary (the shape-aware
+        # default for non-spendcap IRs) is decided by the two independent
+        # model checkers with policy-direct as the offline fallback.
+        if self.mode == MODE_STRICT:
+            policy_assumption = (
+                "cross-check policy: PROVEN/VIOLATED require ALL THREE "
+                "engines (SMT/Z3, TLC, policy-direct) to agree")
+        else:
+            policy_assumption = (
+                "cross-check policy: PROVEN/VIOLATED require the two "
+                "independent model checkers (SMT/Z3, TLC) to agree; "
+                "policy-direct is the offline fallback when TLC is absent "
+                "(shape-aware mode=primary)")
+
         return v.Verdict(
             status=joined,
             property_name=self.prop.name,
             engine="crosscheck",
             counterexample=counterexample,
             assumptions=[
-                ("cross-check policy: PROVEN/VIOLATED require ALL THREE "
-                 "engines (SMT/Z3, TLC, policy-direct) to agree"),
+                policy_assumption,
                 "SMT (Z3) engine reported: %s" % smt.status,
                 "TLC engine reported: %s" % tlc.status,
                 "policy-direct engine reported: %s" % policy_direct.status,
@@ -683,7 +787,8 @@ class CrossChecker:
             soundness=[
                 "no PROVEN/VIOLATED is issued on a single engine's answer "
                 "alone",
-                "disagreement or UNKNOWN/ERROR on any engine forces UNKNOWN",
+                "disagreement or UNKNOWN/ERROR on a decision engine forces "
+                "UNKNOWN",
                 ("model independence: policy_direct uses a different model "
                  "family (direct policy vs IR state-machine)"),
             ],

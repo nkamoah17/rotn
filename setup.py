@@ -3,7 +3,9 @@
 
 ROTN is a pure-stdlib (zero-dependency) Python package that verifies
 temporal safety policies against bounded state-space models using three
-independent engines (SMT/Z3, TLC, and policy-direct).  It ships with a
+independent engines (SMT/Z3, TLC, and policy-direct -- the two independent
+model checkers decide, with the spend-cap-specific policy-direct engine as
+the third, model-independent leg and offline fallback).  It ships with a
 ``rot`` console script for the product-grade CLI.
 
 Python 3.8+.  No external dependencies.
@@ -52,8 +54,10 @@ setup(
         "holds even when the model attempts to break it, and coach the "
         "agent back in bounds when it does.*\n\n"
         "ROTN ingests an AI agent's tool policy (Dogwood *or* a standard "
-        "MCP manifest), verifies it with three independent engines and a "
-        "bounded re-check loop, maps findings to SOC 2 / AIUC controls, bounds "
+        "MCP manifest), verifies it with three independent engines (the two "
+        "independent model checkers decide; the spend-cap-specific "
+        "policy-direct engine is the third, model-independent leg and "
+        "offline fallback) and a bounded re-check loop, maps findings to SOC 2 / AIUC controls, bounds "
         "depth by a user-set `--depth` bound, and emits a deterministic, "
         "hashed trace that "
         "replays as an interactive proof on GitHub Pages.\n\n"
