@@ -296,6 +296,15 @@ repo root; `python -m rot` is the entry point, `rot` once installed):
   failures). The full evaluation (per-policy verdicts, aggregate metrics,
   the honest 13-vs-59 note, and the gaps) is in
   [`corpus-eval.md`](corpus-eval.md).
+- **The APW catalog + reference-interpreter agreement.**
+  The six named bug classes ([`apw-catalog.md`](apw-catalog.md)) and the
+  credibility backbone: for each gate class (APW-1/2/4) the counterexample is
+  replayed against **Dogwood's reference interpreter** on the same trace, and
+  the gate requires ROTN = VIOLATED with the reference = admitted (**3 of 3
+  pass**).
+  ```
+  rot replay --oracle dogwood --gate
+  ```
 - **The parallel-fire bug (Section 4).**
   ```
   rot check --policy tests/fixtures/aws_dogwood/spendcap/policies/spendcap-buggy.dw --max-inflight 3

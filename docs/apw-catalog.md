@@ -33,6 +33,42 @@ Every row is **oracle-verified**: `python -m unittest discover -s tests -p
 'test_apw*.py'` runs the buggy→VIOLATED (with the named witness) and
 correct→PROVEN legs for all six.
 
+## Reference-interpreter agreement (the credibility backbone)
+
+Oracle-verified is the *internal* leg. The *external* leg is the one that
+matters for trust: **replaying every gate-class counterexample against
+Dogwood's own reference interpreter** (`dogwood replay`) and recording the
+reference verdict next to ROTN's, on the *same* trace -- the "Dogwood admits
+it, ROTN catches it" side-by-side.
+
+For each of the three **gate classes** (APW-1, APW-2, APW-4), the replay must
+show **ROTN = VIOLATED** and the **reference = admitted** (the buggy policy
+admits the violating requests). On this machine the gate passes:
+
+| APW | class | ROTN | reference (buggy) | reference (correct) | gate |
+|-----|-------|------|-------------------|---------------------|------|
+| **APW-1** | Settled-sum cap bypass | VIOLATED | 4 ALLOW / 0 DENY | 2 ALLOW / 2 DENY | **AGREE** |
+| **APW-2** | Approval replay | VIOLATED | 3 ALLOW / 1 DENY | 1 ALLOW / 3 DENY | **AGREE** |
+| **APW-4** | Distinct-count race | VIOLATED | 4 ALLOW / 0 DENY | 4 ALLOW / 0 DENY | **AGREE** |
+
+**Gate: PASS -- 3 of 3 gate classes agree.**
+
+Two caveats are empirically verified in the report, and they keep the claim
+honest. First, the reference is Cedar-default-deny, so the "admits the
+violation" leg is shown on the **permit** form (the gateway's authorize-action
+form); ROTN's shape detection is permit/forbid-independent. Second, the
+reference window is *open and non-reflexive* (an event is decided before it is
+appended to the trace), and APW-4's `count` is a **per-recipient** count in the
+reference (a partition guarantee), so the reference does not deny the
+cross-recipient burst there -- ROTN still catches the global distinct-recipient
+class. APW-3 (taint race) and APW-5/6 (concept / forward-looking) are not gate
+classes: APW-3's egress is data-dependent, and APW-5/6 do not yet lower to a
+reference-interpretable shape.
+
+Reproduce: `rot replay --oracle dogwood --gate` (writes
+`out/reference-replay.md`).
+
+
 ---
 
 
@@ -157,6 +193,11 @@ python -m unittest discover -s tests -p 'test_apw*.py' -v
 # The flagship APW-1 through the CLI (exit 1 / 0):
 rot check --policy samples/apw1-buggy.dw   # VIOLATED, witness {"completed":0,"inflight":3}
 rot check --policy samples/apw1-correct.dw # PROVEN
+
+# The reference-interpreter agreement (the credibility backbone): replay each
+# gate-class counterexample against Dogwood's reference interpreter and gate on
+# "ROTN = VIOLATED, reference = admitted" (writes out/reference-replay.md):
+rot replay --oracle dogwood --gate
 ```
 
 ## What this is (and isn't)

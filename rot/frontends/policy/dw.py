@@ -34,6 +34,7 @@ import os
 
 import rot.dw as dw
 import rot.spendcap as spendcap
+from rot.frontends.policy import PolicyFrontendError
 
 __all__ = [
     "DwFrontendError",
@@ -68,8 +69,13 @@ _SHAPE = {
 }
 
 
-class DwFrontendError(ValueError):
-    """Raised when a ``.dw`` file cannot be lowered into a ProtocolIR."""
+class DwFrontendError(PolicyFrontendError):
+    """Raised when a ``.dw`` file cannot be lowered into a ProtocolIR.
+
+    (A subclass of the router's ``PolicyFrontendError`` so the whole
+    ``frontends.policy`` package presents one error type -- callers such as
+    ``rot check`` catch a single exception and report one clean CLI error.)
+    """
 
 
 def build_ir(policy_path, tools_path=None, n_steps=1, max_inflight=None,

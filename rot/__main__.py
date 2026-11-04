@@ -687,6 +687,21 @@ def cmd_report(args):
 # rot coach
 # ---------------------------------------------------------------------------
 
+def _coach_shape_error(policy_path):
+    """One clean CLI error when a policy is not a spend-cap policy.
+
+    ``rot coach`` is the spend-cap coaching loop (it rewrites the event kind
+    and re-proves the cap invariant over the ``spend_ok`` decision action).
+    A ``.dw`` policy that lowers to another APW shape -- or a concept sample
+    that does not lower at all -- is reported as one clean CLI error (exit 3),
+    never a traceback.
+    """
+    print("ERROR: %s is not a spend-cap policy (the coach supports the "
+          "spendcap shape -- a .dw spend-cap policy such as "
+          "samples/apw1-buggy.dw -- or --shape exfiltration)"
+          % policy_path, file=sys.stderr)
+
+
 def cmd_coach(args):
     """Coach the agent back in bounds, *with a proof* (the CoachingArtifact).
 
@@ -736,9 +751,21 @@ def cmd_coach(args):
         except (dw.DwParseError, IOError, OSError) as exc:
             print("ERROR: %s" % exc, file=sys.stderr)
             return EXIT_ERROR
-        if not hasattr(policy, "to_ir"):
-            print("ERROR: %s is not a spend-cap policy (no to_ir)" % policy_path,
-                  file=sys.stderr)
+        if not isinstance(policy, dw.DwPolicy):
+            _coach_shape_error(policy_path)
+            return EXIT_ERROR
+        # The coaching loop is spend-cap-shaped: it rewrites the event kind and
+        # re-proves the cap invariant over the ``spend_ok`` decision action.  A
+        # policy that lowers to a different APW shape (APW-5 scoped-cap, APW-6
+        # window-boundary, ...) has no ``spend_ok`` action, so it is one clean
+        # CLI error -- never a traceback.
+        try:
+            probe = policy.to_ir(cap=policy.cap)
+        except (dw.DwParseError, ValueError) as exc:
+            print("ERROR: %s" % exc, file=sys.stderr)
+            return EXIT_ERROR
+        if probe.action("spend_ok") is None:
+            _coach_shape_error(policy_path)
             return EXIT_ERROR
 
         try:

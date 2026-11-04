@@ -103,7 +103,7 @@ the spend-cap policy class, the deterministic counterexample + K-sweep, the
 one-pager generator, the attestation hash + re-verify command, the service
 layer (`rot runtime serve`, the LangChain adapter, the MCP gateway, the fleet
 aggregate, the G8 behavioral audit, the Lethal-Trifecta risk surface), the
-969-test product suite (count pinned by `tests/test_suite_count.py`), and the
+972-test product suite (count pinned by `tests/test_suite_count.py`), and the
 CI gate.
 
 **Not** in this repo: the **hosted service** — the cloud operation of the

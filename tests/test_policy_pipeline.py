@@ -101,6 +101,16 @@ class DispatcherTests(unittest.TestCase):
         with self.assertRaises(policy_frontends.PolicyFrontendError):
             policy_frontends.build_ir(_POL, os.path.join(_ROOT, "no_such_tools.json"), 1)
 
+    def test_dw_frontend_error_is_policy_frontend_error(self):
+        # A ``.dw`` front-end failure is one of the router's error types, so
+        # ``rot check`` (which catches ``PolicyFrontendError``) reports one
+        # clean CLI error instead of a traceback.  The APW-5/6 concept samples
+        # are the canonical case: they parse as ``.dw`` but do not lower to a
+        # spend-cap shape, so ``build_ir`` must fail with the router's error.
+        from rot.frontends.policy.dw import DwFrontendError
+        self.assertTrue(
+            issubclass(DwFrontendError, policy_frontends.PolicyFrontendError))
+
 
 class BuildIrValidationTests(unittest.TestCase):
     def test_dogwood_ir_validates(self):

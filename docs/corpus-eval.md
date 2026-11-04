@@ -116,6 +116,26 @@ source URLs from the pinned dogwood commit (see
   able to decide it — it does **not** silently pass, and it does **not** report
   an internal error. This is a known, bounded limitation.
 
+## 4.1 Connection to the APW catalog (the six classes)
+
+The corpus verdicts above are not isolated rows -- they are the **corpus
+instantiations** of the six named bug classes in
+[apw-catalog.md](apw-catalog.md). The spend-cap / distinct-count / taint-egress
+rows here are the same shapes as **APW-1** (settled-sum cap bypass),
+**APW-4** (distinct-count race), and **APW-3** (taint race); the `count_window`
+row is the shape that **APW-5/6** generalize with a scope or a boundary; and the
+approval-replay shape is **APW-2**. The corpus evaluation is the *honest
+coverage matrix* (including the `OUT_OF_SCOPE` `refund_budget` row); the APW
+catalog is the *named, replayable* version of the same gap.
+
+The credibility backbone ties the two together: for each **gate class**
+(APW-1, APW-2, APW-4) the counterexample is replayed against **Dogwood's own
+reference interpreter** (`dogwood replay`) on the *same* trace, and the gate
+requires **ROTN = VIOLATED** with the **reference = admitted**. The gate passes
+**3 of 3** (see [apw-catalog.md](apw-catalog.md), "Reference-interpreter
+agreement"): the point-in-time monitor admits the violation, and ROTN's temporal
+proof catches it.
+
 ## 5. Redesign history (worth recording)
 
 **First draft** classified the `ProductTooLarge` (state-space) case as

@@ -17,7 +17,9 @@ Covers the acceptance bar for the "coach agents back in bounds" gap:
 Run: python tests/test_coach.py
 """
 
+import contextlib
 import hashlib
+import io
 import json
 import os
 import sys
@@ -29,6 +31,7 @@ from rot.coach import (  # noqa: E402
     SCHEMA, CLOSED, OPEN, CoachingArtifact, coach, coach_exfiltration,
     coach_hash, canonical_json)
 from rot.dw import parse_file  # noqa: E402
+import rot.__main__ as cli  # noqa: E402
 import rot.agent_harness as agent_harness  # noqa: E402
 
 #: The canonical buggy spend-cap .dw fixture (the ``response``-sum variant).
@@ -281,6 +284,42 @@ class ExfiltrationCoachTests(unittest.TestCase):
         self.assertIn("instruction", tp)
         self.assertIn("Release the private data", tp["instruction"])
         self.assertIn("approved channel", tp["instruction"])
+
+
+class CoachShapeGuardTests(unittest.TestCase):
+    """``rot coach`` is the spend-cap coaching loop (it rewrites the event
+    kind and re-proves the cap invariant over the ``spend_ok`` decision
+    action).  A policy that does not lower to a spend-cap shape is therefore
+    one clean CLI error (exit 3), never a traceback.
+
+    The APW-5 (scoped-cap) and APW-6 (window-boundary) catalog samples are the
+    canonical case: they parse as ``.dw`` but lower to non-spend-cap shapes,
+    so ``cmd_coach`` must report a clean error.  The APW-1 spend-cap sample,
+    by contrast, IS coachable and closes (exit 0).
+    """
+
+    _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    def _run(self, path):
+        args = cli.argparse.Namespace(shape="spendcap", policy=path,
+                                     aggregate=False, quiet=True)
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = cli.cmd_coach(args)
+        return code, out.getvalue(), err.getvalue()
+
+    def test_non_spendcap_sample_is_a_clean_error(self):
+        for name in ("apw5-buggy.dw", "apw6-buggy.dw"):
+            path = os.path.join(self._ROOT, "samples", name)
+            code, _out, err = self._run(path)
+            self.assertEqual(code, cli.EXIT_ERROR)
+            self.assertIn("not a spend-cap policy", err)
+
+    def test_spendcap_sample_is_coached_and_closes(self):
+        path = os.path.join(self._ROOT, "samples", "apw1-buggy.dw")
+        code, out, _err = self._run(path)
+        self.assertEqual(code, cli.EXIT_PROVEN)
+        self.assertIn(SCHEMA, out)
 
 
 if __name__ == "__main__":
