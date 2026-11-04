@@ -1,0 +1,47 @@
+{
+  "attack_path": [
+    {
+      "action": "new_value",
+      "state": {
+        "counted": 0,
+        "distinct": 1
+      },
+      "step": 0
+    },
+    {
+      "action": "new_value",
+      "state": {
+        "counted": 0,
+        "distinct": 2
+      },
+      "step": 1
+    },
+    {
+      "action": "new_value",
+      "state": {
+        "counted": 0,
+        "distinct": 3
+      },
+      "step": 2
+    },
+    {
+      "action": "new_value",
+      "state": {
+        "counted": 0,
+        "distinct": 4
+      },
+      "step": 3
+    }
+  ],
+  "dw_window": "1h",
+  "policy_source": "C:\\Users\\jeren\\Documents\\KAMANU\\ROTN\\tests\\fixtures\\apw\\apw4-permit-buggy.dw",
+  "property_kind": "safety",
+  "property_name": "distinct_within_cap",
+  "target": "policy-apw4-permit-buggy.dw",
+  "verdict": "violated",
+  "window": 4,
+  "witness": {
+    "counted": 0,
+    "distinct": 4
+  }
+}

@@ -1341,8 +1341,18 @@ def cmd_replay(args):
     recorded attack). With ``--policy`` it re-runs the sound core and
     reports whether the counterexample reproduces -- the verification loop
     that closes the "is this attack real?" question.
+
+    With ``--oracle dogwood`` it instead replays a policy + trace against
+    Dogwood's reference interpreter and records the reference verdict next to
+    ROTN's (the Phase-3 "Dogwood admits it, ROTN catches it" side-by-side).
     """
+    if getattr(args, "oracle", None) == "dogwood":
+        return _cmd_replay_oracle_dogwood(args)
     path = args.attack
+    if not path:
+        print("ERROR: no attack file given (or use --oracle dogwood --gate)",
+              file=sys.stderr)
+        return EXIT_ERROR
     if not os.path.isfile(path):
         print("ERROR: attack file not found: %s" % path, file=sys.stderr)
         return EXIT_ERROR
@@ -1413,6 +1423,92 @@ def cmd_replay(args):
     print(_BAR)
     return code
 
+
+
+def _cmd_replay_oracle_dogwood(args):
+    """Phase 3 -- replay a policy + trace against Dogwood's reference
+    interpreter and record the reference verdict next to ROTN's.
+
+    Modes:
+      * ``--gate``  : run the APW-1/2/4 gate classes (fixtures) and write the
+        side-by-side report (JSON + Markdown).
+      * single      : ``--policy --trace --policy-schema`` for one class.
+    """
+    import rot.oracle as oracle
+
+    binary = oracle.find_dogwood(getattr(args, "dogwood", None))
+    if binary is None:
+        print("ERROR: dogwood binary not found -- set DOGWOOD_BIN or pass "
+              "--dogwood PATH (Phase-0 build at C:\\tools\\dogwood\\target\\...)",
+              file=sys.stderr)
+        return EXIT_ERROR
+
+    out_dir = args.out or os.path.join(_repo_root(), "out", "reference-replay")
+    if not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
+
+    if getattr(args, "gate", False):
+        reports = oracle.run_gate(binary)
+    else:
+        if not (args.policy and args.trace and args.policy_schema):
+            print("ERROR: --oracle dogwood needs --policy, --trace and "
+                  "--policy-schema (or --gate to run APW-1/2/4)",
+                  file=sys.stderr)
+            return EXIT_ERROR
+        rot = oracle.run_rotn_check(args.policy)
+        ref_buggy = oracle.run_dogwood_replay(
+            binary, args.policy, args.policy_schema, args.trace)
+        ref_correct = None
+        if getattr(args, "correct", None):
+            ref_correct = oracle.run_dogwood_replay(
+                binary, args.correct, args.policy_schema, args.trace)
+        reports = [oracle.side_by_side(
+            rot.get("verdict"), rot.get("witness"), rot.get("property"),
+            ref_buggy, ref_correct)]
+        reports[0]["apw"] = getattr(args, "apw", None) or "custom"
+        reports[0]["name"] = "single policy"
+        reports[0]["policy_buggy"] = args.policy
+        reports[0]["trace"] = args.trace
+
+    # Persist: per-class JSON, combined JSON, and the Markdown artifact.
+    for r in reports:
+        with open(os.path.join(out_dir,
+                               "%s.reference.json" % r.get("apw", "policy")),
+                  "w") as f:
+            json.dump(r, f, indent=2, sort_keys=True)
+    with open(os.path.join(out_dir, "reference-replay.json"), "w") as f:
+        json.dump(reports, f, indent=2, sort_keys=True)
+    md_path = args.md or os.path.join(out_dir, "reference-replay.md")
+    with open(md_path, "w") as f:
+        f.write(oracle.render_markdown(reports, binary=binary))
+
+    # Human summary.
+    is_gate = getattr(args, "gate", False)
+    if is_gate:
+        passed = oracle.gate_passed(reports)
+        scope = "gate"
+    else:
+        # single mode: pass iff this one class agrees (the 3-class gate N/A)
+        passed = bool(reports and reports[0].get("gate", {}).get("agreement"))
+        scope = "class"
+    n_agree = sum(1 for r in reports if r.get("gate", {}).get("agreement"))
+    print(_BAR)
+    print("  ROTN x Dogwood reference -- oracle replay")
+    print(_BAR)
+    for r in reports:
+        g = r.get("gate", {})
+        mark = "AGREE" if g.get("agreement") else "no"
+        print("  %-6s %-30s ROTN=%-8s ref-admit=%-5s [%s]" % (
+            r.get("apw"), r.get("name"),
+            (r.get("rot") or {}).get("verdict", "-"),
+            g.get("reference_admitted"), mark))
+    print(_BAR)
+    print("  %s      : %s (%d of %d agree)" % (
+        scope, "PASS" if passed else "FAIL", n_agree, len(reports)))
+    print("  json      : %s" % os.path.join(out_dir, "reference-replay.json"))
+    print("  markdown  : %s" % md_path)
+    print(_BAR)
+    return EXIT_PROVEN if passed else EXIT_VIOLATED
 
 
 # ---------------------------------------------------------------------------
@@ -2324,9 +2420,12 @@ def main(argv=None):
                    help="suppress the human summary")
 
     p = sub.add_parser(
-        "replay", help="re-derive a recorded attack.jsonl")
-    p.add_argument("attack", metavar="ATTACK_JSONL",
-                   help="attack file written by 'rot check'")
+        "replay",
+        help="re-derive a recorded attack.jsonl; --oracle dogwood replays "
+             "a policy+trace against Dogwood's reference interpreter")
+    p.add_argument("attack", nargs="?", default=None, metavar="ATTACK_JSONL",
+                   help="attack file written by 'rot check' (omit for "
+                        "--oracle dogwood / --gate)")
     p.add_argument("--policy", default=None, metavar="FILE",
                    help="policy to re-verify against "
                         "(record-only inspection without it)")
@@ -2334,6 +2433,34 @@ def main(argv=None):
                    help="bounded concurrency pool K (spend-cap policies)")
     p.add_argument("--liveness-horizon", type=int, default=None, metavar="H",
                    help="bounded liveness horizon (liveness policies)")
+    # Phase 3 -- reference-interpreter oracle (dogwood)
+    p.add_argument("--oracle", default=None, choices=["dogwood"],
+                   metavar="NAME",
+                   help="run the reference interpreter as the oracle; "
+                        "'dogwood' runs `dogwood replay` and records its "
+                        "verdict next to ROTN's")
+    p.add_argument("--gate", action="store_true",
+                   help="(with --oracle dogwood) run the APW-1/2/4 gate "
+                        "classes and write the side-by-side report")
+    p.add_argument("--trace", default=None, metavar="FILE",
+                   help="(oracle) the witness trace.log to replay")
+    p.add_argument("--policy-schema", default=None, metavar="FILE",
+                   help="(oracle) the Cedar schema for the policy")
+    p.add_argument("--dogwood", default=None, metavar="PATH",
+                   help="(oracle) path to the dogwood binary "
+                        "[default: $DOGWOOD_BIN or the Phase-0 build]")
+    p.add_argument("--md", default=None, metavar="PATH",
+                   help="(oracle) Markdown report path "
+                        "[default: <out>/reference-replay.md]")
+    p.add_argument("--correct", default=None, metavar="FILE",
+                   help="(oracle, single mode) the corrected policy to replay "
+                        "for the side-by-side contrast")
+    p.add_argument("--apw", default=None, metavar="ID",
+                   help="(oracle, single mode) the APW id to label the "
+                        "report row [default: custom]")
+    p.add_argument("--out", default=None, metavar="DIR",
+                   help="(oracle) output dir for the JSON + Markdown report "
+                        "[default: <repo>/out/reference-replay]")
 
     p = sub.add_parser(
         "ci", help="CI gate: verdict + JUnit XML + SARIF")

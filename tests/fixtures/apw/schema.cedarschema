@@ -1,0 +1,132 @@
+// APW catalog — reference-interpreter schema (Phase 3).
+//
+// A single Drupe action schema covering every action referenced by the
+// APW-1..APW-6 catalog samples (samples/apwN-*.dw), so each buggy policy can be
+// `dogwood validate`d and `dogwood replay`ed against Dogwood's reference
+// interpreter. Modeled on the pinned upstream fixture
+// (tests/fixtures/aws_dogwood/spendcap/examples/alert_total_transfer_over_200/
+//  schema.cedarschema) — same namespace, same principal/resource entities.
+//
+// Actions and the fields the APW policies read:
+//   Transfer         input.amount: Long, input.user: String      (APW-1)
+//   GetCart          input.cartId: String                        (APW-2)
+//   PlaceOrder       input.amount: Long, input.cartId: String    (APW-2)
+//   ReadConfidential output.label: String                        (APW-3)
+//   Send             input.recipient: String                     (APW-3, APW-4, APW-5, APW-6)
+namespace Drupe {
+  type TransferInput = {
+    amount: Long,
+    user: String
+  };
+
+  type TransferOutput = {  };
+
+  type GetCartInput = {
+    cartId: String
+  };
+
+  type GetCartOutput = {  };
+
+  type PlaceOrderInput = {
+    amount: Long,
+    cartId: String
+  };
+
+  type PlaceOrderOutput = {  };
+
+  type ReadConfidentialInput = {
+    doc: String
+  };
+
+  type ReadConfidentialOutput = {
+    label: String
+  };
+
+  type SendInput = {
+    recipient: String
+  };
+
+  type SendOutput = {  };
+
+  type SystemContext = {
+    now: datetime
+  };
+
+  entity Gateway;
+
+  entity IamEntity = {
+    id: String
+  };
+
+  entity OAuthUser = {
+    id: String
+  } tags String;
+
+  entity UnauthenticatedUser;
+
+  action "Transfer" in [Action::"CallTool"] appliesTo {
+    principal: [IamEntity, OAuthUser, UnauthenticatedUser],
+    resource: [Gateway],
+    context: {
+      input: TransferInput,
+      output?: TransferOutput,
+      system: SystemContext
+    }
+  };
+
+  action "GetCart" in [Action::"CallTool"] appliesTo {
+    principal: [IamEntity, OAuthUser, UnauthenticatedUser],
+    resource: [Gateway],
+    context: {
+      input: GetCartInput,
+      output?: GetCartOutput,
+      system: SystemContext
+    }
+  };
+
+  action "PlaceOrder" in [Action::"CallTool"] appliesTo {
+    principal: [IamEntity, OAuthUser, UnauthenticatedUser],
+    resource: [Gateway],
+    context: {
+      input: PlaceOrderInput,
+      output?: PlaceOrderOutput,
+      system: SystemContext
+    }
+  };
+
+  action "ReadConfidential" in [Action::"CallTool"] appliesTo {
+    principal: [IamEntity, OAuthUser, UnauthenticatedUser],
+    resource: [Gateway],
+    context: {
+      input: ReadConfidentialInput,
+      output?: ReadConfidentialOutput,
+      system: SystemContext
+    }
+  };
+
+  action "Send" in [Action::"CallTool"] appliesTo {
+    principal: [IamEntity, OAuthUser, UnauthenticatedUser],
+    resource: [Gateway],
+    context: {
+      input: SendInput,
+      output?: SendOutput,
+      system: SystemContext
+    }
+  };
+
+  action "CallTool" in [Action::"Mcp"] appliesTo {
+    principal: [OAuthUser, IamEntity, UnauthenticatedUser],
+    resource: [Gateway],
+    context: {
+      system: SystemContext
+    }
+  };
+
+  action "Mcp" appliesTo {
+    principal: [OAuthUser, IamEntity, UnauthenticatedUser],
+    resource: [Gateway],
+    context: {
+      system: SystemContext
+    }
+  };
+}

@@ -1,0 +1,19 @@
+// APW-2 -- Approval replay (approval never consumed) -- BUGGY, permit form.
+//
+// permit-form because the reference interpreter is default-deny: a
+// `forbid`-only policy set can only DENY, so "Dogwood admits the violation"
+// is observable only on a `permit` policy (the form a gateway uses to
+// authorize an action). ROTN's shape detection is independent of
+// permit/forbid -- it still classifies this as the approval-replay class.
+//
+// One cart-check (GetCart::response) authorises EVERY PlaceOrder in the
+// window: nothing consumes the approval.
+@id("apw2_permit_buggy")
+permit (
+    principal,
+    action == Drupe::Action::"PlaceOrder",
+    resource
+)
+when temporal {
+    formerly within 1m Drupe::Action::"GetCart"::response{ input.cartId: context.input.cartId }
+};

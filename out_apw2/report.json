@@ -1,0 +1,38 @@
+{
+  "attack_path": [
+    {
+      "action": "cart_check",
+      "state": {
+        "approved": true,
+        "orders": 0
+      },
+      "step": 0
+    },
+    {
+      "action": "place_order",
+      "state": {
+        "approved": true,
+        "orders": 1
+      },
+      "step": 1
+    },
+    {
+      "action": "place_order",
+      "state": {
+        "approved": true,
+        "orders": 2
+      },
+      "step": 2
+    }
+  ],
+  "policy_source": "C:\\Users\\jeren\\Documents\\KAMANU\\ROTN\\samples\\apw2-buggy.dw",
+  "property_kind": "safety",
+  "property_name": "approval_single_use",
+  "target": "policy-apw2-buggy.dw",
+  "verdict": "violated",
+  "window": 4,
+  "witness": {
+    "approved": true,
+    "orders": 2
+  }
+}

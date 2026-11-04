@@ -1,0 +1,21 @@
+// APW-4 -- Distinct-count cap -- CORRECT, permit form.
+//
+// Counts *requested* (in-flight + settled) sends, so the in-flight burst is
+// charged against the `<= 3` cap.
+//
+// NOTE (reference semantics): the reference interpreter partitions temporal
+// aggregates by the request's pinned key (`input.recipient`), so this is a
+// per-recipient cap in the reference, not a global distinct-recipient cap.
+// ROTN models the global distinct-recipient class; see
+// docs/reference-replay.md for the honest side-by-side.
+@id("apw4_permit_correct")
+permit (
+    principal,
+    action == Drupe::Action::"Send",
+    resource
+)
+when temporal {
+    (count for (t: Timepoint). where (
+        formerly within 1h (Drupe::Action::"Send"::request{ input.recipient: context.input.recipient } && tp(t))
+    )) <= 3
+};

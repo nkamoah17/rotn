@@ -1,0 +1,40 @@
+{
+  "attack_path": [
+    {
+      "action": "spend_ok",
+      "state": {
+        "completed": 0,
+        "inflight": 1
+      },
+      "step": 0
+    },
+    {
+      "action": "spend_ok",
+      "state": {
+        "completed": 0,
+        "inflight": 2
+      },
+      "step": 1
+    },
+    {
+      "action": "spend_ok",
+      "state": {
+        "completed": 0,
+        "inflight": 3
+      },
+      "step": 2
+    }
+  ],
+  "dw_window": "24h",
+  "max_inflight": 3,
+  "policy_source": "C:\\Users\\jeren\\Documents\\KAMANU\\ROTN\\samples\\apw1-buggy.dw",
+  "property_kind": "safety",
+  "property_name": "spendcap_within_cap",
+  "target": "policy-apw1-buggy.dw",
+  "verdict": "violated",
+  "window": 4,
+  "witness": {
+    "completed": 0,
+    "inflight": 3
+  }
+}

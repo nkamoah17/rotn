@@ -1,0 +1,16 @@
+// APW-2 -- Approval replay (approval consumed exactly once) -- CORRECT,
+// permit form.
+//
+// An order is admitted only if a cart-check happened AND no order has already
+// responded -- the approval is consumed after the first order, so one
+// cart-check authorises at most one order.
+@id("apw2_permit_correct")
+permit (
+    principal,
+    action == Drupe::Action::"PlaceOrder",
+    resource
+)
+when temporal {
+    formerly within 1m Drupe::Action::"GetCart"::response{ input.cartId: context.input.cartId }
+    && !formerly within 1m Drupe::Action::"PlaceOrder"::response{ input.amount: context.input.amount }
+};

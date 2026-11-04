@@ -1,0 +1,19 @@
+// APW-4 -- Distinct-count cap -- BUGGY, permit form.
+//
+// permit-form (see apw2-permit-buggy.dw for the default-deny rationale).
+//
+// Counts *settled* (response) events; a burst of in-flight sends to distinct
+// recipients is admitted before any settles, so the `<= 3` cap is not
+// enforced. The one-word bug vs. the correct variant: `response` vs.
+// `request`.
+@id("apw4_permit_buggy")
+permit (
+    principal,
+    action == Drupe::Action::"Send",
+    resource
+)
+when temporal {
+    (count for (t: Timepoint). where (
+        formerly within 1h (Drupe::Action::"Send"::response{ input.recipient: context.input.recipient } && tp(t))
+    )) <= 3
+};
