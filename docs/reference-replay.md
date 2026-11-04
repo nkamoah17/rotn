@@ -29,7 +29,7 @@ For each of APW-1, APW-2, APW-4 the report must show **ROTN = VIOLATED** and **D
 
 ### APW-2 -- Approval replay (approval never consumed)
 
-- **ROTN**: `VIOLATED` (property: `no_exfiltration`, witness: `{"exfiltrated": true, "holding_private": true}`)
+- **ROTN**: `VIOLATED` (property: `approval_single_use`, witness: `{"approved": true, "orders": 2}`)
 - **Buggy policy**: `tests/fixtures/apw/apw2-permit-buggy.dw`
 - **Correct policy**: `tests/fixtures/apw/apw2-permit-correct.dw`
 - **Trace**: `tests/fixtures/apw/apw2.trace.log`
@@ -51,7 +51,7 @@ For each of APW-1, APW-2, APW-4 the report must show **ROTN = VIOLATED** and **D
 
 ## Honest caveats (empirically verified)
 
-* **default-deny.** The reference is Cedar-default-deny: a `forbid`-only policy set can only DENY, so 'admits the violation' is shown on the **permit** form (the gateway's authorize-action form). ROTN's shape detection is permit/forbid-independent.
+* **default-deny.** The reference is Cedar-default-deny: a `forbid`-only policy set can only DENY, so 'admits the violation' is shown on the **permit** form (the gateway's authorize-action form). ROTN's shape detection reads the policy's *intent* (permit/forbid) to disambiguate the formerly-gated shape: a **permit** gated on a prior approval event is APW-2 (approval replay); a **forbid** on egress after a confidential read is APW-3 (taint race).
 * **open, non-reflexive window.** `dogwood replay` decides an event *before* appending it, so the current event is not in its own temporal aggregate; the witness traces are shaped so the violation still surfaces (a 4th APW-1 request, a 3rd APW-2 order, a 4th APW-4 recipient).
 * **partition guarantee.** Temporal aggregates are sharded by the request's pinned key; APW-4's `count … recipient: context.input.recipient` is a *per-recipient* count in the reference (not a global distinct-recipient cap), so APW-4's correct policy does not deny the cross-recipient burst there -- ROTN still catches the global distinct-recipient class.
 

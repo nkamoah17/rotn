@@ -387,7 +387,11 @@ def render_markdown(reports, binary=None):
         "* **default-deny.** The reference is Cedar-default-deny: a "
         "`forbid`-only policy set can only DENY, so 'admits the violation' "
         "is shown on the **permit** form (the gateway's authorize-action "
-        "form). ROTN's shape detection is permit/forbid-independent.")
+        "form). ROTN's shape detection reads the policy's *intent* "
+        "(permit/forbid) to disambiguate the formerly-gated shape: a "
+        "**permit** gated on a prior approval event is APW-2 (approval "
+        "replay); a **forbid** on egress after a confidential read is APW-3 "
+        "(taint race).")
     lines.append(
         "* **open, non-reflexive window.** `dogwood replay` decides an event "
         "*before* appending it, so the current event is not in its own "

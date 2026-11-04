@@ -79,6 +79,33 @@ class OracleHelperTests(unittest.TestCase):
                     os.path.isfile(c[key]),
                     "missing %s for %s: %s" % (key, c["apw"], c[key]))
 
+    def test_gate_fixtures_lower_to_their_apw_class(self):
+        """The gate proves what it claims: each gate class's buggy fixture
+        must lower to *that* APW class's protocol.
+
+        Regression: the APW-2 row pointed at ``apw2-permit-buggy.dw`` (the
+        Classmethod ``formerly within <approval-event>`` gating shape) while
+        the dispatcher classified that shape as taint-egress (APW-3) -- the
+        gate "passed" APW-2 by proving the *wrong* bug class.  This test
+        pins the fixture-to-class mapping the gate relies on.
+        """
+        from rot.dw import parse_file
+        expected = {
+            "APW-1": "SPENDCAP",
+            "APW-2": "APPROVAL_REPLAY",
+            "APW-4": "DISTINCT_COUNT",
+        }
+        for c in oracle.gate_classes():
+            ir = parse_file(c["buggy"]).to_ir()
+            self.assertEqual(
+                ir.metadata.get("protocol"), expected[c["apw"]],
+                "%s gate fixture %s lowers to the wrong class (protocol=%r)"
+                % (c["apw"], os.path.basename(c["buggy"]),
+                   ir.metadata.get("protocol")))
+            self.assertEqual(ir.metadata.get("buggy"), True,
+                             "%s gate fixture must be the buggy variant"
+                             % c["apw"])
+
 
 
 @unittest.skipIf(oracle.find_dogwood() is None,

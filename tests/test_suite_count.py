@@ -35,7 +35,7 @@ _REPO_ROOT = os.path.dirname(_TESTS_DIR)
 # The 80 service-plane (Product 2: LangChain / MCP gateway / fleet-aggregate)
 # tests live in the commercial layer under rot/commercial/tests/ and are NOT counted
 # here -- the free core suite is what this test pins.
-PINNED_SUITE_COUNT = 972
+PINNED_SUITE_COUNT = 977
 
 # The exact documented phrasings this test checks (keep in sync with the docs).
 _README_TEST_COUNT_RE = re.compile(r"\*\*(\d+) tests\*\*")

@@ -41,6 +41,14 @@ SAMPLE_BUGGY = os.path.join(
 SAMPLE_CORRECT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "samples", "apw2-correct.dw")
+# The Classmethod permit form (the ``formerly within <approval-event>``
+# gating shape -- the exact shape of the public Classmethod tutorial).
+PERMIT_BUGGY = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "fixtures", "apw", "apw2-permit-buggy.dw")
+PERMIT_CORRECT = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "fixtures", "apw", "apw2-permit-correct.dw")
 
 
 def _action(ir, name):
@@ -108,6 +116,53 @@ class APW2SampleTests(unittest.TestCase):
         assert_oracle_match(
             SAMPLE_CORRECT,
             shapes.build_approval_replay_ir(buggy=False), APW)
+
+
+class APW2PermitFormTests(unittest.TestCase):
+    """The Classmethod ``permit`` form classifies as approval-replay (APW-2).
+
+    Regression for the misclassification the gate used to hide: the bare
+    ``formerly within <approval-event>`` gating shape (the exact shape of
+    the public Classmethod tutorial policy) was routed to the **taint-egress
+    (APW-3)** / event-ordering detectors before the approval-replay one, so
+    ``apw2-permit-buggy.dw`` proved the *wrong* bug class.  The dispatcher
+    now disambiguates by *policy intent*: a **permit** gated on a prior
+    approval event is approval-replay (sticky fact = replayable); a
+    **forbid** on egress after a confidential read is taint-egress.
+    """
+
+    def test_permit_buggy_classifies_as_approval_replay(self):
+        from rot.dw import parse_file
+        ir = parse_file(PERMIT_BUGGY).to_ir()
+        self.assertEqual(ir.metadata.get("protocol"), "APPROVAL_REPLAY",
+                         "the Classmethod permit form must classify as "
+                         "approval-replay (APW-2), not taint-egress (APW-3)")
+        self.assertEqual(ir.metadata.get("buggy"), True,
+                         "the bare formerly fact is sticky: approval replay")
+
+    def test_permit_correct_classifies_as_single_use(self):
+        from rot.dw import parse_file
+        ir = parse_file(PERMIT_CORRECT).to_ir()
+        self.assertEqual(ir.metadata.get("protocol"), "APPROVAL_REPLAY")
+        self.assertEqual(ir.metadata.get("buggy"), False,
+                         "the !formerly consumption clause makes the "
+                         "approval single-use")
+
+    def test_permit_fixtures_lower_to_the_oracle(self):
+        assert_oracle_match(
+            PERMIT_BUGGY, shapes.build_approval_replay_ir(buggy=True), APW)
+        assert_oracle_match(
+            PERMIT_CORRECT, shapes.build_approval_replay_ir(buggy=False), APW)
+
+    def test_forbid_form_stays_taint_egress(self):
+        """The disambiguation guard: the *forbid* form of the same syntactic
+        shape is the APW-3 taint-egress class (intent, not syntax, decides)."""
+        from rot.dw import parse_file
+        apw3 = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "samples", "apw3-buggy.dw")
+        ir = parse_file(apw3).to_ir()
+        self.assertEqual(ir.metadata.get("protocol"), "TAINT_EGRESS")
 
 
 if __name__ == "__main__":

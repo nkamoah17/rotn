@@ -56,7 +56,10 @@ admits the violating requests). On this machine the gate passes:
 Two caveats are empirically verified in the report, and they keep the claim
 honest. First, the reference is Cedar-default-deny, so the "admits the
 violation" leg is shown on the **permit** form (the gateway's authorize-action
-form); ROTN's shape detection is permit/forbid-independent. Second, the
+form); ROTN's shape detection reads the policy's *intent* (permit/forbid) to
+disambiguate the formerly-gated shape — a **permit** gated on a prior
+approval event is APW-2 (approval replay), a **forbid** on egress after a
+confidential read is APW-3 (taint race). Second, the
 reference window is *open and non-reflexive* (an event is decided before it is
 appended to the trace), and APW-4's `count` is a **per-recipient** count in the
 reference (a partition guarantee), so the reference does not deny the

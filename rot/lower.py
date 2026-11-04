@@ -31,6 +31,17 @@ Supported shapes (detected by duck-typed traversal of the ``.dw`` AST):
    taints the agent's context; the policy's scope names the egress action
    that is forbidden while the taint is held.
 
+ 6. **Formerly-gated approval** (a ``permit`` gated on
+   ``formerly within <window> <approval-event>``): the APW-2 approval-replay
+   shape in its *permit* form (the Classmethod "order only after the cart
+   check" tutorial policy).  A bare ``formerly`` fact is *sticky* -- one
+   approval admits N gated actions (the buggy variant); a ``!formerly``
+   clause on the gated action consumes the approval (the correct variant).
+   **Effect-sensitive**: it is disambiguated from the taint-egress shape (5)
+   by *policy intent* -- a ``permit`` gated on a prior approval event is
+   approval-replay; a ``forbid`` on egress after a confidential read is
+   taint-egress.
+
 :func:`rot.spendcap.build_ir` (``buggy=...``) is retained as a **test oracle**
 for shape 1 -- the expected output this lowering must reproduce -- not the
 production path.  The two are asserted equal in ``tests/test_dw.py``
@@ -858,6 +869,21 @@ def _is_formerly_within(node):
             and getattr(node, "body", None) is not None)
 
 
+def _is_event_ref(node):
+    """True if ``node`` looks like a :class:`rot.dw.EventRef`.
+
+    An event reference carries both a ``kind`` (``"request"`` /
+    ``"response"``) and an ``action`` (the Drupe action name) and no
+    binary-op slots.  Duck-typed on purpose (this module must not import
+    :mod:`rot.dw` -- see the module docstring).
+    """
+    return (node is not None
+            and getattr(node, "kind", None) is not None
+            and getattr(node, "action", None) is not None
+            and getattr(node, "left", None) is None
+            and getattr(node, "right", None) is None)
+
+
 def _detect_taint_egress(node):
     """Detect the taint-egress shape.
 
@@ -1054,6 +1080,72 @@ def _lower_approval_replay(node, detected, window=None, dw_window=None):
 
 
 # ---------------------------------------------------------------------------
+# Shape 6b: formerly-gated approval (a ``permit`` on ``formerly within <w>
+# <approval-event>``) -- the APW-2 shape in its permit form
+# ---------------------------------------------------------------------------
+
+def _is_consumption_clause(node):
+    """True if ``node`` is ``!formerly within <w> <event>``.
+
+    That negated former occurrence of the gated action is the *consumption*
+    clause of the correct APW-2 permit form: the approval is single-use
+    (one cart-check authorises at most one order).
+    """
+    if not (_is_unary(node) and node.op == "!"):
+        return False
+    operand = node.operand
+    return _is_formerly_within(operand) and _is_event_ref(operand.body)
+
+
+def _detect_formerly_gated(node):
+    """Detect the ``formerly within <approval-event>`` gating shape.
+
+    The Classmethod "order only after the cart check" policy shape (APW-2 in
+    its *permit* form): a bare temporal fact -- "the approval event happened
+    within the window" -- gates the action.  Two variants:
+
+    * **buggy** -- ``formerly within <w> <approval-event>`` alone: the fact
+      is *sticky* (once the approval event occurs it stays true for the rest
+      of the window), so one approval admits N gated actions;
+    * **correct** -- ``formerly within <w> (<approval-event>
+      && !formerly within <w> <gated-event>)``: the negated former occurrence
+      of the gated action *consumes* the approval (single-use).
+
+    Returns ``(variant, approval_ref)`` where ``variant`` is ``"buggy"`` or
+    ``"correct"``, and ``approval_ref`` is the approval-event reference; else
+    ``None``.
+    """
+    if not _is_formerly_within(node):
+        return None
+    body = node.body
+    if _is_event_ref(body):
+        return ("buggy", body)
+    if _is_binary(body) and body.op == "&&":
+        for approval, consumption in ((body.left, body.right),
+                                      (body.right, body.left)):
+            if _is_event_ref(approval) and _is_consumption_clause(consumption):
+                return ("correct", approval)
+    return None
+
+
+def _lower_formerly_gated(node, detected, window=None, dw_window=None):
+    """Lower the formerly-gated approval shape to a :class:`ProtocolIR`.
+
+    ``detected`` is the ``(variant, approval_ref)`` tuple from
+    :func:`_detect_formerly_gated`.  The model is the single-use-approval
+    oracle (:func:`rot.shapes.build_approval_replay_ir`): the approval is
+    consumed on use (correct) or replayable (buggy); the pinned property is
+    the single-use condition.
+    """
+    variant, _ref = detected
+    buggy = (variant == "buggy")
+    kind = _find_event_kind(node)
+    ir_model = shapes.build_approval_replay_ir(buggy=buggy)
+    return _stamp_apw(ir_model, "APPROVAL_REPLAY", "approval_replay", buggy,
+                      kind, window, dw_window)
+
+
+# ---------------------------------------------------------------------------
 # Shape 7: distinct-count (``count where … <op> cap``)
 # ---------------------------------------------------------------------------
 
@@ -1195,19 +1287,36 @@ def _lower_event_ordering(node, detected, window=None, dw_window=None):
 # Public dispatcher
 # ---------------------------------------------------------------------------
 
-def lower_policy(node, amount=None, cap=None, max_inflight=None, window=None):
+def lower_policy(node, amount=None, cap=None, max_inflight=None, window=None,
+                 effect=None):
     """Lower a parsed ``when`` expression to a :class:`rot.ir.ProtocolIR`.
 
-    The five temporal-policy shapes are tried in order, most specific first:
+    The temporal-policy shapes are tried in order, most specific first:
 
     1. count-window arithmetic (``Count - Count < cap``);
     2. refund budget (``Sum + context.* <op> cap``);
     3. exists-sum (``Exists(total, Sum == total && total <op> cap)`` or the
        equivalent ``let_`` macro call);
-    4. taint-egress (``formerly within <window> <event>`` -- a bare temporal
+    4. formerly-gated approval (a **``permit``** gated on
+       ``formerly within <window> <approval-event>`` -- the APW-2 shape in its
+       permit form);
+    5. event-ordering (``formerly within <w> (A && B)``);
+    6. taint-egress (``formerly within <window> <event>`` -- a bare temporal
        trigger predicate; the "never contact outsiders after touching
        confidential data" shape);
-    5. spend-cap (``Sum <op> cap``) -- the fallback and the original shape.
+    7. approval-replay (``!gated since within <w> trigger``);
+    8. distinct-count (``count where … <op> cap``);
+    9. scoped-cap (``sum(1) where … <op> cap``);
+    10. spend-cap (``Sum <op> cap``) -- the fallback and the original shape.
+
+    The formerly-gated shape (4) and the taint-egress shape (6) are
+    *syntactically* the same (a bare ``formerly within <event>``) and are
+    disambiguated by **policy intent** (the policy's ``effect``): a
+    ``permit`` gated on a prior approval event is approval-replay (APW-2, the
+    Classmethod "order only after the cart check" tutorial policy); a
+    ``forbid`` on egress after a confidential read is taint-egress (APW-3).
+    When ``effect`` is unknown (``None``) the taint-egress reading is kept --
+    the historical default for a bare ``formerly`` trigger.
 
     Args:
         node: the parsed ``when`` expression (a :class:`rot.dw` AST node).
@@ -1218,6 +1327,10 @@ def lower_policy(node, amount=None, cap=None, max_inflight=None, window=None):
             the AST, so this argument is ignored for them.
         max_inflight: the in-flight bound (spend-cap shape only); defaults to
             :data:`rot.spendcap.MAX_INFLIGHT`.
+        effect: the policy's effect (``"permit"`` / ``"forbid"``), used to
+            disambiguate the formerly-gated approval shape (APW-2) from the
+            taint-egress shape (APW-3); ``None`` keeps the taint-egress
+            reading for a bare ``formerly`` trigger.
 
     Returns:
         rot.ir.ProtocolIR: the lowered protocol model.
@@ -1253,6 +1366,19 @@ def lower_policy(node, amount=None, cap=None, max_inflight=None, window=None):
     if detected is not None:
         return _lower_exists_sum(node, detected, k,
                                  window=w, dw_window=dw_window)
+
+    # Effect-sensitive branch: a *permit* gated on a bare
+    # ``formerly within <approval-event>`` is the approval-replay shape
+    # (APW-2, the Classmethod "order only after the cart check" policy) --
+    # disambiguated from the taint-egress shape (APW-3) by policy intent:
+    # a permit on a prior approval event = approval-replay; a forbid on
+    # egress after a confidential read = taint-egress.  A ``forbid`` (or an
+    # unknown effect) takes the taint-egress / event-ordering readings below.
+    if effect == "permit":
+        detected = _detect_formerly_gated(node)
+        if detected is not None:
+            return _lower_formerly_gated(node, detected,
+                                         window=w, dw_window=dw_window)
 
     detected = _detect_event_ordering(node)
     if detected is not None:

@@ -497,7 +497,7 @@ class Policy(Node):
         cp = spendcap.CAP if cap is None else cap
         w = spendcap.MAX_WINDOW if window is None else window
         model = lower_policy(self.when, amount=amt, cap=cp, max_inflight=k,
-                             window=w)
+                             window=w, effect=self.effect)
         event_ref = _find_event_ref(self.when)
         model.metadata.update({
             "dw_policy_id": self.id,
@@ -557,7 +557,8 @@ class Document(Node):
             policy = self.policies[0] if self.policies else None
         when = policy.when if policy is not None else None
         model = lower_policy(when, amount=amt, cap=cp, max_inflight=k,
-                             window=w)
+                             window=w,
+                             effect=policy.effect if policy else None)
         event_ref = _find_event_ref(when) if when else None
         model.metadata.update({
             "dw_policy_id": policy.id if policy else None,
