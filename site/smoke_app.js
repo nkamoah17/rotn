@@ -101,6 +101,12 @@ check("P9: K-sweep table moved up top (above the gallery)",
   viewEl.innerHTML.indexOf("sweep-hero") >= 0 &&
   viewEl.innerHTML.indexOf("ksweep") >= 0 &&
   viewEl.innerHTML.indexOf("sweep-hero") < viewEl.innerHTML.indexOf("class=\"gallery\""));
+check("P10: 'Six ways' APW framing present, above the K-sweep",
+  viewEl.innerHTML.indexOf("sixways") >= 0 &&
+  viewEl.innerHTML.indexOf("sixway-k") >= 0 &&
+  viewEl.innerHTML.indexOf("APW-1") >= 0 &&
+  viewEl.innerHTML.indexOf("APW-6") >= 0 &&
+  viewEl.innerHTML.indexOf("sixways") < viewEl.innerHTML.indexOf("sweep-hero"));
 check("gallery: >= 10 trace cards", (viewEl.innerHTML.match(/trace-card/g) || []).length >= 10);
 
 (async function () {

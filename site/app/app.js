@@ -320,6 +320,38 @@
         "ships with a to_proceed guard the engine verified</li>",
       "  </ol>"
     ];
+    /* P10 (Phase 4): the "Six ways agent policies fail under concurrency"
+       framing -- the APW catalog -- up top, above the K-sweep table. */
+    html.push(
+      '<section class="sixways" aria-label="Six ways agent policies fail under concurrency">',
+      "  <h2>Six ways agent policies fail under concurrency</h2>",
+      "  <p class=\"lede\">A policy that reads correctly on paper is still wrong when " +
+      "requests overlap. ROTN names the six classes (the APW catalog) and proves " +
+      "each one with a concrete witness:</p>",
+      "  <ul class=\"sixways-grid\">"
+    );
+    var sixways = [
+      ["APW-1", "Settled-sum cap bypass", "a burst of in-flight requests commits past the cap", "{\"completed\": 0, \"inflight\": 3}"],
+      ["APW-2", "Approval replay", "one approval is sticky, so it admits N orders", "{\"approved\": true, \"orders\": 2}"],
+      ["APW-3", "Taint race", "egress is admitted while a confidential read is still held", "{\"holding_private\": true, \"exfiltrated\": true}"],
+      ["APW-4", "Distinct-count race", "in-flight sends to new recipients outgrow the distinct cap", "{\"distinct\": 4, \"counted\": 0}"],
+      ["APW-5", "Session splitting", "a per-session counter resets per event, so N sessions each admit K", "{\"session_count\": 4, \"scope_count\": 1}"],
+      ["APW-6", "Window-boundary burst", "the counter hard-resets at the edge, so K before + K after is a 2\u00d7 burst", "{\"count\": 1, \"total\": 4}"]
+    ];
+    sixways.forEach(function (w) {
+      html.push(
+        "    <li class=\"sixway\"><span class=\"sixway-k\">" + w[0] + "</span>" +
+        "<span class=\"sixway-name\">" + esc(w[1]) + "</span>" +
+        "<span class=\"sixway-why\">" + w[2] + "</span>" +
+        "<code class=\"sixway-w mono\">witness " + w[3] + "</code></li>"
+      );
+    });
+    html.push(
+      "  </ul>",
+      '  <p class="sixways-cta"><a class="btn" href="#/replay/spendcap-buggy">' +
+      "See APW-1 (the spend-cap bug) end to end: rule &rarr; attack &rarr; proof &rarr; coach &rarr;</a></p>",
+      "</section>"
+    );
     /* P9: the K-sweep table moves up top -- the single most informative view of
        the pair, above the gallery (the same widget as the compare view). */
     if (window.ROT.ROTCompare && reg["spendcap-buggy"] && reg["spendcap-correct"]) {

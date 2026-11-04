@@ -20,6 +20,32 @@ The spend-cap bug is the canonical example. The policy sums spend over *settled*
 
 ROTN finds this by model-checking the policy over the adversarial agent's tool-call sequences, and returns a **concrete witness**: `{"completed": 0, "inflight": 3}`.
 
+## Six ways agent policies fail under concurrency
+
+A policy that reads correctly on paper is still wrong when requests overlap.
+ROTN names the six bug classes — the **APW catalog** — and proves each one with
+a concrete, replayable witness (see [`docs/apw-catalog.md`](docs/apw-catalog.md)):
+
+| APW | Weakness | Why a per-request monitor misses it | Witness |
+|-----|----------|--------------------------------------|---------|
+| **APW-1** | Settled-sum cap bypass | each in-flight fire sees settled = 0; a burst commits past the cap | `{"completed": 0, "inflight": 3}` |
+| **APW-2** | Approval replay | a bare `formerly` fact is sticky — one approval admits N orders | `{"approved": true, "orders": 2}` |
+| **APW-3** | Taint race | egress admitted *while* the taint is still held | `{"holding_private": true, "exfiltrated": true}` |
+| **APW-4** | Distinct-count race | in-flight sends to new recipients outgrow the cap before any settle | `{"distinct": 4, "counted": 0}` |
+| **APW-5** | Session splitting | the per-session counter resets per event, so N sessions each admit K | `{"session_count": 4, "scope_count": 1}` |
+| **APW-6** | Window-boundary burst | the counter hard-resets at the edge → K before + K after is a 2× burst | `{"count": 1, "total": 4}` |
+
+**The K-sweep** is the single most informative view of the bug: the concurrency
+pool *is* the story. At K=1 the buggy policy proves clean (a **masked** bug, a
+false negative); at K≥2 the same policy is **VIOLATED**, while the corrected
+policy stays **PROVEN** at every K:
+
+| K (pool) | buggy policy | corrected policy |
+|----------|--------------|------------------|
+| 1 | `PROVEN` (masked) | `PROVEN` |
+| 2 | `VIOLATED` | `PROVEN` |
+| 3 | `VIOLATED` | `PROVEN` |
+
 ## 60-second run
 
 ```bash
@@ -59,6 +85,7 @@ Every command is deterministic, offline, and exit-code aware (`0` proven · `1` 
 | command | what it does |
 |---------|-------------|
 | `rot check --policy FILE` | check one policy (Dogwood `.dw` / Cedar `.cedar` / MCP manifest) |
+| `rot ai` | the AI-authored loop: intent → AI policy (`.rego`/`.ap2`/`.dw`) → verdict |
 | `rot replay FILE --policy FILE` | replay a counterexample |
 | `rot corpus --corpus-dir DIR` | classify a whole policy corpus (verdict + witness + coverage matrix) |
 | `rot ci --policy FILE --out DIR` | CI gate: verdict + JUnit XML + SARIF |
@@ -77,7 +104,7 @@ holds, counter = ModelFinder.from_ir(ir).forall_reachable(ir.pinned_property.eva
 # counter -> {"completed": 0, "inflight": 3}
 ```
 
-**CI**: the suite is pure-stdlib (no Java, no Z3, no network) and green in a bare Python env — **917 tests**, deterministic, exit-code aware. See `.github/workflows/rotn.yml` (tests) and `.github/workflows/publish.yml` (PyPI).
+**CI**: the suite is pure-stdlib (no Java, no Z3, no network) and green in a bare Python env — **969 tests**, deterministic, exit-code aware. See `.github/workflows/rotn.yml` (tests) and `.github/workflows/publish.yml` (PyPI).
 
 ## License — all Apache-2.0, one product
 
@@ -100,6 +127,7 @@ See [`docs/licensing.md`](docs/licensing.md) for the full position.
 
 ## Go deeper
 
+- [`docs/positioning.md`](docs/positioning.md) — **the positioning: AgentCore writes the policy, ROTN proves it can't be bypassed** (the two facts, the complementary-not-competing stance, the multi-language neutral checker, and the AP2 mandate mapping)
 - [`docs/apw-catalog.md`](docs/apw-catalog.md) — **the APW catalog: six ways agent policies fail under concurrency** (the named bug classes, each with a buggy/correct pair, a lowering, and an oracle-verified witness)
 - [`docs/architecture.md`](docs/architecture.md) — the pipeline, the engines, the bounded re-check
 - [`docs/spendcap-demo.md`](docs/spendcap-demo.md) — the demo walkthrough

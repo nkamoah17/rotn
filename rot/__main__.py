@@ -5,6 +5,9 @@ Subcommands
 -----------
   rot check     Verify a policy (safety / realizability / liveness); on
                 VIOLATED emit a narrative + an auditable attack.jsonl.
+  rot ai        The AI-authored demo loop (Phase 4): intent -> AI policy
+                -> ROTN verdict (the "verify the policies AI writes"
+                position, runnable end to end).
   rot replay    Re-derive a recorded attack.jsonl against a policy -- the
                 verification loop that proves the counterexample is real.
   rot ci        CI gate: verdict + JUnit XML + SARIF artifacts.
@@ -1331,6 +1334,67 @@ def cmd_check(args):
 
 
 # ---------------------------------------------------------------------------
+# rot ai (Phase 4): the AI-authored-policy demo loop
+# ---------------------------------------------------------------------------
+
+def _ai_narrative(r):
+    """Print the four-step demo-loop narrative (intent -> policy -> verdict)."""
+    print(_BAR)
+    print(" ROTN -- AI-authored policy demo loop (intent -> policy -> verdict)")
+    print(_BAR)
+    first = " ".join(r["intent"].split())
+    print("\n 1. INTENT (natural language)")
+    print("    %s%s" % (first[:140], "..." if len(first) > 140 else ""))
+    print("    [%s]" % r["intent_path"])
+    print("\n 2. AI-AUTHORED POLICY (as the AI authoring would emit it)")
+    print("    %s" % r["policy_path"])
+    print("    frontend: %s    shape: %s" % (r["frontend"], r["shape"]))
+    print("\n 3. NEUTRAL CHECKER (lower to ProtocolIR, decide the property)")
+    print("    property: %s (%s)" % (r["property"], r["property_kind"]))
+    cross = r.get("cross_language")
+    if cross:
+        print("    Dogwood twin: %s" % cross["dogwood_policy"])
+        print("    same IR as the Dogwood policy : %s" % cross["same_ir"])
+        print("    same verdict as the Dogwood   : %s" % cross["same_verdict"])
+    print("\n 4. VERDICT")
+    if r["witness"] is not None:
+        print("    %s   witness=%s"
+              % (r["verdict"].upper(),
+                 json.dumps(r["witness"], sort_keys=True)))
+    else:
+        print("    %s" % r["verdict"].upper())
+    if r["verdict"] == "violated":
+        print("\n    The AI's draft reads correctly on paper; under concurrency it")
+        print("    can be bypassed. ROTN proves the bypass with a named witness;")
+        print("    the corrected draft is what the proof is about.")
+    print()
+
+
+def cmd_ai(args):
+    """Run the AI-authored demo loop (Phase 4): intent -> policy -> verdict.
+
+    The default example is the canonical APW-2 (approval-replay) policy:
+    the intent in ``samples/ai_authoring/intent.md`` and the AI's natural
+    first draft in ``samples/ai_authoring/apw2-buggy.rego``.  Exit codes:
+    ``0`` proven / ``1`` violated / ``2`` unknown / ``3`` error.
+    """
+    import rot.ai_loop as ai_loop
+
+    try:
+        result = ai_loop.run(
+            intent_path=getattr(args, "intent", None),
+            policy_path=getattr(args, "policy", None),
+            out_dir=getattr(args, "out", None))
+    except Exception as exc:  # one clear CLI error (exit 3)
+        print("ERROR: %s" % exc, file=sys.stderr)
+        return EXIT_ERROR
+
+    if not args.quiet:
+        _ai_narrative(result)
+    return result["exit_code"]
+
+
+# ---------------------------------------------------------------------------
 # rot replay
 # ---------------------------------------------------------------------------
 
@@ -2420,6 +2484,22 @@ def main(argv=None):
                    help="suppress the human summary")
 
     p = sub.add_parser(
+        "ai",
+        help="the AI-authored demo loop: intent -> AI policy -> ROTN "
+             "verdict (Phase 4)")
+    p.add_argument("--intent", default=None, metavar="FILE",
+                   help="natural-language intent file "
+                        "[default: samples/ai_authoring/intent.md]")
+    p.add_argument("--policy", default=None, metavar="FILE",
+                   help="the AI-authored policy to verify "
+                        "(.rego / .dw / .ap2) "
+                        "[default: samples/ai_authoring/apw2-buggy.rego]")
+    p.add_argument("--out", default=None, metavar="DIR",
+                   help="output dir for ai-loop-report.json")
+    p.add_argument("--quiet", action="store_true",
+                   help="suppress the human summary")
+
+    p = sub.add_parser(
         "replay",
         help="re-derive a recorded attack.jsonl; --oracle dogwood replays "
              "a policy+trace against Dogwood's reference interpreter")
@@ -2708,7 +2788,8 @@ def main(argv=None):
     if args.command is None:
         parser.print_help()
         return EXIT_ERROR
-    return {"check": cmd_check, "replay": cmd_replay, "ci": cmd_ci,
+    return {"check": cmd_check, "ai": cmd_ai, "replay": cmd_replay,
+            "ci": cmd_ci,
             "demo": cmd_demo, "corpus": cmd_corpus,
             "trace": cmd_trace,
             "report": cmd_report,

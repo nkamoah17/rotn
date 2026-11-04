@@ -1,0 +1,10 @@
+{
+  "schema": "ap2.mandate/v1",
+  "intent": "spend up to $200 on goods_and_services",
+  "amount_max": 200,
+  "currency": "USD",
+  "scope": "goods_and_services",
+  "single_use": false,
+  "session_scoped": false,
+  "enforcement": "settled_sum"
+}

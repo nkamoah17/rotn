@@ -26,6 +26,17 @@ policy file extension:
   optionally paired with a ``tools.json`` tool catalog.  Pinned property:
   *policy conformance* -- the conforming agent never takes a denied action
   (a safety query, checked with ``forall_reachable``).
+* ``.rego``  -- OPA (Rego) policy, **stub** front-end
+  (:mod:`rot.frontends.policy.opa`).  Recognises the canonical Rego
+  encoding of a supported shape (``# rotn:shape=`` annotation) and lowers
+  it to the *same* ``ProtocolIR`` the ``.dw`` route produces for the
+  equivalent policy -- the "neutral checker across languages" claim.
+  Supported shapes: ``spendcap`` (APW-1), ``approval_replay`` (APW-2).
+* ``.ap2``   -- AP2 mandate document, **stub** front-end
+  (:mod:`rot.frontends.policy.ap2`).  Maps the "spend up to $X on Y"
+  mandate onto the APW shape it instantiates (APW-1 / APW-2 / APW-5) and
+  lowers it through the same oracle the ``.dw`` route uses.  See
+  ``docs/positioning.md`` for the mapping write-up.
 
 Every returned IR carries:
 
@@ -57,14 +68,16 @@ def _split_ext(path):
 
 
 def build_ir(policy_path, tools_path=None, n_steps=1, kind=None,
-             max_inflight=None, amount=None, cap=None, window=None):
+             max_inflight=None, amount=None, cap=None, window=None,
+             variant=None):
     """Build a ``ProtocolIR`` from a policy file.
 
     Parameters
     ----------
     policy_path : str
-        Path to a Cedar (``.cedar``), Dogwood spend-cap (``.dw``), or Dogwood
-        (``.json``) policy file.
+        Path to a Cedar (``.cedar``), Dogwood spend-cap (``.dw``), Dogwood
+        (``.json``), OPA/Rego (``.rego``, stub), or AP2 mandate (``.ap2``,
+        stub) policy file.
     tools_path : str or None
         Optional Dogwood ``tools.json`` catalog (ignored for Cedar and
         ``.dw`` spend-cap policies).
@@ -98,6 +111,11 @@ def build_ir(policy_path, tools_path=None, n_steps=1, kind=None,
         family only).  ``None`` uses :data:`rot.spendcap.MAX_WINDOW` (4).
         A ``FormerlyWithin`` window is approximated as "the last ``W``
         events"; recorded in the IR metadata (``window`` / ``dw_window``).
+    variant : str or None
+        ``"buggy"`` / ``"correct"`` -- the policy decision under test, for
+        the stub front-ends (``.rego`` / ``.ap2``).  Overrides the
+        policy's own annotation / ``enforcement`` field.  Ignored by the
+        full front-ends (the variant is part of the policy text).
 
     Returns
     -------
@@ -172,6 +190,25 @@ def build_ir(policy_path, tools_path=None, n_steps=1, kind=None,
         from . import dogwood as _dogwood
         return _dogwood.build_ir(policy_path, tools_path=tools_path,
                                  n_steps=n_steps)
+    if ext == ".rego":
+        # OPA (Rego) stub front-end: recognises the canonical Rego encoding
+        # of a supported shape and lowers it to the SAME ProtocolIR the
+        # ``.dw`` route produces for the equivalent policy (the neutral-
+        # checker-across-languages claim; see docs/positioning.md).
+        from . import opa as _opa
+        return _opa.build_ir(policy_path, tools_path=tools_path,
+                             n_steps=n_steps, max_inflight=max_inflight,
+                             amount=amount, cap=cap, window=window,
+                             variant=variant)
+    if ext == ".ap2":
+        # AP2 mandate stub front-end: maps the "spend up to $X on Y"
+        # mandate onto the APW shape it instantiates (APW-1/2/5) and lowers
+        # it through the same oracle the ``.dw`` route uses.
+        from . import ap2 as _ap2
+        return _ap2.build_ir(policy_path, tools_path=tools_path,
+                             n_steps=n_steps, max_inflight=max_inflight,
+                             amount=amount, cap=cap, window=window,
+                             variant=variant)
     raise PolicyFrontendError(
         "unknown policy file extension %r for %s "
-        "(expected .cedar, .dw or .json)" % (ext, policy_path))
+        "(expected .cedar, .dw, .json, .rego or .ap2)" % (ext, policy_path))
