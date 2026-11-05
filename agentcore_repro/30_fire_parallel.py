@@ -12,7 +12,10 @@ Implementation notes
   per-session (new session = fresh count), so the three fires must share the
   session to be counted against one another.
 * The three invokes are started back-to-back (Popen) so they are genuinely
-  in flight together -- that is the race the buggy policy cannot see.
+  in flight together -- that is the in-flight burst the buggy policy cannot
+  see (its sum counts settled ::response transfers only).  Runbook SS7: a
+  $300 result on the buggy policy is NOT by itself evidence of a race (the
+  spec predicts $300 sequentially too).
 * Each invoke goes through the official AgentCore CLI (SigV4 with the local
   AWS credentials profile); responses are saved to out/fire-*.json.
 * The MCP path is /mcp (JSON-RPC tools/call); /tools/call is retried if the
@@ -182,8 +185,10 @@ def main():
     print("  ADMITTED : %d fire(s), $%d committed" % (len(admitted), committed))
     print("  DENIED   : %d fire(s)" % len(denied))
     if admitted and committed > CAP:
-        print("  *** RACE CONFIRMED: $%d committed > $%d cap ***"
+        print("  *** OVER CAP: $%d committed > $%d cap ***"
               % (committed, CAP))
+        print("      (spec prediction for the settled-sum policy -- runbook "
+              "SS2; not, by itself, evidence of a race -- runbook SS7)")
     print("-" * 68)
 
     C.write_json("fire-results.json", {

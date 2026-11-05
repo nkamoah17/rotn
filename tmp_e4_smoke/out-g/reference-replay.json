@@ -1,0 +1,64 @@
+[
+  {
+    "apw": "custom",
+    "dogwood_reference_buggy": {
+      "admitted_any": true,
+      "admitted_timepoints": [
+        0,
+        1
+      ],
+      "decisions": [
+        {
+          "decision": "ALLOW",
+          "seq": 0,
+          "timepoint": 0
+        },
+        {
+          "decision": "ALLOW",
+          "seq": 2,
+          "timepoint": 1
+        },
+        {
+          "decision": "DENY",
+          "seq": 4,
+          "timepoint": 2
+        },
+        {
+          "decision": "DENY",
+          "seq": 6,
+          "timepoint": 3
+        },
+        {
+          "decision": "DENY",
+          "seq": 8,
+          "timepoint": 4
+        }
+      ],
+      "denied_any": true,
+      "denied_timepoints": [
+        2,
+        3,
+        4
+      ],
+      "exit": 0,
+      "n_admitted": 2,
+      "n_decisions": 5,
+      "n_denied": 3,
+      "ok": true
+    },
+    "gate": {
+      "agreement": false,
+      "reference_admitted": true,
+      "rot_violated": false
+    },
+    "mode": "oracle-dogwood",
+    "name": "single policy",
+    "policy_buggy": "tmp_e4_smoke/policy-adapted.dw",
+    "rot": {
+      "property": null,
+      "verdict": "error",
+      "witness": null
+    },
+    "trace": "tmp_e4_smoke/out-g\\trace.log"
+  }
+]

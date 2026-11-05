@@ -60,8 +60,10 @@ form); ROTN's shape detection reads the policy's *intent* (permit/forbid) to
 disambiguate the formerly-gated shape — a **permit** gated on a prior
 approval event is APW-2 (approval replay), a **forbid** on egress after a
 confidential read is APW-3 (taint race). Second, the
-reference window is *open and non-reflexive* (an event is decided before it is
-appended to the trace), and APW-4's `count` is a **per-recipient** count in the
+reference window is **reflexive** (the current event is included in its own
+temporal aggregate -- spec §6: evaluation at position i reads positions j <= i;
+the APW-1 correct policy decides the 4 x $100 burst as 2 ALLOW / 2 DENY), and
+APW-4's `count` is a **per-recipient** count in the
 reference (a partition guarantee), so the reference does not deny the
 cross-recipient burst there -- ROTN still catches the global distinct-recipient
 class. APW-3 (taint race) and APW-5/6 (concept / forward-looking) are not gate

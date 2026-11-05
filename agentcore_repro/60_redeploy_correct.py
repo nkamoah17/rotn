@@ -9,8 +9,9 @@
 2. Wait until the policy is ACTIVE.
 3. Re-fire the same 3 parallel $100 transfers with a FRESH session id
    (new session = fresh 24h window).
-4. Expected: 2 ADMITTED ($200), 1 DENIED (would make $300 > $200) -- the
-   cap is now enforced against in-flight authorized transfers.
+4. Spec prediction (runbook SS2): 2 ADMITTED ($200), 1 DENIED.  The live
+    runs to date (runbook SS6, runs 2-3) admitted all three ($300) instead;
+    the re-fire outcome is DATA to be read against the SS5 controls and the SS7 hypotheses (A/B/C) -- not a pass/fail gate.
 
 E1 control (evidence): update-policy already runs under the STRICT
 validation-mode default (FAIL_ON_ANY_FINDINGS); this step now also records
@@ -163,10 +164,13 @@ def main():
     print("  DENIED   : %d fire(s)" % len(denied))
     enforced = (len(denied) >= 1 and committed <= 200)
     if enforced:
-        print("  *** CAP ENFORCED: $%d committed <= $200, %d denied ***"
+        print("  CAP HELD THIS RUN: $%d committed (<= $200), %d denied"
               % (committed, len(denied)))
+        print("      (spec-conformant outcome -- runbook SS2 prediction)")
     else:
-        print("  (expected: 2 admitted / 1 denied -- check out/fire-fixed-*.json)")
+        print("  $%d committed -- NOT the spec prediction ($200); read "
+              "against runbook SS5/SS7 (hypotheses A/B/C)" % committed)
+        print("      (per-fire detail: out/fire-fixed-*.json)")
     print("-" * 68)
 
     C.write_json("fixed-results.json", {

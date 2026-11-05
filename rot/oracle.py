@@ -19,9 +19,11 @@ build, see ``docs/reference-replay.md``):
   violation" is observable only on a **``permit``** policy -- the form a
   gateway uses to authorize an action.  ROTN's shape detection is independent
   of permit/forbid, so it still classifies the buggy policy.
-* ``dogwood replay`` decides each event **before** appending it to the trace
-  (an open, non-reflexive window), and **partitions** temporal aggregates
-  by the request's pinned key (the partition guarantee) -- e.g. APW-4's
+* ``dogwood replay`` includes the current event in its own temporal
+  aggregate (a **reflexive** window -- spec §6: evaluation at position ``i``
+  reads positions ``j <= i``; the APW-1 correct policy decides a 4 x $100
+  burst as 2 ALLOW / 2 DENY), and **partitions** temporal aggregates by the
+  request's pinned key (the partition guarantee) -- e.g. APW-4's
   ``count … recipient: context.input.recipient`` is a *per-recipient* count
   in the reference, not a global distinct-recipient count.
 """
@@ -483,11 +485,12 @@ def render_markdown(reports, binary=None):
         "replay); a **forbid** on egress after a confidential read is APW-3 "
         "(taint race).")
     lines.append(
-        "* **open, non-reflexive window.** `dogwood replay` decides an event "
-        "*before* appending it, so the current event is not in its own "
-        "temporal aggregate; the witness traces are shaped so the violation "
-        "still surfaces (a 4th APW-1 request, a 3rd APW-2 order, a 4th "
-        "APW-4 recipient).")
+        "* **reflexive window.** `dogwood replay` includes the current "
+        "event in its own temporal aggregate (spec SS6: evaluation at "
+        "position i reads positions j <= i) -- the APW-1 correct policy "
+        "decides the 4 x $100 burst as 2 ALLOW / 2 DENY (the 3rd request "
+        "is already over the cap), matching the E4 5 x $100 replay that "
+        "denies from fire #3.")
     lines.append(
         "* **partition guarantee.** Temporal aggregates are sharded by the "
         "request's pinned key; APW-4's `count … recipient: context.input."
