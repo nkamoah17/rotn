@@ -6,7 +6,7 @@
 
 > **Agents are replacing the software that used to enforce our rules. ROTN makes the rules explicit, proves the policy holds even when the model tries to break it, and coaches the agent back in bounds when it does.**
 
-**ROTN** (R**o**gression-detection **O**racle via **T**race **N**on-emptiness) is a small, fully offline, pure-stdlib (Python 3.8+) verification engine for **AI agent tool policies**. It checks a policy against a named invariant with **three independent engines** (SMT/Z3, TLC, and policy-direct — the two independent model checkers decide, with the spend-cap-specific policy-direct engine as the third, model-independent leg and offline fallback) and a **bounded re-check** loop; on a finding it hands back a **concrete, replayable counterexample** and a **coach** that tells the agent exactly what to do to get back in bounds.
+**ROTN** (R**o**gression-detection **O**racle via **T**race **N**on-emptiness) is a small, fully offline, pure-stdlib (Python 3.8+) verification engine for **AI agent tool policies**. It checks a policy against a named invariant with a **built-in, pure-stdlib default engine** (a bounded state-space model finder) — with **optional Z3 / TLC / Apalache cross-checks** that degrade to a skip or an honest `UNKNOWN` when absent — and a **bounded re-check** loop. Every **verdict is engine-labeled**, so you always know which engine(s) produced it. On a finding it hands back a **concrete, replayable counterexample** and a **coach** that tells the agent exactly what to do to get back in bounds.
 
 The beachhead is the **spend-cap parallel-fire bug** — a payments policy that settles spend only against *settled* responses, so a parallel burst of in-flight requests overshoots the cap, invisible to a per-request monitor.
 
@@ -23,7 +23,7 @@ ROTN finds this by model-checking the policy over the adversarial agent's tool-c
 ## Six ways agent policies fail under concurrency
 
 A policy that reads correctly on paper is still wrong when requests overlap.
-ROTN names the six bug classes — the **APW catalog** — and proves each one with
+ROTN names the six bug classes — the **APW catalog** — and demonstrates each one with
 a concrete, replayable witness (see [`docs/apw-catalog.md`](docs/apw-catalog.md)):
 
 | APW | Weakness | Why a per-request monitor misses it | Witness |
@@ -32,8 +32,8 @@ a concrete, replayable witness (see [`docs/apw-catalog.md`](docs/apw-catalog.md)
 | **APW-2** | Approval replay | a bare `formerly` fact is sticky — one approval admits N orders | `{"approved": true, "orders": 2}` |
 | **APW-3** | Taint race | egress admitted *while* the taint is still held | `{"holding_private": true, "exfiltrated": true}` |
 | **APW-4** | Distinct-count race | in-flight sends to new recipients outgrow the cap before any settle | `{"distinct": 4, "counted": 0}` |
-| **APW-5** | Session splitting | the per-session counter resets per event, so N sessions each admit K | `{"session_count": 4, "scope_count": 1}` |
-| **APW-6** | Window-boundary burst | the counter hard-resets at the edge → K before + K after is a 2× burst | `{"count": 1, "total": 4}` |
+| **APW-5** <span class="apw-badge apw-badge-concept">concept</span> | Session splitting | the per-session counter resets per event, so N sessions each admit K | `{"session_count": 4, "scope_count": 1}` |
+| **APW-6** <span class="apw-badge apw-badge-ship">if absolute windows ship</span> | Window-boundary burst | the counter hard-resets at the edge → K before + K after is a 2× burst | `{"count": 1, "total": 4}` |
 
 **The K-sweep** is the single most informative view of the bug: the buggy
 policy is **VIOLATED at every K** (the corrected policy stays **PROVEN** at
@@ -69,10 +69,12 @@ rot check --policy samples/spendcap-buggy.dw --max-inflight 2   # VIOLATED (witn
 
 Every command is deterministic, offline, and exit-code aware (`0` proven · `1` violated · `2` unknown · `3` error). `rot demo` runs the whole story in one command.
 
+> **Drupe** — the action namespace in the repo's Dogwood (`.dw`) samples: actions are written as `Drupe::Action::"Transfer"`, whose `request`/`response` events the spend-cap policy reasons over.
+
 ## What it finds
 
 - **A concrete, replayable counterexample** — not just "unsafe", but the exact state that breaks the invariant, and a replay that re-derives it.
-- **Six named bug classes** — the [APW catalog](docs/apw-catalog.md): settled-sum cap bypass, approval replay, taint race, distinct-count race, session splitting, and window-boundary burst — each with a buggy/correct pair and an oracle-verified witness.
+- **Six named bug classes** — the [APW catalog](docs/apw-catalog.md): settled-sum cap bypass, approval replay, taint race, distinct-count race, session splitting, and window-boundary burst — each with a buggy/correct pair and a witness from a hand-written oracle, cross-checked against the reference interpreter.
 - **A K-sweep** — the buggy policy is VIOLATED at every K, and the witness shape tracks K (K=1 sequential off-by-one, K≥2 parallel-fire signature).
 - **A verdict per policy** — `PROVEN` / `VIOLATED` / `UNKNOWN` (never a silent `SAFE`), with an honest coverage matrix over a whole corpus (`rot corpus`).
 - **A coach** — a runtime guard that decides one live tool call against the *same guard* the offline engine proved safe; a denial is a computed remediation (`to_proceed`), not a log line.
@@ -128,7 +130,7 @@ See [`docs/licensing.md`](docs/licensing.md) for the full position.
 ## Go deeper
 
 - [`docs/positioning.md`](docs/positioning.md) — **the positioning: AgentCore writes the policy, ROTN proves it can't be bypassed** (the two facts, the complementary-not-competing stance, the multi-language neutral checker, and the AP2 mandate mapping)
-- [`docs/apw-catalog.md`](docs/apw-catalog.md) — **the APW catalog: six ways agent policies fail under concurrency** (the named bug classes, each with a buggy/correct pair, a lowering, and an oracle-verified witness)
+- [`docs/apw-catalog.md`](docs/apw-catalog.md) — **the APW catalog: six ways agent policies fail under concurrency** (the named bug classes, each with a buggy/correct pair, a lowering, and a witness from a hand-written oracle, cross-checked against the reference interpreter)
 - [`docs/architecture.md`](docs/architecture.md) — the pipeline, the engines, the bounded re-check
 - [`docs/spendcap-demo.md`](docs/spendcap-demo.md) — the demo walkthrough
 - [`docs/spendcap-usage.md`](docs/spendcap-usage.md) — the CLI reference

@@ -40,7 +40,8 @@ setup(
     version=_read_version(),
     description=(
         "nkamoah17/rotn -- verify an AI agent's tool policy (Dogwood or "
-        "an MCP manifest) with three independent engines + bounded re-check; "
+        "an MCP manifest) with a built-in pure-stdlib engine + optional "
+        "Z3/TLC/Apalache cross-checks; engine-labeled verdicts; "
         "deterministic, hashed trace; SOC 2 / AIUC control mapping; zero "
         "runtime deps."
     ),
@@ -54,10 +55,13 @@ setup(
         "holds even when the model attempts to break it, and coach the "
         "agent back in bounds when it does.*\n\n"
         "ROTN ingests an AI agent's tool policy (Dogwood *or* a standard "
-        "MCP manifest), verifies it with three independent engines (the two "
-        "independent model checkers decide; the spend-cap-specific "
-        "policy-direct engine is the third, model-independent leg and "
-        "offline fallback) and a bounded re-check loop, maps findings to SOC 2 / AIUC controls, bounds "
+        "MCP manifest) and verifies it with a **built-in, pure-stdlib "
+        "default engine** (a bounded state-space model finder), with "
+        "**optional Z3 / TLC / Apalache cross-checks** that degrade to a "
+        "skip or an honest `UNKNOWN` when absent, and a bounded re-check "
+        "loop. Every **verdict is engine-labeled**, so you always know "
+        "which engine(s) produced it. ROTN maps findings to SOC 2 / AIUC "
+        "controls, bounds "
         "depth by a user-set `--depth` bound, and emits a deterministic, "
         "hashed trace that "
         "replays as an interactive proof on GitHub Pages.\n\n"

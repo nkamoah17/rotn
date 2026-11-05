@@ -241,6 +241,18 @@ main.wrap { flex: 1; padding-top: 30px; padding-bottom: 56px; }
   align-self: flex-start; word-break: break-word;
 }
 .sixways-cta { margin: 14px 0 0; }
+/* WS2: APW status badges — APW-5 "concept", APW-6 "if absolute windows ship". */
+.apw-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--panel); align-self: flex-start; line-height: 1.5;
+}
+.apw-badge .apw-badge-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.apw-badge-concept { color: var(--unknown); background: var(--unknown-bg); border-color: var(--unknown-line); }
+.apw-badge-concept .apw-badge-dot { background: var(--unknown); }
+.apw-badge-ship { color: var(--accent-strong); background: var(--accent-soft); border-color: var(--accent-line); }
+.apw-badge-ship .apw-badge-dot { background: var(--accent); }
 .hero-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; position: relative; }
 .hbadge {
   display: inline-flex; align-items: center; gap: 7px;

@@ -27,15 +27,16 @@ this policy doesn't actually enforce "at most K" under concurrency.*
 | **APW-3** | Taint race ("no egress after a confidential read") | `formerly within 24h Read::response{private}` forbidding `Send` | The egress is admitted **while the taint is held** — the parallel read/send interleaving a per-request check never sees. | [buggy](../samples/apw3-buggy.dw) · [correct](../samples/apw3-correct.dw) | `{"holding_private":true,"exfiltrated":true}` |
 | **APW-4** | Distinct-count race | `count_distinct_within(… recipients) > cap` | In-flight sends to *new* recipients aren't settled yet, so the distinct set grows past the cap before any settle. | [buggy](../samples/apw4-buggy.dw) · [correct](../samples/apw4-correct.dw) | `{"distinct":4,"counted":0}` |
 | **APW-5** | Session splitting (cap scoped to a session) | per-session cap (*concept*) | The per-session counter resets on every event, so the guard is always satisfied and N sessions each admit K events — N× the per-session budget. | [buggy](../samples/apw5-buggy.dw) · [correct](../samples/apw5-correct.dw) | `{"session_count":4,"scope_count":1}` |
-| **APW-6** | Window-boundary burst | absolute "daily" window (*roadmap*) | The counter hard-resets at the window edge, so K events just before + K just after the reset is a 2× burst. | [buggy](../samples/apw6-buggy.dw) · [correct](../samples/apw6-correct.dw) | `{"count":1,"total":4}` |
+| **APW-6** | Window-boundary burst | absolute "daily" window (*if absolute windows ship*) | The counter hard-resets at the window edge, so K events just before + K just after the reset is a 2× burst. | [buggy](../samples/apw6-buggy.dw) · [correct](../samples/apw6-correct.dw) | `{"count":1,"total":4}` |
 
-Every row is **oracle-verified**: `python -m unittest discover -s tests -p
+Every row rests on a **hand-written oracle, cross-checked against the
+reference interpreter**: `python -m unittest discover -s tests -p
 'test_apw*.py'` runs the buggy→VIOLATED (with the named witness) and
 correct→PROVEN legs for all six.
 
 ## Reference-interpreter agreement (the credibility backbone)
 
-Oracle-verified is the *internal* leg. The *external* leg is the one that
+The hand-written oracle is the *internal* leg. The *external* leg is the one that
 matters for trust: **replaying every gate-class counterexample against
 Dogwood's own reference interpreter** (`dogwood replay`) and recording the
 reference verdict next to ROTN's, on the *same* trace -- the "Dogwood admits
@@ -163,7 +164,7 @@ limits are *per-session*; this shape makes the split explicit.
   does not lower to a ROTN shape.
 - **Witness:** `{"session_count": 4, "scope_count": 1}`
 
-## APW-6 — Window-boundary burst (forward-looking)
+## APW-6 — Window-boundary burst (if absolute windows ship)
 
 The policy says "at most K events **per day**". The bug is that the counter
 **hard-resets** at the window boundary (an absolute window), so an attacker does
@@ -174,8 +175,8 @@ the cap.
   the cap (the reset just happened).
 - **The fix:** a sliding window (no hard reset), so the total across windows
   stays bounded.
-- **Status:** *forward-looking* — Dogwood's roadmap lists absolute-time windows
-  ("here's the bug class before AWS ships absolute windows"). The oracle
+- **Status:** *if absolute windows ship* — Dogwood's roadmap lists
+  absolute-time windows; this is the bug class before they do. The oracle
   (`rot.shapes.build_window_boundary_ir`) is hand-written; the shape does not
   yet lower from a `.dw` file.
 - **Witness:** `{"count": 1, "total": 4}`
@@ -212,7 +213,8 @@ rot replay --oracle dogwood --gate
 ## What this is (and isn't)
 
 - **Is:** a *named, public* set of bug classes with a reproducible buggy/correct
-  pair and an oracle-verified verdict for each.
+  pair — each backed by a hand-written oracle and cross-checked against the
+  reference interpreter.
 - **Isn't:** an exhaustive taxonomy. Six classes is a beachhead — the engine
   (parser + lowering + oracle) is what generalizes, and each new class is a new
   shape + oracle + pair, not a new engine.

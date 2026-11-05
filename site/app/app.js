@@ -328,21 +328,25 @@
       '<section class="sixways" aria-label="Six ways agent policies fail under concurrency">',
       "  <h2>Six ways agent policies fail under concurrency</h2>",
       "  <p class=\"lede\">A policy that reads correctly on paper is still wrong when " +
-      "requests overlap. ROTN names the six classes (the APW catalog) and proves " +
+      "requests overlap. ROTN names the six classes (the APW catalog) and demonstrates " +
       "each one with a concrete witness:</p>",
       "  <ul class=\"sixways-grid\">"
     );
     var sixways = [
-      ["APW-1", "Settled-sum cap bypass", "a burst of in-flight requests commits past the cap", "{\"completed\": 0, \"inflight\": 3}"],
-      ["APW-2", "Approval replay", "one approval is sticky, so it admits N orders", "{\"approved\": true, \"orders\": 2}"],
-      ["APW-3", "Taint race", "egress is admitted while a confidential read is still held", "{\"holding_private\": true, \"exfiltrated\": true}"],
-      ["APW-4", "Distinct-count race", "in-flight sends to new recipients outgrow the distinct cap", "{\"distinct\": 4, \"counted\": 0}"],
-      ["APW-5", "Session splitting", "a per-session counter resets per event, so N sessions each admit K", "{\"session_count\": 4, \"scope_count\": 1}"],
-      ["APW-6", "Window-boundary burst", "the counter hard-resets at the edge, so K before + K after is a 2\u00d7 burst", "{\"count\": 1, \"total\": 4}"]
+      ["APW-1", "Settled-sum cap bypass", "a burst of in-flight requests commits past the cap", "{\"completed\": 0, \"inflight\": 3}", null],
+      ["APW-2", "Approval replay", "one approval is sticky, so it admits N orders", "{\"approved\": true, \"orders\": 2}", null],
+      ["APW-3", "Taint race", "egress is admitted while a confidential read is still held", "{\"holding_private\": true, \"exfiltrated\": true}", null],
+      ["APW-4", "Distinct-count race", "in-flight sends to new recipients outgrow the distinct cap", "{\"distinct\": 4, \"counted\": 0}", null],
+      ["APW-5", "Session splitting", "a per-session counter resets per event, so N sessions each admit K", "{\"session_count\": 4, \"scope_count\": 1}", "concept"],
+      ["APW-6", "Window-boundary burst", "the counter hard-resets at the edge, so K before + K after is a 2\u00d7 burst", "{\"count\": 1, \"total\": 4}", "if absolute windows ship"]
     ];
     sixways.forEach(function (w) {
+      var badge = w[4]
+        ? "<span class=\"apw-badge apw-badge-" + (w[4] === "concept" ? "concept" : "ship") + "\" title=\"" + esc(w[4]) + "\"><span class=\"apw-badge-dot\"></span>" + esc(w[4]) + "</span>"
+        : "";
       html.push(
-        "    <li class=\"sixway\"><span class=\"sixway-k\">" + w[0] + "</span>" +
+        "    <li class=\"sixway\">" + badge +
+        "<span class=\"sixway-k\">" + w[0] + "</span>" +
         "<span class=\"sixway-name\">" + esc(w[1]) + "</span>" +
         "<span class=\"sixway-why\">" + w[2] + "</span>" +
         "<code class=\"sixway-w mono\">witness " + w[3] + "</code></li>"
