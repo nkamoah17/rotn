@@ -101,27 +101,32 @@ Concretely, ROTN:
    independent engines must agree on the witness fingerprint before the
    result is trusted.
 
-The K-sweep (`--max-inflight`) makes the bound explicit: at `K = 1` the
-in-flight state is structurally absent, so the race is unexpressible and the
-buggy policy proves clean; at `K = 2` or `K = 3` the parallel-fire state
-exists and the violation is found.
+The K-sweep (`--max-inflight`) makes the bound explicit: the buggy policy is
+VIOLATED at every `K`, and the witness shape tracks the bound — at `K = 1`
+the parallel-fire state is structurally absent, so the violation appears as
+the sequential off-by-one (`completed = 200, inflight = 1`); at `K = 2` or
+`K = 3` the parallel-fire state exists and the witness is the parallel fire
+(`completed = 100, inflight = 2`; `completed = 0, inflight = 3`).
 
-## 4. The K-dependence (an honest limit, not a bug)
+## 4. The K-dependence (the witness shape tracks K)
 
-The K-dependence is the most important honesty point in this document:
+The K-dependence is the most important honesty point in this document: the
+buggy policy is **VIOLATED at every K**, and the *witness shape* tracks the
+bound (the bound is part of the claim):
 
 | K (max-inflight) | Buggy policy verdict | Why |
 |---|---|---|
-| 1 | `PROVEN` | With `inflight ≤ 1`, the state `(completed=0, inflight=3)` does not exist. The race is structurally unexpressible at this bound. |
-| 2 | `VIOLATED` (witness) | `(completed=0, inflight=2)` is reachable; two parallel fires settle past the cap. |
-| 3 | `VIOLATED` (witness) | `(completed=0, inflight=3)` is reachable; three parallel fires settle to `completed = 300 > cap`. |
+| 1 | `VIOLATED` (witness `completed=200, inflight=1`) | With `inflight ≤ 1`, the parallel-fire state `(completed=0, inflight=3)` does not exist; the violation is the *sequential* off-by-one — a fire admitted while `completed` already equals the cap settles past it. |
+| 2 | `VIOLATED` (witness `completed=100, inflight=2`) | Two parallel fires settle past the cap (one settled + two in-flight = 300 > 200). |
+| 3 | `VIOLATED` (witness `completed=0, inflight=3`) | Three parallel fires settle to `completed = 300 > cap` (the clean signature). |
 
 This is not a bug in ROTN — it is the **expected behavior of a bounded model
-checker**. The bound is part of the claim: "PROVEN at K=1" is a true and
-useful statement (the policy holds for any schedule with at most one
-in-flight request). "VIOLATED at K=3" is a true and actionable statement
-(here is a concrete interleaving that breaks it). ROTN reports both,
-honestly.
+checker**. The bound is part of the claim: "VIOLATED at K=1" is a true and
+actionable statement (a single sequential fire admitted at the cap breaks it,
+witness attached). "VIOLATED at K=3" is likewise true and actionable (here
+is the concrete parallel-fire interleaving that breaks it). The K-sweep
+shows the buggy policy failing at *every* bound and tells you *which* failure
+the bound expresses. ROTN reports both, honestly.
 
 ## 5. Comparison table
 
@@ -248,11 +253,13 @@ trustworthy and a `VIOLATED` verdict always comes with evidence:
   verdict is only ever reported when the machinery can back it — applied to
   the prover itself.
 - **The K-sweep is exposed, not buried.** The K-dependence (Section 4) is a
-  real limit: at `K = 1` ROTN reports `PROVEN` on the buggy policy because
-  the race is structurally unexpressible. ROTN does not hide this — it is
-  documented, and a K-sweep is the recommended way to surface it. A bounded
-  model checker that admits its bound is honest; one that pretends to be
-  unbounded is not.
+  real property of the model: at `K = 1` the parallel-fire race is
+  structurally unexpressible, so the buggy policy's violation appears as the
+  *sequential* off-by-one — it is still `VIOLATED`, with a witness
+  (`completed = 200, inflight = 1`). ROTN does not hide this — it is
+  documented, and a K-sweep is the recommended way to surface the witness
+  shape each bound expresses. A bounded model checker that admits its bound
+  is honest; one that pretends to be unbounded is not.
 
 The through-line: **ROTN would rather say "I cannot decide" than say "it's
 safe" when it cannot actually rule out a violation.**
@@ -316,8 +323,10 @@ repo root; `python -m rot` is the entry point, `rot` once installed):
   ```
   rot check --policy tests/fixtures/aws_dogwood/spendcap/policies/spendcap-buggy.dw --max-inflight 1
   ```
-  At `K = 1` the same buggy policy reports PROVEN — the race is
-  structurally unexpressible at that bound.
+  At `K = 1` the same buggy policy reports VIOLATED — the parallel-fire race
+  is structurally unexpressible at that bound, so the witness is the
+  *sequential* off-by-one (`completed = 200, inflight = 1`); at `K ≥ 2` it
+  is the parallel fire.
 - **The Phase A walkthrough.**
   [`dogwood-repro.md`](dogwood-repro.md) documents the full
   policy → model → witness derivation end to end.

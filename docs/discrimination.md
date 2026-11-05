@@ -8,36 +8,43 @@ sometimes right.  The problem is that the true verdict depends on *context the
 scan cannot see*: the concurrency bound the environment imposes, and whether a
 capability is single-use.
 
-These two fixtures pin both directions of the error.  In each, a scan and a
-model checker **disagree**, and the model checker is right.
+These two fixtures pin the two directions of the scan's error.  In Case 2 the
+scan and a model checker **disagree**, and the model checker is right.  In
+Case 1 they **agree** -- but the scan stops at a bare flag, while the model
+checker adds what the scan cannot: a **concrete witness**, a **sound proof**,
+and the *K-dependence* of the failure.
 
 ---
 
-## Case 1 — response-sum, bounded in-flight → **SAFE**  *(scan says "buggy")*
+## Case 1 — response-sum, bounded in-flight → **UNSAFE at every K**  *(scan says "buggy" — and is right)*
 
 `tests/fixtures/discrimination/response-sum-bounded.dw` is a **response**-sum
 spend-cap policy: the temporal sum quantifies over `Transfer::response` rows
 (settled completions only).  A keyword scan fires on "response-sum" and calls
-it **UNSAFE** -- and for an unbounded pool, it is.
+it **UNSAFE** -- and it is right: the decision event is a *request*, never a
+*response*, so it is excluded from that sum by event kind, and the policy is
+UNSAFE at **every** K.
 
-ROTN's verdict turns on **K**, the client-side request-pool bound, which a
-scan cannot read from the policy text:
+ROTN agrees with the scan -- and adds what the scan cannot: a **concrete
+witness** and a **sound proof**, with the witness *shape tracking K*, the
+client-side request-pool bound the scan cannot read from the policy text:
 
-| pool bound K | verdict | why |
-|:---:|:---:|:---|
-| **K = 1** | **SAFE** | a fire is admitted only while `inflight < 1`, i.e. when `settled + amount <= cap`; the single in-flight fire settles to `<= cap`. the parallel-fire race is structurally impossible. |
-| **K = 3** | **UNSAFE** | three un-settled fires each pass the guard (`settled` still 0) and settle to `3 × 100 = 300 > 200`. |
+| pool bound K | verdict | witness | why |
+|:---:|:---:|:---|:---|
+| **K = 1** | **UNSAFE** | `{ "completed": 200, "inflight": 1 }` | the **sequential off-by-one**: a fire admitted while `completed` already equals the cap settles past it. |
+| **K = 3** | **UNSAFE** | `{ "completed": 0, "inflight": 3 }` | the **parallel-fire race**: three un-settled fires each pass the guard (`settled` still 0) and settle to `3 × 100 = 300 > 200`. |
 
-The **witness** at K = 3 is the parallel-fire race itself:
+The **witnesses** are the two faces of the same one-word bug:
 
 ```
-{ "completed": 0, "inflight": 3 }     # 3 in-flight × 100 = 300 > 200 cap
+{ "completed": 200, "inflight": 1 }   # K = 1: the sequential off-by-one
+{ "completed": 0, "inflight": 3 }     # K = 3: 3 in-flight × 100 = 300 > 200 cap
 ```
 
-The *same policy text* is SAFE or UNSAFE purely by the bound the environment
-imposes on in-flight concurrency.  A per-request monitor cannot know K; it sees
-"response-sum" and flags it.  ROTN models K and proves the bound makes it
-safe.
+The *same policy text* is UNSAFE at every bound the model can express -- and
+the shape of the counterexample tells you *which* failure that bound
+expresses.  A per-request scan cannot know K, and it stops at a flag.  ROTN
+models K, witnesses the exact failure, and proves the rest of the state space.
 
 ---
 
@@ -72,15 +79,17 @@ only a model checker checks it.
 |---|:---:|:---:|
 | sees the **bound K** | ✗ | ✓ (models in-flight concurrency) |
 | sees **consumption** | ✗ | ✓ (models the state transition) |
-| Case 1 (response-sum, K=1) | **UNSAFE** (wrong) | **SAFE** (right) |
+| Case 1 (response-sum, K=1) | **UNSAFE** (right — but a bare flag) | **UNSAFE** (right — with witness `{ "completed": 200, "inflight": 1 }` + proof) |
 | Case 2 (approval, replayable) | **SAFE** (wrong) | **UNSAFE** (right) |
 
 The scan is a *static* read of local structure.  ROTN lowers the policy to a
 state machine, explores its reachable states, and returns a **witness** -- a
 concrete counterexample trace -- for every UNSAFE it reports, and a
-no-counterexample proof for every SAFE.  The two cases above are the two
-directions in which the static read is wrong, and the two witnesses are the
-proof that the model checker is not just a fancier pattern match.
+no-counterexample proof for every SAFE.  In Case 1 the scan is *right* but
+blind: it cannot say *why* the policy fails, *which* failure K expresses, or
+that nothing else does.  In Case 2 it is *wrong*.  The witnesses in both
+cases are the proof that the model checker is not just a fancier pattern
+match.
 
 ---
 

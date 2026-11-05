@@ -292,9 +292,14 @@ wired, the unbounded path fails closed to `UNKNOWN` rather than assert.
 by interchangeable variable sets — each orbit is represented by one canonical
 state (`rot.symbolic._canonicalize`, enabled via `SymbolicEngine(symmetry=...)`)
 — exact for group-invariant properties. The spend-cap `k_sweep`
-(`rot.spendcap`) is the K-scale: it sweeps the in-flight bound and reports the
-K-masking boundary (`K=1` masks the parallel-fire race; `K>=2` exposes it) with a
-loud `MASKED_AT_LOW_K` advisory, never silent.
+(`rot.spendcap`) is the K-scale: it sweeps the in-flight bound and shows the
+*witness shape tracking* `K` (`K=1` the sequential off-by-one,
+`{completed:200, inflight:1}`; `K>=2` the parallel-fire signature,
+`{completed:100, inflight:2}` / `{completed:0, inflight:3}`) — the buggy
+policy is VIOLATED at every `K`, and each bound is recorded on the verdict as
+a named assumption, never silent. The `MASKED_AT_LOW_K` advisory
+(`rot.verdicts`) stays a loud, general guard: it fires for any cap/budget
+policy that is PROVEN below the minimal overshoot count.
 
 **Out of wedge scope (thesis-level).** Procedures vs. macros (flat `Action`s),
 ghost/auxiliary variables, refinement (spec ⊆ spec; CEGAR ≠ refinement), and

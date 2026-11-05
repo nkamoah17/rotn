@@ -35,16 +35,16 @@ a concrete, replayable witness (see [`docs/apw-catalog.md`](docs/apw-catalog.md)
 | **APW-5** | Session splitting | the per-session counter resets per event, so N sessions each admit K | `{"session_count": 4, "scope_count": 1}` |
 | **APW-6** | Window-boundary burst | the counter hard-resets at the edge → K before + K after is a 2× burst | `{"count": 1, "total": 4}` |
 
-**The K-sweep** is the single most informative view of the bug: the concurrency
-pool *is* the story. At K=1 the buggy policy proves clean (a **masked** bug, a
-false negative); at K≥2 the same policy is **VIOLATED**, while the corrected
-policy stays **PROVEN** at every K:
+**The K-sweep** is the single most informative view of the bug: the buggy
+policy is **VIOLATED at every K** (the corrected policy stays **PROVEN** at
+every K), and the *witness shape tracks K* — K=1 the sequential off-by-one,
+K≥2 the parallel-fire signature:
 
-| K (pool) | buggy policy | corrected policy |
-|----------|--------------|------------------|
-| 1 | `PROVEN` (masked) | `PROVEN` |
-| 2 | `VIOLATED` | `PROVEN` |
-| 3 | `VIOLATED` | `PROVEN` |
+| K (pool) | buggy policy | witness | corrected policy |
+|----------|--------------|---------|------------------|
+| 1 | `VIOLATED` | `{"completed": 200, "inflight": 1}` (sequential off-by-one) | `PROVEN` |
+| 2 | `VIOLATED` | `{"completed": 100, "inflight": 2}` | `PROVEN` |
+| 3 | `VIOLATED` | `{"completed": 0, "inflight": 3}` (parallel fire) | `PROVEN` |
 
 ## 60-second run
 
@@ -62,9 +62,9 @@ rot replay out/attack.jsonl --policy samples/spendcap-buggy.dw
 # 3. The corrected policy -> PROVEN (exit 0)
 rot check --policy samples/spendcap-correct.dw --out out-correct
 
-# 4. The K-sweep: the pool size is the whole story (K=1 masks, K>=2 exposes)
-rot check --policy samples/spendcap-buggy.dw --max-inflight 1   # PROVEN   (masked)
-rot check --policy samples/spendcap-buggy.dw --max-inflight 2   # VIOLATED (exposed)
+# 4. The K-sweep: the witness shape tracks K (K=1 sequential off-by-one, K>=2 parallel fire)
+rot check --policy samples/spendcap-buggy.dw --max-inflight 1   # VIOLATED (witness {"completed": 200, "inflight": 1})
+rot check --policy samples/spendcap-buggy.dw --max-inflight 2   # VIOLATED (witness {"completed": 100, "inflight": 2})
 ```
 
 Every command is deterministic, offline, and exit-code aware (`0` proven · `1` violated · `2` unknown · `3` error). `rot demo` runs the whole story in one command.
@@ -73,7 +73,7 @@ Every command is deterministic, offline, and exit-code aware (`0` proven · `1` 
 
 - **A concrete, replayable counterexample** — not just "unsafe", but the exact state that breaks the invariant, and a replay that re-derives it.
 - **Six named bug classes** — the [APW catalog](docs/apw-catalog.md): settled-sum cap bypass, approval replay, taint race, distinct-count race, session splitting, and window-boundary burst — each with a buggy/correct pair and an oracle-verified witness.
-- **A K-sweep** — the pool size that masks vs. exposes the bug (K=1 masks, K≥2 exposes).
+- **A K-sweep** — the buggy policy is VIOLATED at every K, and the witness shape tracks K (K=1 sequential off-by-one, K≥2 parallel-fire signature).
 - **A verdict per policy** — `PROVEN` / `VIOLATED` / `UNKNOWN` (never a silent `SAFE`), with an honest coverage matrix over a whole corpus (`rot corpus`).
 - **A coach** — a runtime guard that decides one live tool call against the *same guard* the offline engine proved safe; a denial is a computed remediation (`to_proceed`), not a log line.
 - **A deterministic, hashed trace** — replays as an interactive proof on GitHub Pages, with a re-verify command.

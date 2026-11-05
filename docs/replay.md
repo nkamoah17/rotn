@@ -157,18 +157,18 @@ always honest about its depth. See [`architecture.md`](architecture.md) §4.
 ## 9. The K-sweep (concurrency bound)
 
 For spend-cap, `K` (`--max-inflight`) is the client-side concurrency pool bound
-— a **structural** knob shared by the correct and buggy variants. The bug's
-*visibility* depends on it:
+— a **structural** knob shared by the correct and buggy variants. The buggy
+policy is **VIOLATED at every K**; the *witness shape* tracks it:
 
-| `K` | buggy verdict | why |
-|-----|---------------|-----|
-| 1 | **PROVEN (masked)** | one in-flight request (100) can never overshoot the 200 cap |
-| 2 | VIOLATED | one settled + two in-flight = 300 > 200 |
-| ≥3 | VIOLATED | the clean 3-parallel-fire signature |
+| `K` | buggy verdict | witness | why |
+|-----|---------------|---------|-----|
+| 1 | **VIOLATED** | `completed=200, inflight=1` | the sequential off-by-one: a fire admitted while `completed` already equals the cap settles past it |
+| 2 | VIOLATED | `completed=100, inflight=2` | one settled + two in-flight = 300 > 200 |
+| ≥3 | VIOLATED | `completed=0, inflight=3` | the clean 3-parallel-fire signature |
 
 The **compare** view (`#/compare/spendcap-buggy/spendcap-correct`) puts the
 buggy and correct policies side by side and sweeps `K`, so you can watch the
-verdict flip at the bound.
+witness shape track the bound.
 
 ---
 

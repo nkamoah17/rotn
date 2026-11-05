@@ -2,9 +2,10 @@
 
 This is the end-to-end, reproducible demonstration that the seeded
 `Transfer::request` vs `Transfer::response` summation bug in the AWS Dogwood
-spend-cap policy is **concurrency-dependent**: it is *masked* when the model
-can express only one in-flight request, and *exposed* (with a deterministic
-witness) as soon as the state space can express ≥2 parallel in-flight fires.
+spend-cap policy is **VIOLATED at every concurrency bound K**: the witness
+shape tracks K — a deterministic sequential off-by-one at K=1, and the
+parallel-fire signature as soon as the state space can express ≥2 parallel
+in-flight fires.
 
 No Java, no TLC jar, no Z3 required for the core demo — it runs entirely on
 the offline symbolic engine. The three-engine crosscheck phase degrades
@@ -63,7 +64,7 @@ That's it. One command, five phases, deterministic exit code.
 | 2 | `--policy spendcap-buggy.dw` | exit 1 (VIOLATED, witness) | the buggy policy overshoots the cap |
 | 3 | `--trifecta --manifest` | exit 0 (+ manifest + D6 risk flag) | the three-facet audit is sound and reproducible |
 | 4 | `--engine crosscheck` | exit 1 (SMT/Z3, TLC, **and** policy-direct agree) | the witness is not an engine *or* model artifact |
-| 5 | `--policy spendcap-buggy.dw --max-inflight {1,2,3}` | 0, 1, 1 | **K-dependence**: K=1 masks, K≥2 exposes |
+| 5 | `--policy spendcap-buggy.dw --max-inflight {1,2,3}` | 1, 1, 1 | **K-dependence**: VIOLATED at every K; the witness shape tracks K (K=1 sequential off-by-one, K≥2 parallel fire) |
 
 Phase 4 is skipped (not failed) when `java` + `tla2tools.jar` are absent
 (TLC) or when Z3 is unavailable (SMT / policy-direct). The join degrades to
@@ -87,20 +88,23 @@ engine).
 number of in-flight requests the state space can express. It is **structural,
 not policy** — both the correct and the buggy variants share it, because it
 bounds the *expressibility* of the model, not the behavior of either. The
-bug's visibility depends on it:
+buggy policy is VIOLATED at every K; the *witness shape* tracks it:
 
 | `K` | buggy verdict | witness | why |
 |-----|---------------|---------|-----|
-| 1 | **PROVEN (masked)** | — | a single in-flight request (100) can never overshoot the 200 cap |
+| 1 | **VIOLATED** | `completed=200, inflight=1` | the sequential off-by-one: a fire admitted while `completed` already equals the cap settles past it |
 | 2 | VIOLATED | `completed=100, inflight=2` | one settled + two in-flight = 300 > 200 |
 | ≥3 | VIOLATED | `completed=0, inflight=3` | the clean 3-parallel-fire signature (stable through K=6) |
 
 The one-word diff between the two policies is the entire seeded bug:
 summing over `Transfer::request` (issued transfers, in-flight included) is
 correct; summing over `Transfer::response` (settled only) lets a parallel-fire
-burst of in-flight requests overshoot the cap. At `K=1` that burst is
-structurally unexpressible, so the buggy policy *looks* proven — a false
-negative that a K-sweep exposes.
+burst of in-flight requests overshoot the cap — and even a single fire
+admitted while the settled amount already equals the cap settles past it.
+At `K=1` the parallel-fire burst is structurally unexpressible, so the
+violation appears as the *sequential* off-by-one; at `K≥2` the parallel-fire
+signature appears. Either way the buggy policy is VIOLATED — K picks the
+witness shape, not the verdict.
 
 ## Reading the exit code
 

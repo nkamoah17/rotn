@@ -31,7 +31,7 @@ No Java and no TLC jar are required.
 | 2 | `--policy .../spendcap-buggy.dw`   | exit 1 — **VIOLATED** | a parallel-fire burst overshoots the cap (witness emitted) |
 | 3 | `--trifecta --manifest --out out`  | exit 0 — **PROVEN** | three-facet audit (safety + liveness + conformance) + deterministic manifest + D6 risk flag (CLEAR) |
 | 4 | `--policy .../spendcap-buggy.dw --engine crosscheck` | exit 1 — **VIOLATED** | SMT/Z3 + TLC + policy-direct agree on the counterexample (skipped if TLC absent) |
-| 5 | `--policy .../spendcap-buggy.dw --max-inflight {1,2,3}` | 0, 1, 1 | **K-dependence**: K=1 masks the bug, K≥2 exposes it (witness shape tracks K) |
+| 5 | `--policy .../spendcap-buggy.dw --max-inflight {1,2,3}` | 1, 1, 1 | **K-dependence**: VIOLATED at every K; the witness shape tracks K (K=1 sequential off-by-one, K≥2 parallel fire) |
 
 ## Run it
 
@@ -188,23 +188,26 @@ $ python -m rot.crosscheck out/policy-spendcap-buggy.dw_spendcap_within_cap.json
 ## What Phase 5 adds
 
 Phase 5 sweeps the **concurrency pool bound** `K` (`--max-inflight`) across
-the buggy policy and asserts the verdict flips with it:
+the buggy policy. The buggy policy is **VIOLATED at every K** — the bound
+never masks the bug; it picks the *witness shape*:
 
 | `K` | expected | verdict | witness |
 |-----|----------|---------|---------|
-| 1 | exit 0 | **PROVEN (masked)** | — |
-| 2 | exit 1 | VIOLATED | `completed=100, inflight=2` |
+| 1 | exit 1 | VIOLATED | `completed=200, inflight=1` (sequential off-by-one) |
+| 2 | exit 1 | VIOLATED | `completed=100, inflight=2` (one settled + two in-flight = 300 > 200) |
 | 3 | exit 1 | VIOLATED | `completed=0, inflight=3` (clean parallel fire) |
 
 `K` is **structural, not policy**: it bounds how many in-flight requests the
 state space can express, and both the correct and the buggy variants share it.
-At `K=1` a single in-flight request (100) can never overshoot the 200 cap, so
-the buggy policy *looks* proven — a false negative that is only exposed once
-the model can express ≥2 parallel in-flight fires. The witness shape tracks
-`K`: the minimum number of parallel fires needed to break the cap.
+At `K=1` the parallel-fire signature is unexpressible, so the violation shows
+up as the *sequential* off-by-one — a request admitted while the settled
+amount already equals the cap settles past it. At `K=2` the parallel-fire
+signature appears; at `K≥3` the clean three-fire witness is the minimum
+number of parallel fires needed to break the cap.
 
-This is the core lesson of the reproducible demo: a `PROVEN` result for a
-concurrency-sensitive policy is only as strong as its `K`.
+This is the core lesson of the reproducible demo: a concurrency-sensitive
+policy is only as strong as its verdict at *every* `K` — the K-sweep shows
+the buggy policy VIOLATED throughout, with the witness shape tracking `K`.
 
 ## Exit codes (identical to the rest of the pipeline)
 

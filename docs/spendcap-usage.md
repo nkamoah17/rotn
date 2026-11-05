@@ -54,19 +54,19 @@ python pipeline.py --policy tests/fixtures/aws_dogwood/spendcap/policies/spendca
 `K` is the client-side concurrency pool bound: the max number of in-flight
 requests the state space can express. It is **structural, not policy** --
 both the correct and the buggy variants share it, because it bounds the
-*expressibility* of the model, not the behavior of either. The bug's
-visibility depends on it:
+*expressibility* of the model, not the behavior of either. The buggy policy
+is VIOLATED at every K; the *witness shape* tracks it:
 
 | `K` | buggy verdict | witness | why |
 |-----|---------------|---------|-----|
-| 1 | **PROVEN (masked)** | — | a single in-flight request (100) can never overshoot the 200 cap |
+| 1 | **VIOLATED** | `completed=200, inflight=1` | the sequential off-by-one: a fire admitted while `completed` already equals the cap settles past it |
 | 2 | VIOLATED | `completed=100, inflight=2` | one settled + two in-flight = 300 > 200 |
 | ≥3 | VIOLATED | `completed=0, inflight=3` | the clean 3-parallel-fire signature (stable through K=6) |
 
 ```bash
-# K=1: the race is structurally unexpressible -> the buggy policy looks PROVEN
+# K=1: the parallel-fire signature is unexpressible -> the sequential off-by-one
 python pipeline.py --policy tests/fixtures/aws_dogwood/spendcap/policies/spendcap-buggy.dw --max-inflight 1
-# -> spendcap_within_cap PROVEN      (exit 0)   <- false negative, masked
+# -> spendcap_within_cap VIOLATED    (exit 1)   <- witness: completed=200, inflight=1
 
 # K=2: one parallel fire pair already breaks the cap
 python pipeline.py --policy tests/fixtures/aws_dogwood/spendcap/policies/spendcap-buggy.dw --max-inflight 2
@@ -79,10 +79,10 @@ python pipeline.py --policy tests/fixtures/aws_dogwood/spendcap/policies/spendca
 #    witness: completed=0, inflight=3
 ```
 
-Takeaway: a `PROVEN` result for a concurrency-sensitive policy is only as
-strong as its `K`. Sweeping `K` (1, 2, 3, …) separates a *masked* bug from a
-genuinely safe one, and the witness shape tells you how many parallel fires
-the violation needs.
+Takeaway: the buggy policy is VIOLATED at every `K`, and the witness shape
+tracks `K`. Sweeping `K` (1, 2, 3, …) shows how the failure changes shape —
+the sequential off-by-one at `K=1`, the parallel-fire signature at `K≥2` —
+and tells you how many parallel fires the violation needs.
 
 ## Three-engine crosscheck (`--engine crosscheck`)
 

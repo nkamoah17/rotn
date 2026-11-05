@@ -86,12 +86,16 @@ check (each sees settled = 0) but commits **`$300`** against the `$200` cap.
 - **Why a monitor misses it:** the guard is evaluated per request, and each
   request sees the *settled* total (0) — the in-flight term is invisible.
 - **The fix:** charge the in-flight term against the cap (sum the requests).
-- **K-sweep:** the pool size is the whole story — `K=1` masks the bug
-  (PROVEN), `K≥2` exposes it (VIOLATED). See the K-sweep table in
+- **K-sweep:** the buggy policy is VIOLATED at every `K`, and the witness
+  shape tracks the bound — `K=1` the sequential off-by-one
+  (`{"completed": 200, "inflight": 1}`), `K≥2` the parallel-fire signature
+  (`{"completed": 100, "inflight": 2}` at K=2;
+  `{"completed": 0, "inflight": 3}` at K≥3). See the K-sweep table in
   [spendcap-demo.md](spendcap-demo.md).
 - **Buggy / correct:** [apw1-buggy.dw](../samples/apw1-buggy.dw) ·
   [apw1-correct.dw](../samples/apw1-correct.dw)
-- **Witness:** `{"completed": 0, "inflight": 3}`
+- **Witness:** `{"completed": 0, "inflight": 3}` (the K≥3 parallel-fire
+  signature — the default `K=4` run)
 
 ## APW-2 — Approval replay (the commercially important one)
 
