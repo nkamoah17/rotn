@@ -1,23 +1,27 @@
 # Copyright (c) KAMANU. All rights reserved.
 """Phase 2 -- discrimination cases: where a keyword/pattern scan ("grep")
-gets the verdict WRONG in both directions, and ROTN gets it right.
+is blind to what actually decides safety, and ROTN is not.
 
 A per-request monitor or a policy keyword scan can only see *local* structure:
 "this sum is over responses => in-flight invisible => UNSAFE", or "this action
-is gated on an approval => SAFE".  Both heuristics are *sometimes* right and
-*sometimes* wrong, because the true verdict depends on context the scan cannot
-model -- the concurrency bound (K), and whether the approval is single-use.
+is gated on an approval => SAFE".  The first heuristic is a flag without an
+explanation; the second is *sometimes* right and *sometimes* wrong, because
+the true verdict depends on context the scan cannot model -- the concurrency
+bound (K), and whether the approval is single-use.
 
-These two fixtures pin both directions of the error, so the "elaborate grep"
-critique has a concrete, reproducible answer:
+These two fixtures pin the discrimination, so the "elaborate grep" critique
+has a concrete, reproducible answer:
 
-  * **Case 1 -- response-sum + bounded in-flight  =>  SAFE.**
+  * **Case 1 -- response-sum + bounded in-flight  =>  UNSAFE at every K.**
     ``tests/fixtures/discrimination/response-sum-bounded.dw`` is a
-    *response*-sum spend-cap policy (a scan calls it buggy).  With the
-    client-side request-pool bound K = 1 the parallel-fire race is
-    structurally impossible, so ROTN proves it SAFE; at K = 3 the same
-    policy text is UNSAFE (witness ``{completed: 0, inflight: 3}``).  The
-    verdict flips on a *bound*, not a keyword.
+    *response*-sum spend-cap policy.  The scan flags it as UNSAFE -- and is
+    right: the current event is a request, never a response, so it is
+    excluded from that sum by event kind.  ROTN agrees (UNSAFE at every K)
+    and adds what the scan cannot: a concrete witness whose shape tracks the
+    bound K (K = 1 -- the sequential off-by-one,
+    ``{completed: 200, inflight: 1}``; K = 3 -- the parallel fire,
+    ``{completed: 0, inflight: 3}``) and a sound proof that no other failure
+    exists.
 
   * **Case 2 -- approval-gated but replayable  =>  UNSAFE.**
     The approval-replay shape (APW-2) is *gated on an approval* (a scan calls
@@ -26,7 +30,7 @@ critique has a concrete, reproducible answer:
     ``{approved: True, orders: 2}``).  When the approval is single-use the
     same policy is SAFE.  The verdict turns on *consumption*, not gating.
 
-Both directions are checked against the same sound core (``ModelFinder`` over
+Both cases are checked against the same sound core (``ModelFinder`` over
 the lowered IR / the hand-written oracle), so the discrimination is not a
 per-fixture tuning.  See ``docs/discrimination.md``.
 """
@@ -57,8 +61,9 @@ def _verdict(ir):
 
 
 class Case1ResponseSumBoundedTests(unittest.TestCase):
-    """Case 1: a response-sum policy is SAFE when in-flight is bounded to 1,
-    UNSAFE when the pool allows a parallel burst -- the SAME policy text."""
+    """Case 1: a response-sum policy is UNSAFE at every K -- the SAME policy
+    text -- and the witness shape tracks the bound K (which the scan cannot
+    see)."""
 
     def test_fixture_parses_to_response_sum(self):
         ir = policy_fe.build_ir(_RESPONSE_SUM, max_inflight=3)
@@ -66,12 +71,17 @@ class Case1ResponseSumBoundedTests(unittest.TestCase):
                          "the fixture must be a response-sum policy")
         self.assertEqual(ir.metadata.get("property_kind"), "safety")
 
-    def test_safe_at_k1(self):
-        """K = 1: the parallel-fire race is impossible -> SAFE, no witness."""
+    def test_unsafe_at_k1_with_sequential_witness(self):
+        """K = 1: the parallel-fire race is impossible, but the policy is
+        UNSAFE -- the sequential off-by-one (a fire admitted with the settled
+        amount at the cap settles past it) -> witness
+        ``{completed: 200, inflight: 1}``.  The scan says UNSAFE too; here
+        ROTN agrees and adds the witness + a sound proof."""
         ir = policy_fe.build_ir(_RESPONSE_SUM, max_inflight=1)
         safe, witness = _verdict(ir)
-        self.assertIs(safe, True, "response-sum at K=1 must be SAFE")
-        self.assertIsNone(witness)
+        self.assertIs(safe, False, "response-sum at K=1 must be UNSAFE")
+        self.assertEqual(witness, {"completed": 200, "inflight": 1},
+                         "K=1 witness must be the sequential off-by-one")
 
     def test_unsafe_at_k3_with_witness(self):
         """K = 3: a parallel burst overshoots the cap -> UNSAFE + witness."""
@@ -85,15 +95,18 @@ class Case1ResponseSumBoundedTests(unittest.TestCase):
             witness.get("inflight", 0) * 100, 200,
             "the in-flight amount must exceed the cap in the witness")
 
-    def test_verdict_flips_on_the_bound_not_the_keyword(self):
-        """The discrimination: identical policy text, K is the only thing that
-        changes, and it flips SAFE <-> UNSAFE."""
-        safe_k1, _ = _verdict(policy_fe.build_ir(_RESPONSE_SUM, max_inflight=1))
-        safe_k3, _ = _verdict(policy_fe.build_ir(_RESPONSE_SUM, max_inflight=3))
-        self.assertIs(safe_k1, True)
-        self.assertIs(safe_k3, False)
-        self.assertNotEqual(safe_k1, safe_k3,
-                            "the bound K must flip the verdict")
+    def test_witness_shape_tracks_the_bound_not_the_keyword(self):
+        """The discrimination: identical policy text and keyword at every K,
+        UNSAFE at every K -- but the witness *shape* tracks the bound K
+        (K=1 sequential off-by-one vs K>=2 parallel fire), which the scan
+        cannot see."""
+        safe_k1, w_k1 = _verdict(policy_fe.build_ir(_RESPONSE_SUM, max_inflight=1))
+        safe_k3, w_k3 = _verdict(policy_fe.build_ir(_RESPONSE_SUM, max_inflight=3))
+        self.assertIs(safe_k1, False, "response-sum at K=1 must be UNSAFE")
+        self.assertIs(safe_k3, False, "response-sum at K=3 must be UNSAFE")
+        self.assertNotEqual(w_k1, w_k3, "the bound K must change the witness")
+        self.assertEqual(w_k1, {"completed": 200, "inflight": 1})
+        self.assertEqual(w_k3, {"completed": 0, "inflight": 3})
 
 
 class Case2ApprovalReplayTests(unittest.TestCase):

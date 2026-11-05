@@ -130,7 +130,7 @@ class WitnessMatchTest(unittest.TestCase):
 
     def test_proven_join_is_na_not_mismatch(self):
         # A PROVEN run has no counterexample to compare -> N/A (None), not
-        # False.  This is what lets K=1 (masked) read as "no witness".
+        # False.  E.g. the correct policy reads as "no witness".
         self.assertIsNone(crosscheck.witness_match(None, None, PROVEN))
 
     def test_unknown_join_is_na_not_mismatch(self):
@@ -532,7 +532,7 @@ class ReportBuildTest(unittest.TestCase):
 
     def test_witness_match_none_when_both_proven(self):
         # A PROVEN run has no counterexample to compare -> N/A (None), not
-        # False.  This is what lets K=1 (masked) read as "no witness".
+        # False.  E.g. the correct policy reads as "no witness".
         rep = crosscheck.build_crosscheck_report(_run_report(PROVEN, PROVEN))
         self.assertIs(rep["agreement"]["agree"], True)
         self.assertIsNone(rep["agreement"]["witness_match"])

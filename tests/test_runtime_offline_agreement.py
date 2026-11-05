@@ -47,9 +47,9 @@ K, AMOUNT, CAP = 4, 100, 200
 def _state_battery():
     """A battery of (completed, inflight) states spanning the cap boundary.
 
-    Covers the masked (K=1) region, the parallel-fire region (inflight >= 1),
-    and the over-cap region, so a regression that special-cases any of them is
-    caught.
+    Covers the sequential off-by-one region (completed at the cap, inflight=1),
+    the parallel-fire region (inflight >= 1), and the over-cap region, so a
+    regression that special-cases any of them is caught.
     """
     for completed in (0, 100, 200, 300):
         for inflight in (0, 1, 2, 3):

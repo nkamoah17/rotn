@@ -164,12 +164,18 @@ class FailClosedTests(unittest.TestCase):
 class KsweepTests(unittest.TestCase):
     """The coaching is a pure function of the model knobs (the K-sweep)."""
 
-    def test_k1_masks_the_race(self):
-        # At K=1 the buggy policy is PROVEN (the race is unexpressible), so
-        # the coaching's detect step is not violated -- but the loop still
-        # runs and is deterministic.
+    def test_k1_violates_sequentially(self):
+        # At K=1 the parallel-fire race is unexpressible, but the buggy
+        # (settled-only) policy is still VIOLATED -- the sequential
+        # off-by-one (witness completed=200, inflight=1) -- so the detect
+        # step reports it, the re-check re-proves the fix, and the loop
+        # closes.
         a = coach(_buggy_policy(), max_inflight=1)
-        self.assertEqual(a.body["detect"]["status"], "proven")
+        self.assertEqual(a.body["detect"]["status"], "violated")
+        self.assertEqual(a.body["detect"]["witness"],
+                         {"completed": 200, "inflight": 1})
+        self.assertEqual(a.body["recheck"]["status"], "proven")
+        self.assertEqual(a.status(), CLOSED)
 
     def test_k_ge_2_admits_the_violation(self):
         for k in (2, 3, 4):

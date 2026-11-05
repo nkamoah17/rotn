@@ -6,8 +6,7 @@
       "max_tenant_scopes": 10,
       "max_tools": 100
     },
-    "source": "free",
-    "tier": "free"
+    "source": "free"
   },
   "compliance": {
     "controls": {},
@@ -88,7 +87,7 @@
     ],
     "tenant_scope": "tenant:acme"
   },
-  "hash": "0a5a53804e60e869790e2f24e778a43e5e60b3dac7f448a5bf56de1cfec06a2d",
+  "hash": "3d2df08e719db5f59f6b1e7b6db7e55341c643817ee9870c54b0e38774e20bef",
   "horizon": 12,
   "manifest_id": "mf-b3886e274afb2fe1",
   "narration": "ROTN MCP findings  (Cedar-AR vocabulary, temporal proof)\n====================================================\nmanifest server=caravel-agent-tools  version=1.0.0\n         tenant_scope=tenant:acme  allowed_write_fields=['account.balance']\ntools    get_balance, update_balance\n\nbehavioral audit (adversarial agent, tool-call sequences):\n  status : PROVEN -- the property holds in all 3 reachable states\n  risk   : LETHAL TRIFECTA -- the agent can hold the tenant's private data AND reach an outbound channel (flag, per the thesis; not a hard violation)\n\nRESULT: PASS -- field and tenant structural checks clean; no Cedar-AR findings\n\nCedar-AR findings: none",
@@ -109,8 +108,7 @@
         "max_tenant_scopes": 10,
         "max_tools": 100
       },
-      "source": "free",
-      "tier": "free"
+      "source": "free"
     },
     "engines": [
       "structural"

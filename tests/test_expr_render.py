@@ -147,7 +147,7 @@ class SpendcapGuardRenderTest(unittest.TestCase):
 
     def test_buggy_decision(self):
         self.assertEqual(render_expr(spend_ok_guard_buggy()),
-                         "completed + 100 <= 200")
+                         "completed <= 200")
 
     def test_correct_decision(self):
         self.assertEqual(render_expr(spend_ok_guard_correct()),
@@ -157,7 +157,7 @@ class SpendcapGuardRenderTest(unittest.TestCase):
         e = ir.And(spend_ok_guard_buggy(),
                    ir.BinOp("<", ir.V("inflight"), ir.C(MAX_INFLIGHT)))
         self.assertEqual(render_expr(e),
-                         "completed + 100 <= 200 and inflight < 4")
+                         "completed <= 200 and inflight < 4")
 
     def test_full_correct_guard(self):
         e = ir.And(spend_ok_guard_correct(),

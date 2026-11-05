@@ -203,7 +203,7 @@ class SMTBackendTraceTest(unittest.TestCase):
             self.assertEqual(action, "spend_ok")
             self.assertEqual(step_clause, clause)
             self.assertEqual(
-                guard, "completed + 100 <= 200 and inflight < 4")
+                guard, "completed <= 200 and inflight < 4")
             self.assertIsInstance(state_before, dict)
             self.assertIsInstance(delta, dict)
 
@@ -220,7 +220,7 @@ class SMTBackendTraceTest(unittest.TestCase):
         self.assertIn("## Counterexample trace", md)
         self.assertIn("1. **spend_ok**", md)
         self.assertIn(
-            "- guard: `completed + 100 <= 200 and inflight < 4`", md)
+            "- guard: `completed <= 200 and inflight < 4`", md)
         self.assertIn(
             "- policy_clause: `%s`" % self.prop.policy_clause, md)
 

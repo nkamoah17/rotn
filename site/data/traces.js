@@ -12,8 +12,7 @@ window.ROT_TRACES = {
         "max_tenant_scopes": 10,
         "max_tools": 100
       },
-      "source": "free",
-      "tier": "free"
+      "source": "free"
     },
     "compliance": {
       "controls": {
@@ -226,7 +225,7 @@ window.ROT_TRACES = {
       ],
       "tenant_scope": "tenant:acme"
     },
-    "hash": "5cd09c55c6ba741dd0cbb87bdb3662ea81a1a470416ef9130353bdf4e4cbd547",
+    "hash": "97f53376330ebd36657feabba883153e6f4c7830e01313163fdbc92cefde421e",
     "horizon": 12,
     "manifest_id": "mf-61c0c11ae7156e0d",
     "narration": "ROTN MCP findings  (Cedar-AR vocabulary, temporal proof)\n====================================================\nmanifest server=caravel-agent-tools  version=1.0.0\n         tenant_scope=tenant:acme  allowed_write_fields=['account.balance']\ntools    leaky_balance\n\nbehavioral audit (adversarial agent, tool-call sequences):\n  status : VIOLATED -- a reachable tool-call sequence breaks the property\n  attack : leaky_balance\n  witness: {\"holding_private\": true, \"read_foreign\": true, \"used_outbound\": true, \"wrote_unapproved\": true}\n  broken : no_cross_tenant_read, no_unapproved_write\n  risk   : LETHAL TRIFECTA -- the agent can hold the tenant's private data AND reach an outbound channel (flag, per the thesis; not a hard violation)\n\nRESULT: BLOCK -- 2 Cedar-AR finding(s)\n\n[ERROR] Overly Permissive\n    facet: policy   property: field_write_permission\n    controls: CC6.1, AIUC-1\n    tool 'leaky_balance' writes field(s) ['account.ssn'] not in the tenant's allowed write set ['account.balance']\n    witness: {\"allowed_write_fields\": [\"account.balance\"], \"over_permission\": [\"account.ssn\"], \"tool\": \"leaky_balance\", \"write_fields\": [\"account.balance\", \"account.ssn\"]}\n\n[ERROR] Overly Permissive\n    facet: policy   property: tenant_read_isolation\n    controls: CC6.3, AIUC-1\n    tool 'leaky_balance' reads cross-tenant field(s) ['tenant:globex.account.balance'] outside its tenant_scope 'tenant:acme'\n    witness: {\"cross_tenant_fields\": [\"tenant:globex.account.balance\"], \"read_fields\": [\"tenant:acme.account.balance\", \"tenant:globex.account.balance\"], \"tenant_scope\": \"...\n",
@@ -247,8 +246,7 @@ window.ROT_TRACES = {
           "max_tenant_scopes": 10,
           "max_tools": 100
         },
-        "source": "free",
-        "tier": "free"
+        "source": "free"
       },
       "engines": [
         "structural"
@@ -300,8 +298,7 @@ window.ROT_TRACES = {
         "max_tenant_scopes": 10,
         "max_tools": 100
       },
-      "source": "free",
-      "tier": "free"
+      "source": "free"
     },
     "compliance": {
       "controls": {},
@@ -382,7 +379,7 @@ window.ROT_TRACES = {
       ],
       "tenant_scope": "tenant:acme"
     },
-    "hash": "0a5a53804e60e869790e2f24e778a43e5e60b3dac7f448a5bf56de1cfec06a2d",
+    "hash": "3d2df08e719db5f59f6b1e7b6db7e55341c643817ee9870c54b0e38774e20bef",
     "horizon": 12,
     "manifest_id": "mf-b3886e274afb2fe1",
     "narration": "ROTN MCP findings  (Cedar-AR vocabulary, temporal proof)\n====================================================\nmanifest server=caravel-agent-tools  version=1.0.0\n         tenant_scope=tenant:acme  allowed_write_fields=['account.balance']\ntools    get_balance, update_balance\n\nbehavioral audit (adversarial agent, tool-call sequences):\n  status : PROVEN -- the property holds in all 3 reachable states\n  risk   : LETHAL TRIFECTA -- the agent can hold the tenant's private data AND reach an outbound channel (flag, per the thesis; not a hard violation)\n\nRESULT: PASS -- field and tenant structural checks clean; no Cedar-AR findings\n\nCedar-AR findings: none",
@@ -403,8 +400,7 @@ window.ROT_TRACES = {
           "max_tenant_scopes": 10,
           "max_tools": 100
         },
-        "source": "free",
-        "tier": "free"
+        "source": "free"
       },
       "engines": [
         "structural"
@@ -456,8 +452,7 @@ window.ROT_TRACES = {
         "max_tenant_scopes": 10,
         "max_tools": 100
       },
-      "source": "free",
-      "tier": "free"
+      "source": "free"
     },
     "coaching": {
       "close": {
@@ -465,7 +460,7 @@ window.ROT_TRACES = {
         "status": "closed"
       },
       "correct": {
-        "buggy_guard": "completed + 100 <= 200 and inflight < 4",
+        "buggy_guard": "completed <= 200 and inflight < 4",
         "delta": "response -> request (charge in-flight against the cap)",
         "event_kind": "request",
         "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 4",
@@ -480,7 +475,7 @@ window.ROT_TRACES = {
       },
       "detect": {
         "engine": "symbolic",
-        "n_states": 20,
+        "n_states": 25,
         "status": "violated",
         "witness": {
           "completed": 0,
@@ -490,14 +485,14 @@ window.ROT_TRACES = {
       "explain": {
         "cap": 200,
         "exposure": 300,
-        "rationale": "The policy sums over 'response' events, so it charges only settled requests. In the witness (completed=0, inflight=3) the 3 in-flight requests are invisible to the decision: each of the 3 parallel fires sees completed=0 and is admitted, pushing total exposure to 300 -- past the cap of 200.",
+        "rationale": "The policy sums over 'response' events, so it charges only settled requests -- in-flight (issued, unsettled) requests are invisible to the decision.  In the witness (completed=0, inflight=3) total exposure is 300 (completed + inflight * 100), past the cap of 200, because the guard (completed <= cap) admits each request on settled amount alone: off-by-one sequentially (a request admitted at completed = cap settles past it) and unbounded under concurrency (a burst of parallel fires is admitted while the settled sum is still low) -- the invariant is VIOLATED at every K.",
         "root_cause": "the spend_ok guard sums over 'response' events only; in-flight (issued, unsettled) requests are not charged against the cap",
         "witness": {
           "completed": 0,
           "inflight": 3
         }
       },
-      "hash": "52a593e69d84453cbc4f333692bdf152f046fd45869cc401596042e4d42d39e1",
+      "hash": "d4aedd0327f78e0c5bcfb0bb39a25a997f28d9de15c37367b032f2fd9b10f6b2",
       "policy": {
         "action": "Transfer",
         "amount": 100,
@@ -726,9 +721,9 @@ window.ROT_TRACES = {
           "witness": false
         },
         {
-          "action": "spend_deny",
+          "action": "spend_ok",
           "from": "s200_0",
-          "to": "s200_0",
+          "to": "s200_1",
           "witness": false
         },
         {
@@ -744,15 +739,9 @@ window.ROT_TRACES = {
           "witness": false
         },
         {
-          "action": "spend_deny",
+          "action": "spend_ok",
           "from": "s200_1",
-          "to": "s200_1",
-          "witness": false
-        },
-        {
-          "action": "respond",
-          "from": "s200_1",
-          "to": "s300_0",
+          "to": "s200_2",
           "witness": false
         },
         {
@@ -762,81 +751,15 @@ window.ROT_TRACES = {
           "witness": false
         },
         {
-          "action": "spend_deny",
+          "action": "spend_ok",
           "from": "s200_2",
-          "to": "s200_2",
-          "witness": false
-        },
-        {
-          "action": "respond",
-          "from": "s200_2",
-          "to": "s300_1",
-          "witness": false
-        },
-        {
-          "action": "spend_deny",
-          "from": "s300_0",
-          "to": "s300_0",
-          "witness": false
-        },
-        {
-          "action": "spend_deny",
-          "from": "s200_3",
           "to": "s200_3",
           "witness": false
         },
         {
-          "action": "respond",
+          "action": "spend_ok",
           "from": "s200_3",
-          "to": "s300_2",
-          "witness": false
-        },
-        {
-          "action": "spend_deny",
-          "from": "s300_1",
-          "to": "s300_1",
-          "witness": false
-        },
-        {
-          "action": "respond",
-          "from": "s300_1",
-          "to": "s400_0",
-          "witness": false
-        },
-        {
-          "action": "spend_deny",
-          "from": "s300_2",
-          "to": "s300_2",
-          "witness": false
-        },
-        {
-          "action": "respond",
-          "from": "s300_2",
-          "to": "s400_1",
-          "witness": false
-        },
-        {
-          "action": "spend_deny",
-          "from": "s400_0",
-          "to": "s400_0",
-          "witness": false
-        },
-        {
-          "action": "spend_deny",
-          "from": "s400_1",
-          "to": "s400_1",
-          "witness": false
-        },
-        {
-          "action": "respond",
-          "from": "s400_1",
-          "to": "s500_0",
-          "witness": false
-        },
-        {
-          "action": "spend_deny",
-          "from": "s500_0",
-          "to": "s500_0",
+          "to": "s200_4",
           "witness": false
         }
       ],
@@ -947,14 +870,6 @@ window.ROT_TRACES = {
           "witness": false
         },
         {
-          "completed": 300,
-          "cumulative": 300,
-          "id": "s300_0",
-          "inflight": 0,
-          "kind": "state",
-          "witness": false
-        },
-        {
           "completed": 200,
           "cumulative": 500,
           "id": "s200_3",
@@ -963,42 +878,10 @@ window.ROT_TRACES = {
           "witness": false
         },
         {
-          "completed": 300,
-          "cumulative": 400,
-          "id": "s300_1",
-          "inflight": 1,
-          "kind": "state",
-          "witness": false
-        },
-        {
-          "completed": 300,
-          "cumulative": 500,
-          "id": "s300_2",
-          "inflight": 2,
-          "kind": "state",
-          "witness": false
-        },
-        {
-          "completed": 400,
-          "cumulative": 400,
-          "id": "s400_0",
-          "inflight": 0,
-          "kind": "state",
-          "witness": false
-        },
-        {
-          "completed": 400,
-          "cumulative": 500,
-          "id": "s400_1",
-          "inflight": 1,
-          "kind": "state",
-          "witness": false
-        },
-        {
-          "completed": 500,
-          "cumulative": 500,
-          "id": "s500_0",
-          "inflight": 0,
+          "completed": 200,
+          "cumulative": 600,
+          "id": "s200_4",
+          "inflight": 4,
           "kind": "state",
           "witness": false
         }
@@ -1009,10 +892,10 @@ window.ROT_TRACES = {
         "s0_3"
       ]
     },
-    "hash": "79376640a1cb00e124a56e7a487b2a46210a70dfd3f66f176deb407d13a941b8",
+    "hash": "8678de15a24e79faac05f2e189af9b7c6f01c37e37aa5c8c2f2bcc1a47c64287",
     "horizon": 12,
     "manifest_id": "mf-4227160622359a2c",
-    "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 3 * 100 = 300 -- past the cap of 200. The counterexample is {'completed': 0, 'inflight': 3}. (20 reachable states explored.)",
+    "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 3 * 100 = 300 -- past the cap of 200. The counterexample is {'completed': 0, 'inflight': 3}. (15 reachable states explored.)",
     "policy": {
       "amount": 100,
       "buggy": true,
@@ -1029,15 +912,14 @@ window.ROT_TRACES = {
           "max_tenant_scopes": 10,
           "max_tools": 100
         },
-        "source": "free",
-        "tier": "free"
+        "source": "free"
       },
       "engines": [
         "symbolic"
       ],
       "horizon": 12,
       "horizon_complete": true,
-      "n_states": 20,
+      "n_states": 15,
       "policy_hash": "4227160622359a2cc5678aa61ffb0e7e8cd9b5fa6fd489317a29ff6e0c284db4",
       "policy_source": "samples/spendcap-buggy.dw"
     },
@@ -1133,45 +1015,15 @@ window.ROT_TRACES = {
           "within_cap": false
         },
         {
-          "completed": 300,
-          "cumulative": 300,
-          "inflight": 0,
-          "within_cap": false
-        },
-        {
           "completed": 200,
           "cumulative": 500,
           "inflight": 3,
           "within_cap": false
         },
         {
-          "completed": 300,
-          "cumulative": 400,
-          "inflight": 1,
-          "within_cap": false
-        },
-        {
-          "completed": 300,
-          "cumulative": 500,
-          "inflight": 2,
-          "within_cap": false
-        },
-        {
-          "completed": 400,
-          "cumulative": 400,
-          "inflight": 0,
-          "within_cap": false
-        },
-        {
-          "completed": 400,
-          "cumulative": 500,
-          "inflight": 1,
-          "within_cap": false
-        },
-        {
-          "completed": 500,
-          "cumulative": 500,
-          "inflight": 0,
+          "completed": 200,
+          "cumulative": 600,
+          "inflight": 4,
           "within_cap": false
         }
       ],
@@ -1266,35 +1118,232 @@ window.ROT_TRACES = {
         "max_tenant_scopes": 10,
         "max_tools": 100
       },
-      "source": "free",
-      "tier": "free"
+      "source": "free"
     },
-    "coaching": null,
+    "coaching": {
+      "close": {
+        "discharge": "the corrected policy is proven safe within the bound (K=1, W=4): the coaching is discharged",
+        "status": "closed"
+      },
+      "correct": {
+        "buggy_guard": "completed <= 200 and inflight < 1",
+        "delta": "response -> request (charge in-flight against the cap)",
+        "event_kind": "request",
+        "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 1",
+        "policy": {
+          "action": "Transfer",
+          "buggy": false,
+          "cap": 200,
+          "event_kind": "request",
+          "policy_id": "spendcap_buggy",
+          "window": "24h"
+        }
+      },
+      "detect": {
+        "engine": "symbolic",
+        "n_states": 7,
+        "status": "violated",
+        "witness": {
+          "completed": 200,
+          "inflight": 1
+        }
+      },
+      "explain": {
+        "cap": 200,
+        "exposure": 300,
+        "rationale": "The policy sums over 'response' events, so it charges only settled requests -- in-flight (issued, unsettled) requests are invisible to the decision.  In the witness (completed=200, inflight=1) total exposure is 300 (completed + inflight * 100), past the cap of 200, because the guard (completed <= cap) admits each request on settled amount alone: off-by-one sequentially (a request admitted at completed = cap settles past it) and unbounded under concurrency (a burst of parallel fires is admitted while the settled sum is still low) -- the invariant is VIOLATED at every K.",
+        "root_cause": "the spend_ok guard sums over 'response' events only; in-flight (issued, unsettled) requests are not charged against the cap",
+        "witness": {
+          "completed": 200,
+          "inflight": 1
+        }
+      },
+      "hash": "9f0547008476771bf10fab88aa54bb9cccf0bae19a213002b6c62695767ed553",
+      "policy": {
+        "action": "Transfer",
+        "amount": 100,
+        "cap": 200,
+        "event_kind": "response",
+        "max_inflight": 1,
+        "policy_id": "spendcap_buggy",
+        "window": 4
+      },
+      "recheck": {
+        "engine": "symbolic",
+        "n_states": 5,
+        "status": "proven",
+        "witness": null
+      },
+      "rot_version": "0.2.0",
+      "schema": "caravel.coach/v1",
+      "statement": "Your policy would allow this call. ROTN's verified guard blocks it.",
+      "status": "closed",
+      "to_proceed": {
+        "action": "spend_ok",
+        "blocked": true,
+        "blockers": [
+          "not (completed + inflight * 100 + 100 <= 200)",
+          "not (inflight < 1)"
+        ],
+        "conditions": [
+          "completed + inflight * 100 + 100 <= 200",
+          "inflight < 1"
+        ],
+        "explanation": "to proceed with 'spend_ok' from state {'completed': 200, 'inflight': 1}, the guard's currently-false condition(s) must hold: completed + inflight * 100 + 100 <= 200; inflight < 1",
+        "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 1",
+        "instruction": "Cap exhausted: $300 already committed against a $200 limit. Wait for the window to roll over, or request a cap increase.",
+        "state": {
+          "completed": 200,
+          "inflight": 1
+        }
+      }
+    },
     "compliance": {
-      "controls": {},
-      "controls_touched": [],
+      "controls": {
+        "AIUC-1": "ROTN AIUC-1 -- Autonomy (agent must not act beyond policy)",
+        "CC6.1": "SOC 2 CC6.1 -- Logical access security"
+      },
+      "controls_touched": [
+        "AIUC-1",
+        "CC6.1"
+      ],
       "evidence": {
-        "by_control": {},
-        "findings_total": 0
+        "by_control": {
+          "AIUC-1": 1,
+          "CC6.1": 1
+        },
+        "findings_total": 1
       },
       "frameworks": [
         "SOC2",
         "AIUC"
       ],
       "profile": "caravel.compliance/v1",
-      "result": "proven"
+      "result": "violated"
     },
-    "counterexample": null,
+    "counterexample": {
+      "completed": 200,
+      "inflight": 1,
+      "steps": [
+        {
+          "action": "spend_ok",
+          "state": {
+            "completed": 0,
+            "inflight": 1
+          },
+          "step": 0
+        },
+        {
+          "action": "respond",
+          "state": {
+            "completed": 100,
+            "inflight": 0
+          },
+          "step": 1
+        },
+        {
+          "action": "spend_ok",
+          "state": {
+            "completed": 100,
+            "inflight": 1
+          },
+          "step": 2
+        },
+        {
+          "action": "respond",
+          "state": {
+            "completed": 200,
+            "inflight": 0
+          },
+          "step": 3
+        },
+        {
+          "action": "spend_ok",
+          "state": {
+            "completed": 200,
+            "inflight": 1
+          },
+          "step": 4
+        }
+      ]
+    },
     "decision_tree": {
-      "checks": [],
+      "checks": [
+        {
+          "action": "spend_ok",
+          "guard": "completed + AMOUNT <= CAP",
+          "result": "admit",
+          "state": {
+            "completed": 0,
+            "inflight": 1
+          },
+          "step": 0
+        },
+        {
+          "action": "respond",
+          "guard": "completed + AMOUNT <= CAP",
+          "result": "deny",
+          "state": {
+            "completed": 100,
+            "inflight": 0
+          },
+          "step": 1
+        },
+        {
+          "action": "spend_ok",
+          "guard": "completed + AMOUNT <= CAP",
+          "result": "admit",
+          "state": {
+            "completed": 100,
+            "inflight": 1
+          },
+          "step": 2
+        },
+        {
+          "action": "respond",
+          "guard": "completed + AMOUNT <= CAP",
+          "result": "deny",
+          "state": {
+            "completed": 200,
+            "inflight": 0
+          },
+          "step": 3
+        },
+        {
+          "action": "spend_ok",
+          "guard": "completed + AMOUNT <= CAP",
+          "result": "admit",
+          "state": {
+            "completed": 200,
+            "inflight": 1
+          },
+          "step": 4
+        }
+      ],
       "guard": "completed + AMOUNT <= CAP",
       "root": "spendcap_within_cap",
-      "verdict": "proven"
+      "verdict": "violated"
     },
     "engines": [
       "symbolic"
     ],
-    "findings": [],
+    "findings": [
+      {
+        "controls": [
+          "AIUC-1",
+          "CC6.1"
+        ],
+        "finding": "Overly Permissive",
+        "message": "the spend_ok guard admits 1 in-flight requests (cumulative 100), exceeding the cap of 200",
+        "property_name": "spendcap_within_cap",
+        "remediation": "charge in-flight requests against the cap: guard on completed + inflight * AMOUNT + AMOUNT <= CAP",
+        "severity": "error",
+        "witness": {
+          "completed": 200,
+          "inflight": 1
+        }
+      }
+    ],
     "graph": {
       "edges": [
         {
@@ -1307,25 +1356,25 @@ window.ROT_TRACES = {
           "action": "respond",
           "from": "s0_1",
           "to": "s100_0",
-          "witness": false
+          "witness": true
         },
         {
           "action": "spend_ok",
           "from": "s100_0",
           "to": "s100_1",
-          "witness": false
+          "witness": true
         },
         {
           "action": "respond",
           "from": "s100_1",
           "to": "s200_0",
-          "witness": false
+          "witness": true
         },
         {
-          "action": "spend_deny",
+          "action": "spend_ok",
           "from": "s200_0",
-          "to": "s200_0",
-          "witness": false
+          "to": "s200_1",
+          "witness": true
         }
       ],
       "kind": "state",
@@ -1344,7 +1393,7 @@ window.ROT_TRACES = {
           "id": "s0_1",
           "inflight": 1,
           "kind": "state",
-          "witness": false
+          "witness": true
         },
         {
           "completed": 100,
@@ -1352,7 +1401,7 @@ window.ROT_TRACES = {
           "id": "s100_0",
           "inflight": 0,
           "kind": "state",
-          "witness": false
+          "witness": true
         },
         {
           "completed": 100,
@@ -1360,7 +1409,7 @@ window.ROT_TRACES = {
           "id": "s100_1",
           "inflight": 1,
           "kind": "state",
-          "witness": false
+          "witness": true
         },
         {
           "completed": 200,
@@ -1368,15 +1417,29 @@ window.ROT_TRACES = {
           "id": "s200_0",
           "inflight": 0,
           "kind": "state",
-          "witness": false
+          "witness": true
+        },
+        {
+          "completed": 200,
+          "cumulative": 300,
+          "id": "s200_1",
+          "inflight": 1,
+          "kind": "state",
+          "witness": true
         }
       ],
-      "witness_path": []
+      "witness_path": [
+        "s0_1",
+        "s100_0",
+        "s100_1",
+        "s200_0",
+        "s200_1"
+      ]
     },
-    "hash": "acb1af067612d88acb2fee28c8a66114a2499272d805f57f399732f7fe47c622",
+    "hash": "42b183218be021c648bcc607d1f8615b528675e35b6410ba463e83ca3fcd6fd8",
     "horizon": 12,
     "manifest_id": "mf-5834b20b0999946d",
-    "narration": "The spend-cap policy is PROVEN. The ``spend_ok`` guard charges in-flight requests against the cap, so the settled + in-flight amount never exceeds 200 in any of the 5 reachable states.",
+    "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 1 * 100 = 100 -- past the cap of 200. The counterexample is {'completed': 200, 'inflight': 1}. (6 reachable states explored.)",
     "policy": {
       "amount": 100,
       "buggy": true,
@@ -1393,15 +1456,14 @@ window.ROT_TRACES = {
           "max_tenant_scopes": 10,
           "max_tools": 100
         },
-        "source": "free",
-        "tier": "free"
+        "source": "free"
       },
       "engines": [
         "symbolic"
       ],
       "horizon": 12,
       "horizon_complete": true,
-      "n_states": 5,
+      "n_states": 6,
       "policy_hash": "5834b20b0999946dd43eeca87eb10f6b2b2f57e057e691b3f003e501e63aab31",
       "policy_source": "samples/spendcap-buggy.dw"
     },
@@ -1415,7 +1477,7 @@ window.ROT_TRACES = {
     "spend": {
       "amount": 100,
       "cap": 200,
-      "crossing_step": null,
+      "crossing_step": 4,
       "max_inflight": 1,
       "reachable_states": [
         {
@@ -1447,9 +1509,76 @@ window.ROT_TRACES = {
           "cumulative": 200,
           "inflight": 0,
           "within_cap": true
+        },
+        {
+          "completed": 200,
+          "cumulative": 300,
+          "inflight": 1,
+          "within_cap": false
         }
       ],
-      "steps": []
+      "steps": [
+        {
+          "action": "spend_ok",
+          "crosses": false,
+          "cumulative": 100,
+          "inflight": 1,
+          "settled": 0,
+          "state": {
+            "completed": 0,
+            "inflight": 1
+          },
+          "step": 0
+        },
+        {
+          "action": "respond",
+          "crosses": false,
+          "cumulative": 100,
+          "inflight": 0,
+          "settled": 100,
+          "state": {
+            "completed": 100,
+            "inflight": 0
+          },
+          "step": 1
+        },
+        {
+          "action": "spend_ok",
+          "crosses": false,
+          "cumulative": 200,
+          "inflight": 1,
+          "settled": 100,
+          "state": {
+            "completed": 100,
+            "inflight": 1
+          },
+          "step": 2
+        },
+        {
+          "action": "respond",
+          "crosses": false,
+          "cumulative": 200,
+          "inflight": 0,
+          "settled": 200,
+          "state": {
+            "completed": 200,
+            "inflight": 0
+          },
+          "step": 3
+        },
+        {
+          "action": "spend_ok",
+          "crosses": true,
+          "cumulative": 300,
+          "inflight": 1,
+          "settled": 200,
+          "state": {
+            "completed": 200,
+            "inflight": 1
+          },
+          "step": 4
+        }
+      ]
     },
     "timeline": [
       {
@@ -1458,12 +1587,62 @@ window.ROT_TRACES = {
         "step": "parse_policy"
       },
       {
-        "narration": "Verdict: PROVEN -- the settled + in-flight amount never exceeds the cap in any reachable state.",
-        "status": "proven",
+        "action": "spend_ok",
+        "narration": "Step 0: spend_ok -> completed=0, inflight=1 (cumulative 100 within the cap of 200).",
+        "state": {
+          "completed": 0,
+          "inflight": 1
+        },
+        "status": "ok",
+        "step": "step_0"
+      },
+      {
+        "action": "respond",
+        "narration": "Step 1: respond -> completed=100, inflight=0 (cumulative 100 within the cap of 200).",
+        "state": {
+          "completed": 100,
+          "inflight": 0
+        },
+        "status": "ok",
+        "step": "step_1"
+      },
+      {
+        "action": "spend_ok",
+        "narration": "Step 2: spend_ok -> completed=100, inflight=1 (cumulative 200 within the cap of 200).",
+        "state": {
+          "completed": 100,
+          "inflight": 1
+        },
+        "status": "ok",
+        "step": "step_2"
+      },
+      {
+        "action": "respond",
+        "narration": "Step 3: respond -> completed=200, inflight=0 (cumulative 200 within the cap of 200).",
+        "state": {
+          "completed": 200,
+          "inflight": 0
+        },
+        "status": "ok",
+        "step": "step_3"
+      },
+      {
+        "action": "spend_ok",
+        "narration": "Step 4: spend_ok -> completed=200, inflight=1 (cumulative 300 EXCEEDS the cap of 200) -- the cap is crossed here.",
+        "state": {
+          "completed": 200,
+          "inflight": 1
+        },
+        "status": "fail",
+        "step": "step_4"
+      },
+      {
+        "narration": "Verdict: VIOLATED -- a burst of parallel fires grows the in-flight amount past the cap; the crossing moment is highlighted.",
+        "status": "violated",
         "step": "verdict"
       }
     ],
-    "verdict": "proven"
+    "verdict": "violated"
   },
   "spendcap-buggy-k2": {
     "budget": {
@@ -1473,8 +1652,7 @@ window.ROT_TRACES = {
         "max_tenant_scopes": 10,
         "max_tools": 100
       },
-      "source": "free",
-      "tier": "free"
+      "source": "free"
     },
     "coaching": {
       "close": {
@@ -1482,7 +1660,7 @@ window.ROT_TRACES = {
         "status": "closed"
       },
       "correct": {
-        "buggy_guard": "completed + 100 <= 200 and inflight < 2",
+        "buggy_guard": "completed <= 200 and inflight < 2",
         "delta": "response -> request (charge in-flight against the cap)",
         "event_kind": "request",
         "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 2",
@@ -1497,7 +1675,7 @@ window.ROT_TRACES = {
       },
       "detect": {
         "engine": "symbolic",
-        "n_states": 9,
+        "n_states": 12,
         "status": "violated",
         "witness": {
           "completed": 100,
@@ -1507,14 +1685,14 @@ window.ROT_TRACES = {
       "explain": {
         "cap": 200,
         "exposure": 300,
-        "rationale": "The policy sums over 'response' events, so it charges only settled requests. In the witness (completed=100, inflight=2) the 2 in-flight requests are invisible to the decision: each of the 2 parallel fires sees completed=0 and is admitted, pushing total exposure to 300 -- past the cap of 200.",
+        "rationale": "The policy sums over 'response' events, so it charges only settled requests -- in-flight (issued, unsettled) requests are invisible to the decision.  In the witness (completed=100, inflight=2) total exposure is 300 (completed + inflight * 100), past the cap of 200, because the guard (completed <= cap) admits each request on settled amount alone: off-by-one sequentially (a request admitted at completed = cap settles past it) and unbounded under concurrency (a burst of parallel fires is admitted while the settled sum is still low) -- the invariant is VIOLATED at every K.",
         "root_cause": "the spend_ok guard sums over 'response' events only; in-flight (issued, unsettled) requests are not charged against the cap",
         "witness": {
           "completed": 100,
           "inflight": 2
         }
       },
-      "hash": "45f70ae9665774c61b2ae26f56bf38cf2b0ace7ab192bcc52e85352966727483",
+      "hash": "cf53bdff422d7d87192d4b9422da30dc64d484783ac7634097be1e5a476c3fe8",
       "policy": {
         "action": "Transfer",
         "amount": 100,
@@ -1733,27 +1911,15 @@ window.ROT_TRACES = {
           "witness": false
         },
         {
-          "action": "spend_deny",
+          "action": "spend_ok",
           "from": "s200_0",
-          "to": "s200_0",
-          "witness": false
-        },
-        {
-          "action": "spend_deny",
-          "from": "s200_1",
           "to": "s200_1",
           "witness": false
         },
         {
-          "action": "respond",
+          "action": "spend_ok",
           "from": "s200_1",
-          "to": "s300_0",
-          "witness": false
-        },
-        {
-          "action": "spend_deny",
-          "from": "s300_0",
-          "to": "s300_0",
+          "to": "s200_2",
           "witness": false
         }
       ],
@@ -1824,10 +1990,10 @@ window.ROT_TRACES = {
           "witness": false
         },
         {
-          "completed": 300,
-          "cumulative": 300,
-          "id": "s300_0",
-          "inflight": 0,
+          "completed": 200,
+          "cumulative": 400,
+          "id": "s200_2",
+          "inflight": 2,
           "kind": "state",
           "witness": false
         }
@@ -1839,7 +2005,7 @@ window.ROT_TRACES = {
         "s100_2"
       ]
     },
-    "hash": "792a5abf35f6e6117efc52f51c9f8c2d7f5ad89c4d9c8122629d201e1b7c9d53",
+    "hash": "b25b221e933d595d2dc706c4f92558ce4bede1a7ddd1913334e8f8e564ef5ed2",
     "horizon": 12,
     "manifest_id": "mf-1030049f3b5c2797",
     "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 2 * 100 = 200 -- past the cap of 200. The counterexample is {'completed': 100, 'inflight': 2}. (9 reachable states explored.)",
@@ -1859,8 +2025,7 @@ window.ROT_TRACES = {
           "max_tenant_scopes": 10,
           "max_tools": 100
         },
-        "source": "free",
-        "tier": "free"
+        "source": "free"
       },
       "engines": [
         "symbolic"
@@ -1933,9 +2098,9 @@ window.ROT_TRACES = {
           "within_cap": false
         },
         {
-          "completed": 300,
-          "cumulative": 300,
-          "inflight": 0,
+          "completed": 200,
+          "cumulative": 400,
+          "inflight": 2,
           "within_cap": false
         }
       ],
@@ -2052,8 +2217,7 @@ window.ROT_TRACES = {
         "max_tenant_scopes": 10,
         "max_tools": 100
       },
-      "source": "free",
-      "tier": "free"
+      "source": "free"
     },
     "coaching": {
       "close": {
@@ -2061,7 +2225,7 @@ window.ROT_TRACES = {
         "status": "closed"
       },
       "correct": {
-        "buggy_guard": "completed + 100 <= 200 and inflight < 3",
+        "buggy_guard": "completed <= 200 and inflight < 3",
         "delta": "response -> request (charge in-flight against the cap)",
         "event_kind": "request",
         "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 3",
@@ -2076,7 +2240,7 @@ window.ROT_TRACES = {
       },
       "detect": {
         "engine": "symbolic",
-        "n_states": 14,
+        "n_states": 18,
         "status": "violated",
         "witness": {
           "completed": 0,
@@ -2086,14 +2250,14 @@ window.ROT_TRACES = {
       "explain": {
         "cap": 200,
         "exposure": 300,
-        "rationale": "The policy sums over 'response' events, so it charges only settled requests. In the witness (completed=0, inflight=3) the 3 in-flight requests are invisible to the decision: each of the 3 parallel fires sees completed=0 and is admitted, pushing total exposure to 300 -- past the cap of 200.",
+        "rationale": "The policy sums over 'response' events, so it charges only settled requests -- in-flight (issued, unsettled) requests are invisible to the decision.  In the witness (completed=0, inflight=3) total exposure is 300 (completed + inflight * 100), past the cap of 200, because the guard (completed <= cap) admits each request on settled amount alone: off-by-one sequentially (a request admitted at completed = cap settles past it) and unbounded under concurrency (a burst of parallel fires is admitted while the settled sum is still low) -- the invariant is VIOLATED at every K.",
         "root_cause": "the spend_ok guard sums over 'response' events only; in-flight (issued, unsettled) requests are not charged against the cap",
         "witness": {
           "completed": 0,
           "inflight": 3
         }
       },
-      "hash": "9e60774ba31b5bf6e76ead9fac1c932324fc49540bd52d2dfa71a9ee7c5ad608",
+      "hash": "918548fdf3b60dd3e744040a35bf5e14a54dbaaefe9901f2e17fda0d008ece9e",
       "policy": {
         "action": "Transfer",
         "amount": 100,
@@ -2312,9 +2476,9 @@ window.ROT_TRACES = {
           "witness": false
         },
         {
-          "action": "spend_deny",
+          "action": "spend_ok",
           "from": "s200_0",
-          "to": "s200_0",
+          "to": "s200_1",
           "witness": false
         },
         {
@@ -2324,51 +2488,15 @@ window.ROT_TRACES = {
           "witness": false
         },
         {
-          "action": "spend_deny",
+          "action": "spend_ok",
           "from": "s200_1",
-          "to": "s200_1",
-          "witness": false
-        },
-        {
-          "action": "respond",
-          "from": "s200_1",
-          "to": "s300_0",
-          "witness": false
-        },
-        {
-          "action": "spend_deny",
-          "from": "s200_2",
           "to": "s200_2",
           "witness": false
         },
         {
-          "action": "respond",
+          "action": "spend_ok",
           "from": "s200_2",
-          "to": "s300_1",
-          "witness": false
-        },
-        {
-          "action": "spend_deny",
-          "from": "s300_0",
-          "to": "s300_0",
-          "witness": false
-        },
-        {
-          "action": "spend_deny",
-          "from": "s300_1",
-          "to": "s300_1",
-          "witness": false
-        },
-        {
-          "action": "respond",
-          "from": "s300_1",
-          "to": "s400_0",
-          "witness": false
-        },
-        {
-          "action": "spend_deny",
-          "from": "s400_0",
-          "to": "s400_0",
+          "to": "s200_3",
           "witness": false
         }
       ],
@@ -2463,26 +2591,10 @@ window.ROT_TRACES = {
           "witness": false
         },
         {
-          "completed": 300,
-          "cumulative": 300,
-          "id": "s300_0",
-          "inflight": 0,
-          "kind": "state",
-          "witness": false
-        },
-        {
-          "completed": 300,
-          "cumulative": 400,
-          "id": "s300_1",
-          "inflight": 1,
-          "kind": "state",
-          "witness": false
-        },
-        {
-          "completed": 400,
-          "cumulative": 400,
-          "id": "s400_0",
-          "inflight": 0,
+          "completed": 200,
+          "cumulative": 500,
+          "id": "s200_3",
+          "inflight": 3,
           "kind": "state",
           "witness": false
         }
@@ -2493,10 +2605,10 @@ window.ROT_TRACES = {
         "s0_3"
       ]
     },
-    "hash": "9ddddc16bb93e6c940146bbf0e2dc5c8cadd31640f6092e572f80757f71d9ae9",
+    "hash": "cea0f654e90b31f30bf0873c205d6a0139656fe0207774ca6738d4533238df6e",
     "horizon": 12,
     "manifest_id": "mf-ba311c76ea6f5884",
-    "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 3 * 100 = 300 -- past the cap of 200. The counterexample is {'completed': 0, 'inflight': 3}. (14 reachable states explored.)",
+    "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 3 * 100 = 300 -- past the cap of 200. The counterexample is {'completed': 0, 'inflight': 3}. (12 reachable states explored.)",
     "policy": {
       "amount": 100,
       "buggy": true,
@@ -2513,15 +2625,14 @@ window.ROT_TRACES = {
           "max_tenant_scopes": 10,
           "max_tools": 100
         },
-        "source": "free",
-        "tier": "free"
+        "source": "free"
       },
       "engines": [
         "symbolic"
       ],
       "horizon": 12,
       "horizon_complete": true,
-      "n_states": 14,
+      "n_states": 12,
       "policy_hash": "ba311c76ea6f5884ccf4526f6e611793db5de132e657807b92344a9b8893c3e7",
       "policy_source": "samples/spendcap-buggy.dw"
     },
@@ -2605,21 +2716,9 @@ window.ROT_TRACES = {
           "within_cap": false
         },
         {
-          "completed": 300,
-          "cumulative": 300,
-          "inflight": 0,
-          "within_cap": false
-        },
-        {
-          "completed": 300,
-          "cumulative": 400,
-          "inflight": 1,
-          "within_cap": false
-        },
-        {
-          "completed": 400,
-          "cumulative": 400,
-          "inflight": 0,
+          "completed": 200,
+          "cumulative": 500,
+          "inflight": 3,
           "within_cap": false
         }
       ],
@@ -2714,8 +2813,7 @@ window.ROT_TRACES = {
         "max_tenant_scopes": 10,
         "max_tools": 100
       },
-      "source": "free",
-      "tier": "free"
+      "source": "free"
     },
     "coaching": null,
     "compliance": {
@@ -2853,7 +2951,7 @@ window.ROT_TRACES = {
       ],
       "witness_path": []
     },
-    "hash": "0ac029a32c2b0a56d4387df4b806bd16dcdda71840a3a0011a66111f778fa108",
+    "hash": "b904a5f82cb59c0a7b1ecac0c70e871525b3b8fcde51bd90a035c7171db13887",
     "horizon": 12,
     "manifest_id": "mf-a848e9a4e6c2a999",
     "narration": "The spend-cap policy is PROVEN. The ``spend_ok`` guard charges in-flight requests against the cap, so the settled + in-flight amount never exceeds 200 in any of the 6 reachable states.",
@@ -2873,8 +2971,7 @@ window.ROT_TRACES = {
           "max_tenant_scopes": 10,
           "max_tools": 100
         },
-        "source": "free",
-        "tier": "free"
+        "source": "free"
       },
       "engines": [
         "symbolic"
@@ -2959,8 +3056,7 @@ window.ROT_TRACES = {
         "max_tenant_scopes": 10,
         "max_tools": 100
       },
-      "source": "free",
-      "tier": "free"
+      "source": "free"
     },
     "coaching": null,
     "compliance": {
@@ -3072,7 +3168,7 @@ window.ROT_TRACES = {
       ],
       "witness_path": []
     },
-    "hash": "4094271987ec9907b1cf7f922c280d5d077b3362a0aad3396dba1cf1c782d939",
+    "hash": "71fd37215afa705cd6b7d541a04f1a609f9d84f23368a42cd3f270a14fcf94ab",
     "horizon": 12,
     "manifest_id": "mf-97c802024552fe2f",
     "narration": "The spend-cap policy is PROVEN. The ``spend_ok`` guard charges in-flight requests against the cap, so the settled + in-flight amount never exceeds 200 in any of the 5 reachable states.",
@@ -3092,8 +3188,7 @@ window.ROT_TRACES = {
           "max_tenant_scopes": 10,
           "max_tools": 100
         },
-        "source": "free",
-        "tier": "free"
+        "source": "free"
       },
       "engines": [
         "symbolic"
@@ -3172,8 +3267,7 @@ window.ROT_TRACES = {
         "max_tenant_scopes": 10,
         "max_tools": 100
       },
-      "source": "free",
-      "tier": "free"
+      "source": "free"
     },
     "coaching": null,
     "compliance": {
@@ -3311,7 +3405,7 @@ window.ROT_TRACES = {
       ],
       "witness_path": []
     },
-    "hash": "a30517d8ef0bffbeb81f9235baa95a3849446059f08a6da3b975166f23ac30f2",
+    "hash": "1fccc0dd36acd59dc8ba07af7586d9e32f4ecf8e488e09c376eb63e0296fb12a",
     "horizon": 12,
     "manifest_id": "mf-b863363abfa870cd",
     "narration": "The spend-cap policy is PROVEN. The ``spend_ok`` guard charges in-flight requests against the cap, so the settled + in-flight amount never exceeds 200 in any of the 6 reachable states.",
@@ -3331,8 +3425,7 @@ window.ROT_TRACES = {
           "max_tenant_scopes": 10,
           "max_tools": 100
         },
-        "source": "free",
-        "tier": "free"
+        "source": "free"
       },
       "engines": [
         "symbolic"
@@ -3417,8 +3510,7 @@ window.ROT_TRACES = {
         "max_tenant_scopes": 10,
         "max_tools": 100
       },
-      "source": "free",
-      "tier": "free"
+      "source": "free"
     },
     "coaching": null,
     "compliance": {
@@ -3556,7 +3648,7 @@ window.ROT_TRACES = {
       ],
       "witness_path": []
     },
-    "hash": "0716597ce5b5ea44ee4565f07c2e977cf746fe755a120caeefa2d75996a2aaf2",
+    "hash": "79a4865e00f8a576d25aacaadc3c774be2f4496cd60194201480bb89ae6461ff",
     "horizon": 12,
     "manifest_id": "mf-ced79ff21583e50d",
     "narration": "The spend-cap policy is PROVEN. The ``spend_ok`` guard charges in-flight requests against the cap, so the settled + in-flight amount never exceeds 200 in any of the 6 reachable states.",
@@ -3576,8 +3668,7 @@ window.ROT_TRACES = {
           "max_tenant_scopes": 10,
           "max_tools": 100
         },
-        "source": "free",
-        "tier": "free"
+        "source": "free"
       },
       "engines": [
         "symbolic"

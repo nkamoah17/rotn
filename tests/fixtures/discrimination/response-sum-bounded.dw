@@ -1,25 +1,29 @@
-// DISCRIMINATION CASE 1 (grep gets it WRONG -- it calls this "buggy").
+// DISCRIMINATION CASE 1 (grep flags it -- and is right, but only flags).
 //
 // This is a *response*-sum spend-cap policy: the temporal sum quantifies over
-// `Transfer::response` rows (settled completions only), so in-flight (issued,
-// not-yet-responded) transfers are invisible to the sum.  A keyword/pattern
-// scan ("response-sum => in-flight invisible => UNSAFE") flags this as buggy.
+// `Transfer::response` rows (settled completions only).  The current event is
+// a request, never a response, so it is EXCLUDED from the sum by event kind
+// (under the closed/reflexive `formerly within` window), and in-flight
+// (issued, not-yet-responded) transfers are invisible to the sum.  A
+// keyword/pattern scan ("response-sum => in-flight invisible => UNSAFE")
+// flags this as buggy -- and is right.
 //
-// ROTN's verdict depends on the *concurrency bound K* (the client-side
-// request-pool size), which a keyword scan cannot see:
+// ROTN agrees (UNSAFE at every K) and adds what the scan cannot: a concrete
+// witness whose shape tracks the concurrency bound K (the client-side
+// request-pool size), and a sound proof that no other failure exists:
 //
-//   K = 1  ->  SAFE.    At most one transfer is in flight, so the parallel-
-//                       fire race (N un-settled fires all passing the guard)
-//                       is structurally impossible: a fire is admitted only
-//                       while inflight < 1, i.e. when settled + amount <= cap,
-//                       and that one in-flight fire settles to <= cap.
+//   K = 1  ->  UNSAFE.  The parallel-fire race is unexpressible, but the
+//                       sequential off-by-one is not: a fire is admitted
+//                       with the settled amount already at the cap, and it
+//                       settles to > cap.  Witness:
+//                       {completed: 200, inflight: 1}  (200 + 100 > 200).
 //   K >= 2 ->  UNSAFE.  Two or more un-settled fires can each pass the guard
 //                       (settled still 0) and settle to > cap.  Witness at
 //                       K=3: {completed: 0, inflight: 3}  (3 x 100 = 300 > 200).
 //
-// The SAME policy text is SAFE or UNSAFE purely by the bound the environment
-// imposes on in-flight concurrency -- exactly the kind of context a grep
-// cannot model.  See docs/discrimination.md.
+// The SAME policy text and the SAME keyword at every K -- the witness shape
+// is what tracks the bound the environment imposes on in-flight concurrency.
+// See docs/discrimination.md.
 //
 // Schema: Drupe namespace (alert_total_transfer_over_200 schema).
 // TransferInput carries `amount: Long`; TransferOutput is empty.

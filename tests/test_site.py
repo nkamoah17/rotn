@@ -172,9 +172,10 @@ class DataTests(unittest.TestCase):
 class KsweepDataTests(unittest.TestCase):
     """Phase H: the K-sweep traces drive the compare-mode animated slider.
 
-    K (``--max-inflight``) is structural, shared by both variants. The sweep
-    must expose the masking: at K=1 the buggy policy proves clean (a false
-    negative); at K>=2 it is violated while the correct policy stays proven.
+    K (``--max-inflight``) is structural, shared by both variants. The buggy
+    policy is violated at every K; the witness shape tracks K (K=1 -- the
+    sequential off-by-one; K>=2 -- the parallel fire) while the correct
+    policy stays proven.
     """
 
     def test_ksweep_traces_present(self):
@@ -185,9 +186,9 @@ class KsweepDataTests(unittest.TestCase):
                     tid in _trace_ids(), "missing K-sweep trace: %s" % tid)
 
     def test_ksweep_verdicts(self):
-        # K=1: the bug is masked (buggy proves clean).
+        # K=1: the sequential off-by-one is VIOLATED (not masked).
         self.assertEqual(_read_trace("spendcap-buggy-k1.trace.json")["verdict"],
-                         "proven")
+                         "violated")
         self.assertEqual(_read_trace("spendcap-correct-k1.trace.json")["verdict"],
                          "proven")
         # K=2 and K=3: the bug is visible (buggy violated, correct proven).

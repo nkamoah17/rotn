@@ -1108,7 +1108,8 @@ def cmd_runtime_serve(args):
 #   (trace_id, kind, source_path, max_inflight)
 # ``kind`` is "policy" (a spend-cap .dw) or "manifest" (an MCP manifest JSON).
 # The base spend-cap traces use K=4 (the default pool); the K-sweep traces
-# expose the masking (K=1 proves clean, K>=2 reveals the violation).  The
+# show the witness shape tracking K (K=1 sequential off-by-one, K>=2
+# parallel fire; the buggy policy is VIOLATED at every K).  The
 # source paths are repo-relative (they are recorded verbatim in each trace's
 # provenance, so they must be run from the repo root).
 _SITE_RECIPES = (
@@ -1806,9 +1807,9 @@ def cmd_demo(args):
                      EXIT_VIOLATED))
         else:
             print("  [SKIP] no attack.jsonl produced in %s" % out_dir)
-    print("  -- K-sweep: the pool K is the whole story (K=1 masks, K>=2 exposes)")
-    run("K=1 masked (buggy.dw --max-inflight 1)", buggy, 1, EXIT_PROVEN)
-    run("K=2 exposes (buggy.dw --max-inflight 2)", buggy, 2, EXIT_VIOLATED)
+    print("  -- K-sweep: the witness shape tracks K (K=1 sequential off-by-one, K>=2 parallel fire)")
+    run("K=1 VIOLATED sequential off-by-one (buggy.dw --max-inflight 1)", buggy, 1, EXIT_VIOLATED)
+    run("K=2 VIOLATED parallel fire (buggy.dw --max-inflight 2)", buggy, 2, EXIT_VIOLATED)
 
     # ------------------------------------------------------------------
     # BEAT 3 -- PROOF: the corrected policy is safe + its RTF manifest + hash
@@ -2490,11 +2491,11 @@ def cmd_attestation(args):
         os.makedirs(out_dir)
     stem = os.path.splitext(os.path.basename(args.policy))[0]
     base = os.path.join(out_dir, "attestation-%s" % stem)
-    with open(base + ".json", "w") as f:
+    with open(base + ".json", "w", encoding="utf-8") as f:
         f.write(att.to_json())
-    with open(base + ".md", "w") as f:
+    with open(base + ".md", "w", encoding="utf-8") as f:
         f.write(att.to_markdown())
-    with open(base + ".html", "w") as f:
+    with open(base + ".html", "w", encoding="utf-8") as f:
         f.write(att.to_html())
 
     # 7. Verify the signature we just produced.

@@ -6,8 +6,7 @@
       "max_tenant_scopes": 10,
       "max_tools": 100
     },
-    "source": "free",
-    "tier": "free"
+    "source": "free"
   },
   "coaching": {
     "close": {
@@ -15,7 +14,7 @@
       "status": "closed"
     },
     "correct": {
-      "buggy_guard": "completed + 100 <= 200 and inflight < 2",
+      "buggy_guard": "completed <= 200 and inflight < 2",
       "delta": "response -> request (charge in-flight against the cap)",
       "event_kind": "request",
       "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 2",
@@ -30,7 +29,7 @@
     },
     "detect": {
       "engine": "symbolic",
-      "n_states": 9,
+      "n_states": 12,
       "status": "violated",
       "witness": {
         "completed": 100,
@@ -40,14 +39,14 @@
     "explain": {
       "cap": 200,
       "exposure": 300,
-      "rationale": "The policy sums over 'response' events, so it charges only settled requests. In the witness (completed=100, inflight=2) the 2 in-flight requests are invisible to the decision: each of the 2 parallel fires sees completed=0 and is admitted, pushing total exposure to 300 -- past the cap of 200.",
+      "rationale": "The policy sums over 'response' events, so it charges only settled requests -- in-flight (issued, unsettled) requests are invisible to the decision.  In the witness (completed=100, inflight=2) total exposure is 300 (completed + inflight * 100), past the cap of 200, because the guard (completed <= cap) admits each request on settled amount alone: off-by-one sequentially (a request admitted at completed = cap settles past it) and unbounded under concurrency (a burst of parallel fires is admitted while the settled sum is still low) -- the invariant is VIOLATED at every K.",
       "root_cause": "the spend_ok guard sums over 'response' events only; in-flight (issued, unsettled) requests are not charged against the cap",
       "witness": {
         "completed": 100,
         "inflight": 2
       }
     },
-    "hash": "45f70ae9665774c61b2ae26f56bf38cf2b0ace7ab192bcc52e85352966727483",
+    "hash": "cf53bdff422d7d87192d4b9422da30dc64d484783ac7634097be1e5a476c3fe8",
     "policy": {
       "action": "Transfer",
       "amount": 100,
@@ -266,27 +265,15 @@
         "witness": false
       },
       {
-        "action": "spend_deny",
+        "action": "spend_ok",
         "from": "s200_0",
-        "to": "s200_0",
-        "witness": false
-      },
-      {
-        "action": "spend_deny",
-        "from": "s200_1",
         "to": "s200_1",
         "witness": false
       },
       {
-        "action": "respond",
+        "action": "spend_ok",
         "from": "s200_1",
-        "to": "s300_0",
-        "witness": false
-      },
-      {
-        "action": "spend_deny",
-        "from": "s300_0",
-        "to": "s300_0",
+        "to": "s200_2",
         "witness": false
       }
     ],
@@ -357,10 +344,10 @@
         "witness": false
       },
       {
-        "completed": 300,
-        "cumulative": 300,
-        "id": "s300_0",
-        "inflight": 0,
+        "completed": 200,
+        "cumulative": 400,
+        "id": "s200_2",
+        "inflight": 2,
         "kind": "state",
         "witness": false
       }
@@ -372,7 +359,7 @@
       "s100_2"
     ]
   },
-  "hash": "792a5abf35f6e6117efc52f51c9f8c2d7f5ad89c4d9c8122629d201e1b7c9d53",
+  "hash": "b25b221e933d595d2dc706c4f92558ce4bede1a7ddd1913334e8f8e564ef5ed2",
   "horizon": 12,
   "manifest_id": "mf-1030049f3b5c2797",
   "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 2 * 100 = 200 -- past the cap of 200. The counterexample is {'completed': 100, 'inflight': 2}. (9 reachable states explored.)",
@@ -392,8 +379,7 @@
         "max_tenant_scopes": 10,
         "max_tools": 100
       },
-      "source": "free",
-      "tier": "free"
+      "source": "free"
     },
     "engines": [
       "symbolic"
@@ -466,9 +452,9 @@
         "within_cap": false
       },
       {
-        "completed": 300,
-        "cumulative": 300,
-        "inflight": 0,
+        "completed": 200,
+        "cumulative": 400,
+        "inflight": 2,
         "within_cap": false
       }
     ],

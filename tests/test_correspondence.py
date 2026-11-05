@@ -85,10 +85,11 @@ def policy_sum_over_events(policy, completed, inflight, amount):
           sum_over_events = completed + inflight * amount + amount
 
     * ``response`` (the "buggy" side) -- the event set includes the
-      settled responses (``completed``) and the current response
-      (``amount``); in-flight requests are *invisible* to the guard::
+      settled responses (``completed``) *only*: the current event is a
+      request, never a response, so it is excluded by event kind, and
+      in-flight requests are *invisible* to the guard::
 
-          sum_over_events = completed + amount
+          sum_over_events = completed
 
     ``completed`` is the settled amount (sum of responded requests);
     ``inflight`` is the in-flight request count; ``amount`` is the
@@ -96,8 +97,9 @@ def policy_sum_over_events(policy, completed, inflight, amount):
     """
     if policy.event_kind == "request":
         return completed + inflight * amount + amount
-    # response (the "buggy" side): in-flight requests are invisible
-    return completed + amount
+    # response (the "buggy" side): the current request is excluded by event
+    # kind (it is never a response); in-flight requests are invisible.
+    return completed
 
 
 # ---------------------------------------------------------------------------
@@ -129,8 +131,9 @@ class TestCorrespondence(unittest.TestCase):
         cap = policy.cap
         mismatches = []
         for completed, inflight, amount in self.BATTERY:
-            # Build the model with this specific per-request amount so the
-            # decision rule charges the same amount the policy sums.
+            # Build the model with this specific per-request amount so that,
+            # where the current request IS charged (the request-sum side),
+            # the decision rule charges the same amount the policy sums.
             ir = policy.to_ir(amount=amount)
             model_admits = model_spend_ok_admits(ir, completed, inflight, amount)
             policy_sum = policy_sum_over_events(policy, completed, inflight, amount)
@@ -171,7 +174,8 @@ class TestCorrespondence(unittest.TestCase):
         cap = correct.cap  # 200
         amount = spendcap.AMOUNT  # 100
         # completed = 0, inflight = 2: two in-flight requests, none settled.
-        # Buggy: 0 + 100 = 100 <= 200 -> admits (the race).
+        # Buggy: 0 <= 200 -> admits (the parallel fire is invisible to the
+        # response-sum).
         # Correct: 0 + 2*100 + 100 = 300 > 200 -> rejects.
         self.assertTrue(model_spend_ok_admits(ir_b, 0, 2, amount),
                         "buggy model should admit the parallel fire")

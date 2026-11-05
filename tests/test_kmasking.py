@@ -75,14 +75,15 @@ class MinimalOvershootTests(unittest.TestCase):
         self.assertEqual(minimal_overshoot_count(100, 1000), 2)
 
     def test_unit_amount(self):
-        # amount=1, cap=5: the settled-only guard admits up to completed=4;
-        # one in-flight request (5) still fits, two (6) push past -> need 2.
-        # The K=1 trap is universal for any cap > amount: K must be >= 2.
+        # amount=1, cap=5: the settled ceiling is cap - amount = 4; one
+        # in-flight request (5) still fits, two (6) push past the cap ->
+        # the minimal overshoot is 2.  For any cap > amount, a PROVEN at
+        # K = 1 therefore sits below that bound (the advisory's condition).
         self.assertEqual(minimal_overshoot_count(1, 5), 2)
 
     def test_cap_equal_amount(self):
-        # amount=100, cap=100: guard admits only completed=0; two in-flight
-        # (200) exceed the cap -> need 2.
+        # amount=100, cap=100: the settled ceiling is cap - amount = 0; two
+        # in-flight (200) exceed the cap -> need 2.
         self.assertEqual(minimal_overshoot_count(100, 100), 2)
 
     def test_cap_below_amount(self):

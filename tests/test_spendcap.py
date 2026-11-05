@@ -9,10 +9,14 @@ is its negation:
 
   * correct -- charges in-flight requests against the cap
     (``completed + inflight * AMOUNT + AMOUNT <= CAP``);
-  * buggy   -- charges settled responses only
-    (``completed + AMOUNT <= CAP``), so a burst of parallel fires
-    (``spend_ok`` back-to-back, before any ``respond``) grows the in-flight
-    amount past the cap -- the parallel fire race.
+  * buggy   -- charges settled responses only (``completed <= CAP``): the
+    current event is a request, never a response, so it is excluded from
+    that sum by event kind.  A burst of parallel fires (``spend_ok``
+    back-to-back, before any ``respond``) grows the in-flight amount past
+    the cap -- the parallel fire race -- and even a single fire admitted
+    with the settled amount at the cap settles past it -- the sequential
+    off-by-one.  The buggy policy is VIOLATED at every K; the witness
+    shape tracks K.
 
 Run: python tests/test_spendcap.py
 """
@@ -400,29 +404,37 @@ class MaxInflightKTests(unittest.TestCase):
 
     K is *structural*, not policy: it bounds how many in-flight requests the
     state space can express, and it is shared by the correct and buggy
-    variants.  Verified K-sweep behavior (CAP=200, AMOUNT=50):
+    variants.  Verified K-sweep behavior (CAP=200, AMOUNT=100):
 
-      * K=1  -- masked: the buggy policy is PROVEN (a single in-flight
-                request cannot overshoot the cap);
+      * K=1  -- VIOLATED, witness (completed=200, inflight=1) -- the
+                sequential off-by-one: a fire admitted with the settled
+                amount at the cap settles past it;
       * K=2  -- VIOLATED, witness (completed=100, inflight=2) -- the second
                 in-flight fire is admitted after one settlement;
       * K>=3 -- VIOLATED, witness (completed=0, inflight=3) -- the clean
                 parallel-fire signature (no settlement at all).
 
+    The buggy policy is VIOLATED at every K; the witness shape tracks K.
     The correct policy is PROVEN for every K (the guard charges in-flight
     requests against the cap).
     """
 
-    def test_k1_masks_the_bug(self):
-        # With at most one in-flight request the parallel-fire race cannot be
-        # expressed: the buggy policy is indistinguishable from the correct
-        # one -- this corrects the audit's false "K=2 masked" claim.
-        for buggy in (False, True):
-            ir = build_ir(buggy=buggy, max_inflight=1)
-            res = _check(within_cap_property(), ir)
-            self.assertEqual(res.status, PROVEN,
-                             "K=1 must be masked for buggy=%s (got %s, "
-                             "witness=%s)" % (buggy, res.status, res.witness))
+    def test_k1_violates_sequentially(self):
+        # K=1: the parallel-fire race is unexpressible, but the buggy
+        # (settled-only) policy is still VIOLATED -- the sequential
+        # off-by-one: a fire admitted with the settled amount at the cap
+        # settles past it.  The correct policy (which charges the current
+        # request) stays PROVEN.
+        ir = build_ir(buggy=True, max_inflight=1)
+        res = _check(within_cap_property(), ir)
+        self.assertEqual(res.status, VIOLATED,
+                         "K=1 buggy must be VIOLATED (sequential off-by-one); "
+                         "got %s (witness=%s)" % (res.status, res.witness))
+        self.assertEqual(res.witness, {"completed": 200, "inflight": 1},
+                         "K=1 witness must be the sequential off-by-one")
+        res_ok = _check(within_cap_property(),
+                        build_ir(buggy=False, max_inflight=1))
+        self.assertEqual(res_ok.status, PROVEN, "K=1 correct must hold")
 
     def test_k2_violates_with_partial_settlement(self):
         ir = build_ir(buggy=True, max_inflight=2)
@@ -461,16 +473,17 @@ class MaxInflightKTests(unittest.TestCase):
         self.assertEqual(ir.metadata.get("max_inflight"), MAX_INFLIGHT)
 
     def test_default_k_keeps_race_exposed(self):
-        # Guardrail: the default K must stay >= 2 so the parallel-fire race is
-        # exposed by default.  At K = 1 two in-flight requests cannot coexist
-        # and the buggy policy is masked (see test_k1_masks_the_bug); a
-        # default of 1 would therefore hide the seeded bug by default.  K = 1
-        # remains a valid explicit override -- it must never become the
-        # default.
+        # Guardrail: the default K must stay >= 2 so the parallel-fire
+        # signature (completed=0, inflight=K) is expressible by default.
+        # The buggy policy is VIOLATED at every K -- the sequential
+        # off-by-one is expressible even at K = 1 (see
+        # test_k1_violates_sequentially) -- but the default should express
+        # the most diagnostic shape: the parallel fire.  K = 1 remains a
+        # valid explicit override -- it must never become the default.
         self.assertGreaterEqual(
             MAX_INFLIGHT, 2,
-            "default max-inflight K must stay >= 2 so the race is exposed by "
-            "default (K = 1 masks it)")
+            "default max-inflight K must stay >= 2 so the parallel-fire "
+            "signature is expressible by default")
 
 
 class MaxInflightRouterTests(unittest.TestCase):
@@ -492,7 +505,8 @@ class MaxInflightRouterTests(unittest.TestCase):
 class MaxInflightCliTests(unittest.TestCase):
     """The ``--max-inflight K`` CLI flag end-to-end on the buggy .dw policy:
 
-      * K=1 -> exit 0 (masked: PROVEN)
+      * K=1 -> exit 1 (VIOLATED, witness completed=200, inflight=1 -- the
+                sequential off-by-one)
       * K=2 -> exit 1 (VIOLATED, witness completed=100, inflight=2)
       * K=3 -> exit 1 (VIOLATED, witness completed=0, inflight=3)
 
@@ -519,11 +533,12 @@ class MaxInflightCliTests(unittest.TestCase):
         finally:
             shutil.rmtree(out_dir, ignore_errors=True)
 
-    def test_k1_masked_exits_0(self):
+    def test_k1_violated_exits_1(self):
         rc, data = self._run(1)
-        self.assertEqual(rc, 0, "K=1 must be masked (PROVEN)")
-        self.assertEqual(data["verdict"], "proven")
+        self.assertEqual(rc, 1, "K=1 must be VIOLATED (sequential off-by-one)")
+        self.assertEqual(data["verdict"], "violated")
         self.assertEqual(data.get("max_inflight"), 1)
+        self.assertEqual(data["witness"], {"completed": 200, "inflight": 1})
 
     def test_k2_exits_1_witness_100_2(self):
         rc, data = self._run(2)

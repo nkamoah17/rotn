@@ -6,8 +6,7 @@
       "max_tenant_scopes": 10,
       "max_tools": 100
     },
-    "source": "free",
-    "tier": "free"
+    "source": "free"
   },
   "coaching": {
     "close": {
@@ -15,7 +14,7 @@
       "status": "closed"
     },
     "correct": {
-      "buggy_guard": "completed + 100 <= 200 and inflight < 4",
+      "buggy_guard": "completed <= 200 and inflight < 4",
       "delta": "response -> request (charge in-flight against the cap)",
       "event_kind": "request",
       "guard": "completed + inflight * 100 + 100 <= 200 and inflight < 4",
@@ -30,7 +29,7 @@
     },
     "detect": {
       "engine": "symbolic",
-      "n_states": 20,
+      "n_states": 25,
       "status": "violated",
       "witness": {
         "completed": 0,
@@ -40,14 +39,14 @@
     "explain": {
       "cap": 200,
       "exposure": 300,
-      "rationale": "The policy sums over 'response' events, so it charges only settled requests. In the witness (completed=0, inflight=3) the 3 in-flight requests are invisible to the decision: each of the 3 parallel fires sees completed=0 and is admitted, pushing total exposure to 300 -- past the cap of 200.",
+      "rationale": "The policy sums over 'response' events, so it charges only settled requests -- in-flight (issued, unsettled) requests are invisible to the decision.  In the witness (completed=0, inflight=3) total exposure is 300 (completed + inflight * 100), past the cap of 200, because the guard (completed <= cap) admits each request on settled amount alone: off-by-one sequentially (a request admitted at completed = cap settles past it) and unbounded under concurrency (a burst of parallel fires is admitted while the settled sum is still low) -- the invariant is VIOLATED at every K.",
       "root_cause": "the spend_ok guard sums over 'response' events only; in-flight (issued, unsettled) requests are not charged against the cap",
       "witness": {
         "completed": 0,
         "inflight": 3
       }
     },
-    "hash": "52a593e69d84453cbc4f333692bdf152f046fd45869cc401596042e4d42d39e1",
+    "hash": "d4aedd0327f78e0c5bcfb0bb39a25a997f28d9de15c37367b032f2fd9b10f6b2",
     "policy": {
       "action": "Transfer",
       "amount": 100,
@@ -276,9 +275,9 @@
         "witness": false
       },
       {
-        "action": "spend_deny",
+        "action": "spend_ok",
         "from": "s200_0",
-        "to": "s200_0",
+        "to": "s200_1",
         "witness": false
       },
       {
@@ -294,15 +293,9 @@
         "witness": false
       },
       {
-        "action": "spend_deny",
+        "action": "spend_ok",
         "from": "s200_1",
-        "to": "s200_1",
-        "witness": false
-      },
-      {
-        "action": "respond",
-        "from": "s200_1",
-        "to": "s300_0",
+        "to": "s200_2",
         "witness": false
       },
       {
@@ -312,81 +305,15 @@
         "witness": false
       },
       {
-        "action": "spend_deny",
+        "action": "spend_ok",
         "from": "s200_2",
-        "to": "s200_2",
-        "witness": false
-      },
-      {
-        "action": "respond",
-        "from": "s200_2",
-        "to": "s300_1",
-        "witness": false
-      },
-      {
-        "action": "spend_deny",
-        "from": "s300_0",
-        "to": "s300_0",
-        "witness": false
-      },
-      {
-        "action": "spend_deny",
-        "from": "s200_3",
         "to": "s200_3",
         "witness": false
       },
       {
-        "action": "respond",
+        "action": "spend_ok",
         "from": "s200_3",
-        "to": "s300_2",
-        "witness": false
-      },
-      {
-        "action": "spend_deny",
-        "from": "s300_1",
-        "to": "s300_1",
-        "witness": false
-      },
-      {
-        "action": "respond",
-        "from": "s300_1",
-        "to": "s400_0",
-        "witness": false
-      },
-      {
-        "action": "spend_deny",
-        "from": "s300_2",
-        "to": "s300_2",
-        "witness": false
-      },
-      {
-        "action": "respond",
-        "from": "s300_2",
-        "to": "s400_1",
-        "witness": false
-      },
-      {
-        "action": "spend_deny",
-        "from": "s400_0",
-        "to": "s400_0",
-        "witness": false
-      },
-      {
-        "action": "spend_deny",
-        "from": "s400_1",
-        "to": "s400_1",
-        "witness": false
-      },
-      {
-        "action": "respond",
-        "from": "s400_1",
-        "to": "s500_0",
-        "witness": false
-      },
-      {
-        "action": "spend_deny",
-        "from": "s500_0",
-        "to": "s500_0",
+        "to": "s200_4",
         "witness": false
       }
     ],
@@ -497,14 +424,6 @@
         "witness": false
       },
       {
-        "completed": 300,
-        "cumulative": 300,
-        "id": "s300_0",
-        "inflight": 0,
-        "kind": "state",
-        "witness": false
-      },
-      {
         "completed": 200,
         "cumulative": 500,
         "id": "s200_3",
@@ -513,42 +432,10 @@
         "witness": false
       },
       {
-        "completed": 300,
-        "cumulative": 400,
-        "id": "s300_1",
-        "inflight": 1,
-        "kind": "state",
-        "witness": false
-      },
-      {
-        "completed": 300,
-        "cumulative": 500,
-        "id": "s300_2",
-        "inflight": 2,
-        "kind": "state",
-        "witness": false
-      },
-      {
-        "completed": 400,
-        "cumulative": 400,
-        "id": "s400_0",
-        "inflight": 0,
-        "kind": "state",
-        "witness": false
-      },
-      {
-        "completed": 400,
-        "cumulative": 500,
-        "id": "s400_1",
-        "inflight": 1,
-        "kind": "state",
-        "witness": false
-      },
-      {
-        "completed": 500,
-        "cumulative": 500,
-        "id": "s500_0",
-        "inflight": 0,
+        "completed": 200,
+        "cumulative": 600,
+        "id": "s200_4",
+        "inflight": 4,
         "kind": "state",
         "witness": false
       }
@@ -559,10 +446,10 @@
       "s0_3"
     ]
   },
-  "hash": "79376640a1cb00e124a56e7a487b2a46210a70dfd3f66f176deb407d13a941b8",
+  "hash": "8678de15a24e79faac05f2e189af9b7c6f01c37e37aa5c8c2f2bcc1a47c64287",
   "horizon": 12,
   "manifest_id": "mf-4227160622359a2c",
-  "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 3 * 100 = 300 -- past the cap of 200. The counterexample is {'completed': 0, 'inflight': 3}. (20 reachable states explored.)",
+  "narration": "The spend-cap policy is VIOLATED. A burst of parallel ``spend_ok`` approvals (before any ``respond`` settles) each sees ``completed = 0`` and is admitted, so the in-flight amount grows to 3 * 100 = 300 -- past the cap of 200. The counterexample is {'completed': 0, 'inflight': 3}. (15 reachable states explored.)",
   "policy": {
     "amount": 100,
     "buggy": true,
@@ -579,15 +466,14 @@
         "max_tenant_scopes": 10,
         "max_tools": 100
       },
-      "source": "free",
-      "tier": "free"
+      "source": "free"
     },
     "engines": [
       "symbolic"
     ],
     "horizon": 12,
     "horizon_complete": true,
-    "n_states": 20,
+    "n_states": 15,
     "policy_hash": "4227160622359a2cc5678aa61ffb0e7e8cd9b5fa6fd489317a29ff6e0c284db4",
     "policy_source": "samples/spendcap-buggy.dw"
   },
@@ -683,45 +569,15 @@
         "within_cap": false
       },
       {
-        "completed": 300,
-        "cumulative": 300,
-        "inflight": 0,
-        "within_cap": false
-      },
-      {
         "completed": 200,
         "cumulative": 500,
         "inflight": 3,
         "within_cap": false
       },
       {
-        "completed": 300,
-        "cumulative": 400,
-        "inflight": 1,
-        "within_cap": false
-      },
-      {
-        "completed": 300,
-        "cumulative": 500,
-        "inflight": 2,
-        "within_cap": false
-      },
-      {
-        "completed": 400,
-        "cumulative": 400,
-        "inflight": 0,
-        "within_cap": false
-      },
-      {
-        "completed": 400,
-        "cumulative": 500,
-        "inflight": 1,
-        "within_cap": false
-      },
-      {
-        "completed": 500,
-        "cumulative": 500,
-        "inflight": 0,
+        "completed": 200,
+        "cumulative": 600,
+        "inflight": 4,
         "within_cap": false
       }
     ],
