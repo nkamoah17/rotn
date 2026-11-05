@@ -325,7 +325,7 @@ def main():
     binary = find_dogwood()
     if binary is None:
         C.die("dogwood binary not found (set DOGWOOD_BIN or build it; "
-              "see docs/03-build-dogwood.md)")
+              "see CONTRIBUTING.md — 'The reference gate')")
     version = dogwood_version(binary)
     C.ensure_out()
 

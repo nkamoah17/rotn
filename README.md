@@ -127,6 +127,11 @@ which is not in this repo.
 `pip install rotn` (the core) · `pip install rotn-commercial` (the service layer).
 See [`docs/licensing.md`](docs/licensing.md) for the full position.
 
+## Contributing and security
+
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — setup, the test suite, the reference gate (`DOGWOOD_BIN`), and the waiver rules.
+- [`SECURITY.md`](SECURITY.md) — private disclosure, scope, and the vendor-divergence rule (read §3 before touching `agentcore_repro/`).
+
 ## Go deeper
 
 - [`docs/positioning.md`](docs/positioning.md) — **the positioning: AgentCore writes the policy, ROTN proves it can't be bypassed** (the two facts, the complementary-not-competing stance, the multi-language neutral checker, and the AP2 mandate mapping)
