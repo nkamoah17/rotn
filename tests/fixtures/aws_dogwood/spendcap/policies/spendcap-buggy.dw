@@ -14,8 +14,11 @@
 //   fire(amount=100) -> permit  (sum=0,  0+100<=200)   <-- response not yet arrived
 //   fire(amount=100) -> permit  (sum=0,  0+100<=200)   <-- 3 in-flight, committed=300>200
 //
-// See: examples/refund_budget_settled_plus_current/policy.dw (the `response`-sum idiom),
-//      guide/08-formal-specification.md §5.4 (temporal windows are closed/reflexive).
+// See: examples/refund_budget_settled_plus_current/policy.dw (the `response`-sum idiom).
+// Spec: guide/08-formal-specification.md §6 — evaluation at position i reads only
+//   positions j <= i, including the current event; §6.1 — observe-before-decide.
+//   + guide/04 (04-temporal-expressions.md) "Evaluation semantics" — decision at
+//   timepoint i reads history 0..=i (current event included); windows closed/inclusive.
 
 @id("spendcap_buggy")
 permit (

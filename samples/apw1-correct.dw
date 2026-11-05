@@ -12,8 +12,11 @@
 //   fire(amount=100) -> permit  (sum=200, 200<=200)
 //   fire(amount=100) -> DENY    (sum=300, 300>200)   <-- 3rd fire blocked
 //
-// See: examples/alert_total_transfer_over_200/policy.dw (the `request`-sum idiom),
-//      guide/08-formal-specification.md §5.4 (temporal windows are closed/reflexive).
+// See: examples/alert_total_transfer_over_200/policy.dw (the `request`-sum idiom).
+// Spec: guide/08-formal-specification.md §6 — evaluation at position i reads only
+//   positions j <= i, including the current event; §6.1 — observe-before-decide.
+//   + guide/04 (04-temporal-expressions.md) "Evaluation semantics" — decision at
+//   timepoint i reads history 0..=i (current event included); windows closed/inclusive.
 
 @id("spendcap_correct")
 permit (

@@ -2,7 +2,10 @@
 //
 // Live AgentCore's temporal window is NON-reflexive: the `sum over ::request`
 // does NOT include the current in-flight request being decided (unlike the
-// formal spec, guide/08 sec 5.4, where the window is reflexive).  So the
+// formal spec, where the window IS reflexive — guide/08 §6: evaluation at
+// position i reads only positions j <= i, including the current event; §6.1
+// observe-before-decide; guide/04 (04-temporal-expressions.md) "Evaluation
+// semantics": decision at timepoint i reads history 0..=i).  So the
 // plain `sum <= 200` form degenerates to "prior sum <= 200" and admits an
 // off-by-one-request overshoot ($300 over the $200 cap).
 //

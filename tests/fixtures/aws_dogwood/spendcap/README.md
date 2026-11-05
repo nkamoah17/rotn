@@ -32,9 +32,13 @@ difference is the event kind the `sum` quantifies over.
   the current request being decided is already in the sum; no
   `+ context.input.amount` term is needed (it would double-count).
 
-This is the guide §5.4 "budget incl. this request" idiom, with the sum over the
-*request* kind: admitted-but-unsettled requests count against the cap
-*before* their responses settle.
+This is the "budget incl. this request" idiom, with the sum over the *request*
+kind: the current request being decided is already in the sum (formal spec §6
+— evaluation at position `i` reads only positions `j <= i`, including the
+current event; §6.1 — observe-before-decide; guide/04 "Evaluation semantics"
+— decision at timepoint `i` reads history `0..=i`; windows closed/inclusive),
+so admitted-but-unsettled requests count against the cap *before* their
+responses settle.
 
 ### Counterexample trace (buggy, parallel-fire race)
 
@@ -248,7 +252,11 @@ How the Dogwood policy atoms translate to the IR `rot/spendcap` model:
   (`alert_total_transfer_over_200`, `refund_budget_settled_plus_current`,
   `cap_open_agent_prs_windowed`).
 - `corpus/` — upstream `sum … resolved filter/range filter` test corpus.
-- `guide/08-formal-specification.md` — the temporal-window semantics (§5.4).
+- `guide/08-formal-specification.md` — the evaluation semantics: §6 (evaluation
+  at position `i` reads only positions `j <= i`, including the current event),
+  §6.1 (observe-before-decide). Companion: guide/04 `04-temporal-expressions.md`
+  "Evaluation semantics" (decision at timepoint `i` reads history `0..=i`;
+  windows closed/inclusive).
 - `PROVENANCE.md` / `PROVENANCE.json` — pinned commit + per-file blob SHAs.
 
 Upstream provenance and the pinned commit are recorded in
