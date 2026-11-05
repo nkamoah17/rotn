@@ -280,13 +280,16 @@ def _explain(policy, witness, amount, cap):
     completed = int((witness or {}).get("completed", 0))
     exposure = completed + inflight * amount
     rationale = (
-        "The policy sums over '%s' events, so it charges only settled requests. "
-        "In the witness (completed=%d, inflight=%d) the %d in-flight requests "
-        "are invisible to the decision: each of the %d parallel fires sees "
-        "completed=0 and is admitted, pushing total exposure to %d -- past the "
-        "cap of %d."
-        % (policy.event_kind, completed, inflight, inflight, inflight,
-           exposure, cap)
+        "The policy sums over '%s' events, so it charges only settled "
+        "requests -- in-flight (issued, unsettled) requests are invisible to "
+        "the decision.  In the witness (completed=%d, inflight=%d) total "
+        "exposure is %d (completed + inflight * %d), past the cap of %d, "
+        "because the guard (completed <= cap) admits each request on settled "
+        "amount alone: off-by-one sequentially (a request admitted at "
+        "completed = cap settles past it) and unbounded under concurrency "
+        "(a burst of parallel fires is admitted while the settled sum is "
+        "still low) -- the invariant is VIOLATED at every K."
+        % (policy.event_kind, completed, inflight, exposure, amount, cap)
     )
     root_cause = (
         "the spend_ok guard sums over '%s' events only; in-flight (issued, "

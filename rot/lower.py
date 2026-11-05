@@ -658,10 +658,11 @@ def _lower_exists_sum(node, detected, k, window=None, dw_window=None):
       and the within-cap invariant is maintained in every reachable state.
     * **response-sum** (UNSAFE): the sum covers settled responses only, so
       in-flight requests are invisible to the guard.  The decision is the
-      *buggy* guard (``completed + amount <= cap``); a parallel burst of
-      ``spend_ok`` (none settled yet) is admitted regardless of how much is
-      already in flight, so the in-flight amount overshoots the cap -- the
-      parallel-fire race.
+      *buggy* guard (``completed <= cap``): it charges settled amount only,
+      so a request admitted at ``completed = cap`` settles past it (the
+      sequential off-by-one) and a parallel burst of ``spend_ok`` (none
+      settled yet) is admitted regardless of how much is already in flight
+      (the parallel-fire race) -- the invariant is VIOLATED at every ``K``.
 
     The state (``completed`` / ``inflight``), the actions
     (``spend_ok`` / ``spend_deny`` / ``respond``), and the pinned property

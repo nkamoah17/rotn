@@ -97,7 +97,9 @@ def build_ir(policy_path, tools_path=None, n_steps=1, max_inflight=None,
         (default) uses :data:`rot.spendcap.MAX_INFLIGHT` (4).  Recorded in
         the IR metadata (``max_inflight``) so reports state the ``K`` a
         verdict was produced under.  See :func:`rot.spendcap.build_ir` for
-        how ``K`` interacts with the parallel-fire race (``K = 1`` masks it).
+        how ``K`` shapes the witness: the buggy policy is VIOLATED at every
+        ``K``, and the witness shape tracks ``K`` (``K = 1`` -- sequential
+        off-by-one; ``K >= 2`` -- parallel-fire).
     amount : int or None
         The policy's per-request amount; ``None`` uses
         :data:`rot.spendcap.AMOUNT`.  Threaded into the model.

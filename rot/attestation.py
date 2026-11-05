@@ -234,8 +234,9 @@ def _coverage_conditions(amount, cap, max_inflight, n_states, buggy):
         conds.append("bounded pool: max_inflight = %d "
                      "(the reachable state space is bounded)" % max_inflight)
     if buggy:
-        conds.append("K >= 2 (a burst of parallel fires exposes the bug; "
-                     "K = 1 masks it under settled-only accounting)")
+        conds.append("the buggy (settled-only) policy is VIOLATED at every "
+                     "K -- the witness shape tracks K (K = 1 -- sequential "
+                     "off-by-one; K >= 2 -- parallel-fire)")
     if n_states is not None:
         conds.append("reachable state space explored: n_states = %d" % n_states)
     return conds
