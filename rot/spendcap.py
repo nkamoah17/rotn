@@ -9,23 +9,33 @@ never exceed the cap.
 
 The two variants share the same state, the same actions, and the same pinned
 property; they differ only in the decision rule -- ``spend_ok``'s guard
-admits on it and ``spend_deny``'s guard is its negation:
+admits on it and ``spend_deny``'s guard is its negation.  Both guards are
+derived from the policy text under the named evaluation semantics recorded in
+:data:`SEMANTICS` (closed/reflexive window; whether the CURRENT request is
+charged is decided by the aggregate's EVENT KIND, not the window boundary):
 
-  * correct -- the guard accounts for in-flight requests:
-    ``completed + inflight * AMOUNT + AMOUNT <= CAP`` (the request is
-    admitted only if settled + in-flight + this request all fit within the
-    cap);
-  * buggy   -- the guard accounts for settled responses only:
-    ``completed + AMOUNT <= CAP``.  A burst of parallel fires (``spend_ok``
-    back-to-back, before any ``respond``) each sees ``completed = 0`` and is
-    admitted regardless of how much is already in flight, so the in-flight
-    amount grows past the cap -- the parallel fire race.
+  * correct -- the policy sums over ``::request`` events, and the window is
+    reflexive (the current event included), so the current request IS in the
+    sum: ``completed + inflight * AMOUNT + AMOUNT <= CAP`` -- the trailing
+    ``+ AMOUNT`` is the current request, and the request is admitted only if
+    settled + in-flight + this request all fit within the cap;
+  * buggy   -- the policy sums over ``::response`` events, and the current
+    event is a request, never a response, so the current request is NOT in
+    the sum (by event kind, under reflexive or non-reflexive semantics):
+    ``completed <= CAP`` -- the guard charges settled amount only.  The bug
+    is *off-by-one sequentially* (a request admitted at ``completed = CAP``
+    settles past the cap) and *unbounded under concurrency* (a burst of
+    parallel ``spend_ok`` fires each sees low ``completed`` and is admitted
+    regardless of how much is already in flight) -- the invariant is
+    VIOLATED at every ``K``, not "masked at K=1".
 
-Note on the ``formerly`` window: the Dogwood specification's ``formerly``
-quantifies over *past* timepoints only (it excludes the current timepoint),
-so it does not cover the in-flight set or the current request.  That is
-precisely why the correct rule must explicitly add the current request
-(``+ AMOUNT``) and charge the in-flight set itself.
+Note on the ``formerly`` window (see :data:`SEMANTICS`): the Dogwood window
+is *closed/reflexive* -- ``formerly within W body`` holds iff ``body`` holds
+at some position in the window, the current event included.  So the window
+boundary does not decide whether the current request is charged: a sum over
+``::request`` events includes it, a sum over ``::response`` events excludes
+it.  That event-kind difference -- not the window -- separates the two
+guards above.
 
 Both variants keep the same structural client-side bound
 ``inflight < K`` in the ``spend_ok`` guard (``K`` defaults to
@@ -36,10 +46,12 @@ space finite, since the concrete engines do not enforce variable domains.
 bounds how many concurrent in-flight requests the state space can *express*,
 so the parallel-fire race is itself a function of ``K``:
 
-* ``K = 1``  -- two in-flight requests cannot coexist, so the race is
-  **masked** (the buggy guard is never exercised past one in-flight request);
-* ``K >= 2`` -- the race is expressible and the invariant is violated
-  (witness ``completed = 100, inflight = 2`` at ``K = 2``);
+* ``K = 1``  -- the invariant is VIOLATED by the *sequential* off-by-one
+  (witness ``completed = 200, inflight = 1``: a request admitted at
+  ``completed = CAP`` settles past the cap); two in-flight requests cannot
+  coexist, so the parallel-fire signature is not expressible;
+* ``K = 2``  -- the invariant is VIOLATED with the *parallel-fire* witness
+  (``completed = 100, inflight = 2``);
 * ``K >= 3`` -- the clean 3-parallel-fire signature is reachable
   (witness ``completed = 0, inflight = 3``).
 
@@ -67,7 +79,21 @@ Pure stdlib, Python 3.6 compatible.
 
 import rot.ir as ir
 
+#: The Dogwood evaluation semantics this model assumes (guide §temporal +
+#: formal spec §6):
+#:   * the window is closed/reflexive -- ``formerly within W body`` holds iff
+#:     ``body`` holds at some position j in [0, i] (the current event
+#:     included);
+#:   * every event is observed before it is decided;
+#:   * whether the CURRENT request is charged is decided by the aggregate's
+#:     EVENT KIND, not the window boundary:
+#:       - sum over ::request  -> current request IS in the sum  -> charge it
+#:       - sum over ::response -> current request is NOT in sum  -> charge
+#:         settled only
+SEMANTICS = "dogwood-reflexive@2a66026"
+
 __all__ = [
+    "SEMANTICS",
     "AMOUNT",
     "CAP",
     "MAX_INFLIGHT",
@@ -90,10 +116,13 @@ CAP = 200
 #: not the policy.  Overridable per run via :func:`build_ir`
 #: (``max_inflight=K``) / the CLI (``--max-inflight K``).
 #:
-#: GUARDRAIL: keep the default >= 2.  At K = 1 two in-flight requests cannot
-#: coexist, so the parallel-fire race is structurally masked -- a default of
-#: 1 would hide the seeded bug by default.  K = 1 stays a valid *explicit*
-#: override (the K-sweep uses it to demonstrate masking), never the default.
+#: GUARDRAIL: keep the default >= 2.  K is the concurrency-pool bound, and
+#: the witness shape tracks K: K = 1 gives the sequential off-by-one
+#: (``completed = 200, inflight = 1``), K >= 2 the parallel-fire signature
+#: (``completed = 100, inflight = 2`` at K = 2; ``completed = 0,
+#: inflight = 3`` at K >= 3).  The default (4) expresses the parallel-fire
+#: signature.  K = 1 stays a valid *explicit* override (the K-sweep uses it
+#: to show the sequential off-by-one), never the default.
 MAX_INFLIGHT = 4
 
 
@@ -113,16 +142,24 @@ MAX_WINDOW = 4
 def spend_ok_guard_buggy(amount=AMOUNT, cap=CAP):
     """Decision rule (buggy): charge settled responses only.
 
-    ``completed + amount <= cap`` -- the in-flight set is invisible to the
-    guard, so a parallel burst of ``spend_ok`` (none settled yet) is
-    admitted regardless of how much is already in flight.
+    Derived under :data:`SEMANTICS`: the policy's aggregate is a sum over
+    ``::response`` events, and the current event is a *request*, never a
+    response -- so the current request is NOT in the sum (by event kind, not
+    by the window boundary).  The guard therefore charges the settled amount
+    only: ``completed <= cap``.  No ``+ amount`` term: the response-sum
+    excludes the current request, so it is not charged.
+
+    That guard is *off-by-one sequentially* (it admits a request at
+    ``completed = cap``; once it settles, ``completed + AMOUNT > cap``) and
+    *unbounded under concurrency* (a parallel burst of ``spend_ok`` fires
+    each sees low ``completed`` and is admitted regardless of how much is
+    already in flight) -- the invariant is VIOLATED at every ``K``.
 
     ``amount`` / ``cap`` are the policy's per-request amount and cap; they
     default to the module constants so the hand-written model is unchanged.
+    (``amount`` no longer appears in the guard -- see the derivation above.)
     """
-    return ir.BinOp("<=",
-                    ir.BinOp("+", ir.V("completed"), ir.C(amount)),
-                    ir.C(cap))
+    return ir.BinOp("<=", ir.V("completed"), ir.C(cap))
 
 
 def spend_ok_guard_correct(amount=AMOUNT, cap=CAP):
@@ -130,8 +167,13 @@ def spend_ok_guard_correct(amount=AMOUNT, cap=CAP):
 
     ``completed + inflight * amount + amount <= cap`` -- settled amount, plus
     the amount already in flight, plus the current request, must all fit
-    within the cap.  (The explicit ``+ amount`` is the current request; a
-    past-only ``formerly`` window would not cover it.)
+    within the cap.
+
+    Derived under :data:`SEMANTICS`: the policy's aggregate is a sum over
+    ``::request`` events and the window is closed/reflexive (the current
+    event included), so the CURRENT request IS in the sum -- the explicit
+    ``+ amount`` charges it (because it is in the request-sum, not because
+    the window is past-only).
     """
     return ir.BinOp("<=",
                     ir.BinOp("+",
@@ -171,10 +213,12 @@ def build_ir(n=1, buggy=False, max_inflight=MAX_INFLIGHT, amount=AMOUNT, cap=CAP
     both variants -- not the policy decision -- and it is recorded in the IR
     metadata (``max_inflight``) so the CLI, tests, and reports all agree on
     the ``K`` a verdict was produced under.  Because the state space cannot
-    express more than ``K`` in-flight requests, the parallel-fire race is
-    itself a function of ``K`` (see the module docstring): ``K = 1`` masks
-    it, ``K >= 2`` admits a violation, ``K >= 3`` admits the clean
-    3-parallel-fire signature.
+    express more than ``K`` in-flight requests, the *witness shape* is itself
+    a function of ``K`` (see the module docstring): the buggy policy is
+    VIOLATED at every ``K`` -- ``K = 1`` by the sequential off-by-one
+    (``completed = 200, inflight = 1``), ``K = 2`` with the parallel-fire
+    witness (``completed = 100, inflight = 2``), ``K >= 3`` with the clean
+    3-parallel-fire signature (``completed = 0, inflight = 3``).
 
     ``amount`` and ``cap`` are the policy's per-request settlement amount and
     spend cap; they default to the module constants (:data:`AMOUNT` /
@@ -281,8 +325,9 @@ def build_ir(n=1, buggy=False, max_inflight=MAX_INFLIGHT, amount=AMOUNT, cap=CAP
                       "pin": "hand-authored oracle (AWS Dogwood spend-cap spec)"},
                   "lossiness": [
                       ir.lossiness_entry(
-                          "the `formerly` window's past-timepoint "
-                          "quantification",
+                          "the `formerly` window's time bound approximated "
+                          "as an event count (the window is closed/reflexive "
+                          "-- the current event is included)",
                           "captured by the settled/in-flight split "
                           "(completed + inflight * AMOUNT); the window bound "
                           "W is recorded in metadata"),
@@ -299,12 +344,14 @@ def assume_inflight_at_most(k, note=None):
     """Phase 6.2: the in-flight bound as an ASSUME clause.
 
     ``assume(inflight <= k)`` -- a state constraint restricting the state
-    space to at most ``k`` in-flight requests.  This is the concurrency
-    assumption behind the K-scale: at ``k = 1`` the parallel-fire race is
-    structurally masked (two in-flight requests cannot coexist), so a
-    PROVEN under it does NOT rule the race out -- the assumption is
-    recorded on the IR (and hence on the verdict as a named assumption) so
-    the masking is never silent.
+    space to at most ``k`` in-flight requests.  This is the concurrency-pool
+    bound behind the K-scale: the buggy policy is VIOLATED at every ``k``,
+    but the *witness shape* tracks ``k`` (``k = 1`` -- sequential off-by-one;
+    ``k >= 2`` -- parallel-fire).  A PROVEN for any cap/budget policy at a
+    ``k`` below the minimal overshoot would still not rule the parallel-fire
+    race out -- the assumption is recorded on the IR (and hence on the
+    verdict as a named assumption) so the bound a verdict was decided under
+    is never silent.
 
     Returns a :class:`rot.ir.Assume` node (usable as an IR ``assumes``
     entry or in :func:`build_ir`).
@@ -315,7 +362,8 @@ def assume_inflight_at_most(k, note=None):
     expr = ir.BinOp("<=", ir.V("inflight"), ir.C(k))
     if note is None:
         note = ("concurrency assumption: at most %d in-flight request(s); "
-                "at k=1 the parallel-fire race is masked" % k)
+                "the witness shape tracks k (k=1 sequential off-by-one, "
+                "k>=2 parallel-fire)" % k)
     return ir.Assume(expr, note)
 
 
@@ -324,9 +372,10 @@ def k_sweep(buggy=True, k_values=(1, 2, 3, 4), amount=AMOUNT, cap=CAP,
     """Phase 6.4: the K-scale sweep.
 
     Runs the pinned safety property (``spendcap_within_cap``) under a sweep
-    of the in-flight bound ``K`` (``max_inflight``) and returns one verdict
-    per ``K`` -- the K-masking boundary (``K = 1`` masks the parallel-fire
-    race; ``K >= 2`` exposes it) is *reported*, not assumed.
+    of the concurrency-pool bound ``K`` (``max_inflight``) and returns one
+    verdict per ``K``.  The buggy policy is VIOLATED at every ``K``; what
+    tracks ``K`` is the *witness shape* (``K = 1`` -- sequential off-by-one;
+    ``K >= 2`` -- parallel-fire), which is *reported*, not assumed.
 
     Each row is ``(K, verdict)`` where ``verdict`` is a
     :class:`rot.verdicts.Verdict` decided by the concrete symbolic engine
@@ -370,7 +419,8 @@ def k_sweep(buggy=True, k_values=(1, 2, 3, 4), amount=AMOUNT, cap=CAP,
             v.evidence["k_masking"] = {"code": code, "message": msg}
         v.assumptions = list(v.assumptions or [])
         v.assumptions.append(
-            "assume: inflight < %d (request-pool bound K=%d; at K=1 the "
-            "parallel-fire race is masked)" % (k, k))
+            "assume: inflight < %d (concurrency-pool bound K=%d; the "
+            "witness shape tracks K: K=1 sequential off-by-one, K>=2 "
+            "parallel-fire)" % (k, k))
         out.append((k, v))
     return out

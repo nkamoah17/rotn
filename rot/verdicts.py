@@ -118,16 +118,20 @@ def minimal_overshoot_count(amount, cap):
     least as large as for a settled-only (``response``-triggered) policy's
     parallel-fire race to be *expressible* in the state space.
 
-    The settled-only guard admits a request while ``completed + amount <= cap``
-    (i.e. ``completed <= cap - amount``), so the maximum settled amount that
-    coexists with an admitted in-flight request is ``c_max = max(0, cap -
-    amount)``.  A violation needs ``c_max + m * amount > cap``, i.e.
-    ``m * amount > cap - c_max``; the smallest such ``m`` is
+    The settled ceiling taken here is ``c_max = max(0, cap - amount)`` (the
+    settled amount that still coexists with an admitted in-flight request
+    under a settled-only rule), so a violation needs ``c_max + m * amount >
+    cap``, i.e. ``m * amount > cap - c_max``; the smallest such ``m`` is
     ``(cap - c_max) // amount + 1``.
 
     For the canonical spend-cap (``amount = 100``, ``cap = 200``) this is
-    ``2`` -- exactly why ``K = 1`` (inflight bounded to 1) *masks* the
-    parallel-fire race while ``K >= 2`` exposes it.
+    ``2``: two in-flight requests are the fewest that form the parallel-fire
+    signature, so a PROVEN at ``K = 1`` (where two in-flight requests cannot
+    coexist) does not rule the race out -- re-check at ``K >= 2``.  Under the
+    corrected semantics (:data:`rot.spendcap.SEMANTICS`) the buggy
+    response-sum policy is VIOLATED at every ``K`` anyway (sequential
+    off-by-one at ``K = 1``, parallel-fire at ``K >= 2``), so the advisory
+    does not fire for it.
     """
     amount = int(amount)
     cap = int(cap)
@@ -157,12 +161,16 @@ def k_masking_advisory(metadata, status):
     concurrency pool bound ``K`` that cannot express the minimal overshoot,
     else ``(None, None)``.
 
-    This is the **loud K-masking advisory** (Phase A, A1): a settled-only
-    (``response``-triggered) spend-cap policy checked at ``K`` below the
-    minimal overshoot count returns ``PROVEN`` because the parallel-fire race
-    is not expressible in the state space -- a *silent false-negative*.  The
+    This is the **loud K-masking advisory** (Phase A, A1): a ``PROVEN`` for a
+    cap/budget policy at a ``K`` below the minimal overshoot count is only a
+    *bound-local* result -- the parallel-fire race is not expressible in the
+    state space at that ``K``, so the PROVEN does not rule it out.  The
     advisory makes that bound visible (in the manifest and as a human warning)
-    without changing the verdict or the exit code.
+    without changing the verdict or the exit code.  (Under the corrected
+    spend-cap semantics, :data:`rot.spendcap.SEMANTICS`, the buggy
+    response-sum policy is VIOLATED at every ``K``, so the advisory does not
+    fire for it; it remains a sound, general warning for any cap/budget
+    policy that IS PROVEN below the minimal overshoot.)
 
     ``metadata`` is the IR metadata dict; ``status`` is the verdict status
     string (``"proven"`` / ``"violated"`` / ``"unknown"``).  The advisory

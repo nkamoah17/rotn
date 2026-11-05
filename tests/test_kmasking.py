@@ -1,23 +1,26 @@
 # -*- coding: utf-8 -*-
 """A1 -- the loud K-masking advisory.
 
-A settled-only (``response``-triggered) spend-cap policy checked at a
-concurrency pool bound ``K`` below the *minimal overshoot count* returns
-``PROVEN`` because the parallel-fire race is not expressible in the state
-space -- a **silent false-negative** (the K=1 trap: the buggy guard is never
-exercised).  A1 makes that bound *loud* without changing the verdict or the
-exit code: a ``MASKED_AT_LOW_K`` advisory is emitted in the manifest and as a
-human warning.
+A cap/budget policy that is ``PROVEN`` at a concurrency pool bound ``K``
+below the *minimal overshoot count* is only a *bound-local* result: the
+parallel-fire race is not expressible in the state space at that ``K`` (the
+K=1 trap), so the PROVEN does not rule it out.  A1 makes that bound *loud*
+without changing the verdict or the exit code: a ``MASKED_AT_LOW_K`` advisory
+is emitted in the manifest and as a human warning.  (Under the corrected
+spend-cap semantics -- :data:`rot.spendcap.SEMANTICS` -- the buggy
+response-sum policy is VIOLATED at every ``K``, so the advisory does not fire
+for it; the mechanism stays a sound, general warning.)
 
 Covered here:
-  * ``minimal_overshoot_count`` -- the pure arithmetic (K=1 trap: the fewest
-    in-flight requests that can push a settled-only decision past the cap);
+  * ``minimal_overshoot_count`` -- the pure arithmetic (the fewest in-flight
+    requests that can push a settled-only decision past the cap);
   * ``k_masking_advisory`` -- fires exactly on a settled-only cap/budget policy
     that is PROVEN at a K below the minimal overshoot, and nowhere else;
   * ``Verdict`` / ``Manifest`` -- carry the advisory (schema + integrity);
   * the CLI end-to-end -- ``rot check --max-inflight 1`` on the buggy policy
-    is PROVEN *with* the advisory; ``--max-inflight 2`` is VIOLATED (no
-    advisory); the correct policy is PROVEN with *no* advisory at any K.
+    is VIOLATED (sequential off-by-one, no advisory); ``--max-inflight 2``
+    is VIOLATED (parallel-fire, no advisory); the correct policy is PROVEN
+    with *no* advisory at any K.
 
 Run: python tests/test_kmasking.py
 """
@@ -211,15 +214,16 @@ def _run_check(policy, max_inflight):
 
 
 class CliAdvisoryTests(unittest.TestCase):
-    def test_buggy_k1_proven_with_advisory(self):
+    def test_buggy_k1_violated_no_advisory(self):
+        # Under the corrected semantics (rot.spendcap.SEMANTICS) the buggy
+        # (response-sum) policy is VIOLATED at K=1 -- the sequential
+        # off-by-one -- so the masking advisory has nothing to attach to.
         code, report, out = _run_check(_POLICY_BUGGY, 1)
-        self.assertEqual(code, 0, out)  # PROVEN (within the K=1 bound)
+        self.assertEqual(code, 1, out)  # VIOLATED (sequential off-by-one)
         self.assertIsNotNone(report)
-        self.assertEqual(report["verdict"], "proven")
-        self.assertEqual(report["advisory"], MASKED_AT_LOW_K)
-        self.assertIn("re-check at K>=2", report["advisory_message"])
-        # The human warning is loud, not silent.
-        self.assertIn("MASKED_AT_LOW_K", out)
+        self.assertEqual(report["verdict"], "violated")
+        self.assertNotIn("advisory", report)
+        self.assertNotIn("MASKED_AT_LOW_K", out)
 
     def test_buggy_k2_violated_no_advisory(self):
         code, report, out = _run_check(_POLICY_BUGGY, 2)
