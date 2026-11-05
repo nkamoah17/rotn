@@ -12,11 +12,11 @@
                                                       + out/trifecta_risk.json)
       Phase 4  CROSSCHECK --engine crosscheck (SMT/Z3 + TLC + policy-direct), explicit K
                  4a: K=3 -> exit 1 (all three engines VIOLATED, SAME 3-parallel-fire witness)
-                 4b: K=1 -> exit 0 (all three engines PROVEN -- the bug is masked for K<3)
+                 4b: K=1 -> exit 1 (all three engines VIOLATED -- the K=1 sequential off-by-one)
                  + out/crosscheck_report.json (curated: agree + 3 CEs + witness_match + ITF)
                  [SKIP if TLC (java + tla2tools.jar) is absent -- graceful]
       Phase 5  K-SWEEP   --max-inflight K (symbolic)
-                 K=1 -> exit 0 (masked/PROVEN), K=2 -> exit 1, K=3 -> exit 1 (clean fire)
+                 K=1 -> exit 1 (VIOLATED, sequential off-by-one), K=2 -> exit 1, K=3 -> exit 1 (clean fire)
 
     The one-word diff between the two policies (``request`` vs ``response``) is
     the entire seeded bug: summing over ``Transfer::request`` (issued
@@ -38,8 +38,9 @@
     TLC + policy-direct, zero shared code) at an EXPLICIT concurrency bound and joins their
     verdicts.  4a runs at K=3 and asserts all three engines are VIOLATED AND their
     counterexamples are the SAME attack state (witness_match -- the clean
-    3-parallel-fire ``completed=0, inflight=3``); 4b runs at K=1 (K < 3) and
-    asserts all three engines are PROVEN, i.e. the bug is masked below K=3.  It
+    3-parallel-fire ``completed=0, inflight=3``); 4b runs at K=1 and asserts
+    all three engines are VIOLATED too -- the K=1 sequential off-by-one
+    (``completed=200, inflight=1``).  It
     curates a compact crosscheck_report.json with the Apalache ITF witness
     attached (evidence-only). It is gated on TLC availability
     (java + tla2tools.jar); without them it is skipped gracefully (not a
@@ -179,11 +180,11 @@ if (-not (Test-Path $riskPath)) {
 # ---- Phase 4: three-engine crosscheck at EXPLICIT K (SMT/Z3 + TLC + policy-direct) -----------
 # The credibility core: three INDEPENDENT model checkers (SMT/Z3 + TLC + policy-direct, zero
 # shared code) run the REAL Dogwood policy file at an explicit concurrency
-# bound and ALL THREE must find the SAME 3-parallel-fire attack state.  Phase 4a
-# runs at K=3 (the clean fire: completed=0, inflight=3) and asserts
-# witness_match -- the three engines' counterexamples are the identical state.
-# Phase 4b runs at K=1 (K < 3) and asserts ALL THREE engines agree the invariant
-# HOLDS (PROVEN) -- i.e. the bug is masked below K=3.  K is stated in each
+# bound and ALL THREE must agree.  Phase 4a runs at K=3 (the clean fire:
+# completed=0, inflight=3) and asserts witness_match -- the three engines'
+# counterexamples are the identical state.  Phase 4b runs at K=1 and asserts
+# ALL THREE engines agree the invariant is VIOLATED -- the K=1 sequential
+# off-by-one (completed=200, inflight=1).  K is stated in each
 # run.  Gated on TLC availability (java + tla2tools.jar): if absent the
 # phase is skipped gracefully (no failure) -- phases 1-3 cover the offline path.
 $phase4skipped = $false
@@ -217,10 +218,11 @@ if ($LASTEXITCODE -eq 0) {
         }
     }
 
-    # Phase 4b: K=1 (K < 3) -- ALL THREE engines agree the invariant HOLDS (masked).
+    # Phase 4b: K=1 -- ALL THREE engines agree the invariant is VIOLATED
+    # (the K=1 sequential off-by-one, witness completed=200, inflight=1).
     # Runs to a separate out dir so it does not clobber the K=3 artifacts.
-    Run-Phase -Phase 4 -Title "CROSSCHECK K=1 (masked, K<3) -- spendcap-buggy.dw (SMT/Z3 + TLC + policy-direct all PROVEN)" `
-        -Expected 0 `
+    Run-Phase -Phase 4 -Title "CROSSCHECK K=1 -- spendcap-buggy.dw (SMT/Z3 + TLC + policy-direct all VIOLATED, sequential off-by-one)" `
+        -Expected 1 `
         -PipelineArgs @("pipeline.py", "--policy", $BuggyPolicy, "--engine", "crosscheck", "--max-inflight", "1", "--out", (Join-Path $Out "k1"))
 } else {
     $phase4skipped = $true
@@ -232,14 +234,15 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "         Install Java 8+ and set TLA2TOOLS_JAR (or run in WSL) to enable."
 }
 
-# ---- Phase 5: K-sweep -- bug visibility vs the concurrency pool K ----------
+# ---- Phase 5: K-sweep -- the bound picks the witness shape, never masks the bug ----
 # K is structural, not policy: it bounds how many in-flight requests the
-# state space can express, shared by both variants.  Sweep the buggy policy:
-#   K=1 -> exit 0 (masked: a single in-flight cannot overshoot the cap)
+# state space can express, shared by both variants.  The buggy policy is
+# VIOLATED at every K; sweep it to show the witness shape tracking K:
+#   K=1 -> exit 1 (VIOLATED, witness completed=200, inflight=1, sequential off-by-one)
 #   K=2 -> exit 1 (VIOLATED, witness completed=100, inflight=2)
 #   K=3 -> exit 1 (VIOLATED, witness completed=0, inflight=3, clean fire)
-Run-Phase -Phase 5 -Title "K-SWEEP -- buggy policy K=1: masked (PROVEN)" `
-    -Expected 0 `
+Run-Phase -Phase 5 -Title "K-SWEEP -- buggy policy K=1: VIOLATED (200, 1) sequential off-by-one" `
+    -Expected 1 `
     -PipelineArgs @("pipeline.py", "--policy", $BuggyPolicy, "--max-inflight", "1", "--engine", "symbolic")
 
 Run-Phase -Phase 5 -Title "K-SWEEP -- buggy policy K=2: VIOLATED (100, 2)" `
@@ -256,7 +259,7 @@ if ($script:failures -eq 0) {
     if ($phase4skipped) {
         Write-Host "DEMO OK: 4 phases passed (Phase 4 crosscheck skipped -- TLC absent)."
     } else {
-        Write-Host "DEMO OK: all 5 phases passed (incl. three-engine crosscheck K=3 witness-match + K=1 masked + ITF witness + K-sweep)."
+        Write-Host "DEMO OK: all 5 phases passed (incl. three-engine crosscheck K=3 witness-match + K=1 sequential off-by-one + ITF witness + K-sweep)."
     }
     exit 0
 }

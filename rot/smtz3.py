@@ -506,12 +506,17 @@ class SymbolicSpendcap(object):
     def _guard(self, completed, inflight):
         """The ``spend_ok`` decision rule (the seeded difference), symbolic.
 
-        ``buggy``: charge settled responses only (in-flight invisible) --
-        ``completed + AMOUNT <= CAP``.  ``correct``: charge the in-flight set
-        plus the current request -- ``completed + (inflight+1)*AMOUNT <= CAP``.
+        Under the named semantics (``rot.spendcap.SEMANTICS``) the window is
+        closed/reflexive and the aggregate's EVENT KIND decides whether the
+        current request is charged:
+        ``buggy``: the policy sums over responses, so the current request is
+        NOT in the sum -- charge settled only: ``completed <= CAP``.
+        ``correct``: the policy sums over requests, so the current request
+        IS in the sum -- charge the in-flight set plus the current request:
+        ``completed + (inflight+1)*AMOUNT <= CAP``.
         """
         if self.buggy:
-            return completed + self.AMOUNT <= self.CAP
+            return completed <= self.CAP
         return completed + (inflight + 1) * self.AMOUNT <= self.CAP
 
     # -- solving / evaluation helpers ----------------------------------------

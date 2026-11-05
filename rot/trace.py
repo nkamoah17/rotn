@@ -648,10 +648,11 @@ def _spendcap_decision_tree(steps, status, buggy):
     """The decision tree: the ``spend_ok`` guard evaluation at each step.
 
     The guard is the seeded difference between the two variants:
-      * buggy   -- ``completed + AMOUNT <= CAP`` (settled-only accounting);
+      * buggy   -- ``completed <= CAP`` (settled-only accounting: the
+        response-sum excludes the current request);
       * correct -- ``completed + inflight * AMOUNT + AMOUNT <= CAP``.
     """
-    guard = ("completed + AMOUNT <= CAP" if buggy
+    guard = ("completed <= CAP" if buggy
              else "completed + inflight * AMOUNT + AMOUNT <= CAP")
     checks = []
     for i, step in enumerate(steps or []):

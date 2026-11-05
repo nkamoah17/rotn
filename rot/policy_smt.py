@@ -49,8 +49,12 @@ def _guard(amount, cap, buggy, completed, inflight):
         A Z3 BoolRef: the guard (True if the request is admitted).
     """
     if buggy:
-        # buggy: completed + amount <= cap (settled-only accounting)
-        return completed + amount <= cap
+        # buggy: completed <= cap (settled-only accounting: the policy sums
+        # over ::response events, and the current event is a request -- never
+        # a response -- so the current request is NOT in the sum and no
+        # "+ amount" term is charged; the sequential off-by-one at
+        # "completed = cap" settles past the cap)
+        return completed <= cap
     else:
         # correct: completed + inflight * amount + amount <= cap
         # (in-flight accounting: the current request + in-flight set must
@@ -99,8 +103,11 @@ def policy_direct_check(amount, cap, max_inflight, buggy, steps=None):
       * ``completed[i]``: settled amount (bounded by ``cap + amount``).
       * ``inflight[i]``: in-flight request count (bounded by ``max_inflight``).
 
-    The decision rule (guard) determines whether a ``spend_ok`` is admitted:
-      * buggy: ``completed + amount <= cap``
+    The decision rule (guard) determines whether a ``spend_ok`` is admitted
+    (derived from the policy text under the named semantics in
+    ``rot.spendcap.SEMANTICS``):
+      * buggy: ``completed <= cap`` (the response-sum excludes the current
+        request, so the guard charges settled amount only)
       * correct: ``completed + inflight * amount + amount <= cap``
 
     The obligation: ``completed + inflight * amount <= cap`` at every step.
@@ -111,7 +118,12 @@ def policy_direct_check(amount, cap, max_inflight, buggy, steps=None):
         max_inflight: K, the bound on in-flight requests.
         buggy: which decision rule to use (buggy vs correct).
         steps: the length of the bounded event sequence
-               (default: ``max_inflight + 1``).
+                (default: ``2 * max_inflight + 3`` -- the buggy
+                (settled-only) policy's sequential off-by-one at K=1 needs
+                the alternating path A,S,A,S,A (5 steps) to reach the
+                violating state ``completed = CAP, inflight = 1``; ``K+1``
+                alone is too short to exhibit it, and ``2K+3`` also covers
+                the K>=2 parallel-fire paths).
 
     Returns:
         EngineResult: PROVEN (obligation holds), VIOLATED (counterexample),
@@ -123,7 +135,13 @@ def policy_direct_check(amount, cap, max_inflight, buggy, steps=None):
             note="policy_direct: Z3 not installed")
 
     if steps is None:
-        steps = max_inflight + 1
+        # The buggy (settled-only) policy's K=1 sequential off-by-one needs
+        # the alternating path A,S,A,S,A (5 steps) to reach the violating
+        # state (completed = CAP, inflight = 1); K+1 alone is too short and
+        # would vacuously "prove" the buggy policy at K=1 (the exact false
+        # verdict C1 eliminates).  2K+3 covers the alternating admit/settle
+        # path for every K (a superset of the K+1-step parallel-fire paths).
+        steps = 2 * max_inflight + 3
 
     solver = z3.Solver()
 
