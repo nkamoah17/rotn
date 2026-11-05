@@ -109,6 +109,11 @@ twopc-java/debug/
 /_trace.json
 /tests/_tmp_*.txt
 
+# --- Root scratch directories (one-off gate/replay output) ---
+/out_apw*/
+/tmp_*/
+/test_out.txt
+
 # --- CI output (JUnit / SARIF artifacts) ---
 /ci/
 
