@@ -1,0 +1,35 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AgentCoreFull",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock-agentcore:CreatePolicyEngine",
+        "bedrock-agentcore:GetPolicyEngine",
+        "bedrock-agentcore:GetPolicyEngineSummary",
+        "bedrock-agentcore:ListPolicyEngines",
+        "bedrock-agentcore:DeletePolicyEngine",
+        "bedrock-agentcore:CreateGateway",
+        "bedrock-agentcore:GetGateway",
+        "bedrock-agentcore:ListGateways",
+        "bedrock-agentcore:DeleteGateway",
+        "bedrock-agentcore:CreateGatewayTarget",
+        "bedrock-agentcore:GetGatewayTarget",
+        "bedrock-agentcore:ListGatewayTargets",
+        "bedrock-agentcore:DeleteGatewayTarget",
+        "bedrock-agentcore:CreatePolicy",
+        "bedrock-agentcore:GetPolicy",
+        "bedrock-agentcore:ListPolicies",
+        "bedrock-agentcore:UpdatePolicy",
+        "bedrock-agentcore:DeletePolicy",
+        "bedrock-agentcore:StartPolicyGeneration",
+        "bedrock-agentcore:GetPolicyGeneration",
+        "bedrock-agentcore:ListPolicyGenerations",
+        "bedrock-agentcore:InvokeGateway",
+        "bedrock-agentcore:GetGatewayEndpoint"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

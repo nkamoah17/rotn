@@ -1,0 +1,32 @@
+// ROTN GAP-4 live repro -- SPEND-CAP policy, PLUS-CURRENT variant (AgentCore namespace).
+//
+// Live AgentCore's temporal window is NON-reflexive: the `sum over ::request`
+// does NOT include the current in-flight request being decided (unlike the
+// formal spec, guide/08 sec 5.4, where the window is reflexive).  So the
+// plain `sum <= 200` form degenerates to "prior sum <= 200" and admits an
+// off-by-one-request overshoot ($300 over the $200 cap).
+//
+// This variant compensates with the `+ context.input.amount` idiom (the
+// refund_budget_settled_plus_current shape): it charges the CURRENT request
+// against the cap explicitly, so the guard is (prior authorized sum) + current
+// <= 200.  Expected live behavior (cap = 200, three parallel $100 fires):
+//   if the engine serializes decisions : fire#1 100<=200 ADMIT, fire#2 200<=200
+//     ADMIT, fire#3 300>200 DENY  -> cap enforced
+//   if the engine races decisions      : all three read prior-sum 0 -> 3 ADMIT,
+//     $300  -> a TOCTOU race no sum-policy can close
+// {{GATEWAY_ARN}} is replaced with the real gateway ARN at deploy time.
+permit (
+    principal,
+    action == AgentCore::Action::"TransferTarget___transfer",
+    resource == AgentCore::Gateway::"{{GATEWAY_ARN}}"
+)
+when temporal {
+    (sum amt for (amt: Long), (t: Timepoint). where (
+        formerly within 24h (
+            AgentCore::Action::"TransferTarget___transfer"::request{
+                eventResource: resource,
+                input.amount: amt
+            } && tp(t)
+        )
+    )) + context.input.amount <= 200
+};

@@ -1,0 +1,22 @@
+// ALTERNATE candidate for the buggy twin -- exists/== aggregate-binding form
+// (same semantics as the primary). Used automatically by 20_deploy_policy.py
+// only if the primary candidate is rejected by the real AgentCore validator.
+//
+// Semantics: 24h sum of SETTLED (::response) amounts must be <= 200.
+// {{GATEWAY_ARN}} is replaced with the real gateway ARN at deploy time.
+permit (
+    principal,
+    action == AgentCore::Action::"TransferTarget___transfer",
+    resource == AgentCore::Gateway::"{{GATEWAY_ARN}}"
+)
+when temporal {
+    exists (total: Long).
+        (sum amt for (amt: Long), (t: Timepoint).
+            where (formerly within 24h (
+                AgentCore::Action::"TransferTarget___transfer"::response{
+                    eventResource: resource,
+                    input.amount: amt
+                } && tp(t)
+            ))) == total
+        && total <= 200
+};

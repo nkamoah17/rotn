@@ -1,0 +1,33 @@
+// ROTN GAP-4 live repro -- SPEND-CAP policy, CORRECT variant (AgentCore namespace).
+//
+// This is the AgentCore-Gateway twin of samples/spendcap-correct.dw.
+// One-word fix vs the buggy twin: the 24h running total is summed over
+// Transfer::request rows -- every AUTHORIZED transfer, in-flight included.
+// The current request being decided is already included in the sum, so the
+// cap bounds committed+in-flight, not just settled.
+//
+// Expected live behavior (cap = 200, three parallel $100 fires, one session):
+//   fire#1 $100 -> ADMIT   (authorized total 100 <= 200)
+//   fire#2 $100 -> ADMIT   (authorized total 200 <= 200)
+//   fire#3 $100 -> DENY    (authorized total 300 > 200)   <-- cap enforced
+//
+// Canonical aggregate form, exactly as in AWS's "Cap a running total"
+// temporal-policy example: a two-variable domain (amt: Long), (t: Timepoint)
+// with tp(t) so two payments of the same amount are counted twice rather
+// than deduplicated into one.
+// {{GATEWAY_ARN}} is replaced with the real gateway ARN at deploy time.
+permit (
+    principal,
+    action == AgentCore::Action::"TransferTarget___transfer",
+    resource == AgentCore::Gateway::"{{GATEWAY_ARN}}"
+)
+when temporal {
+    (sum amt for (amt: Long), (t: Timepoint). where (
+        formerly within 24h (
+            AgentCore::Action::"TransferTarget___transfer"::request{
+                eventResource: resource,
+                input.amount: amt
+            } && tp(t)
+        )
+    )) <= 200
+};

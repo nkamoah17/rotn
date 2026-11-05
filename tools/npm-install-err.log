@@ -1,0 +1,4 @@
+npm WARN deprecated @aws-sdk/protocol-http@3.374.0: This package has moved to @smithy/protocol-http
+npm WARN deprecated @aws-sdk/signature-v4@3.374.0: This package has moved to @smithy/signature-v4
+npm WARN deprecated @opentelemetry/sdk-trace-base@2.6.1: Use @opentelemetry/sdk-trace package
+npm WARN deprecated eslint@9.39.5: This version is no longer supported. Please see https://eslint.org/version-support for other options.
