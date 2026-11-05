@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# DEPRECATED: superseded by 31_fire_sequential.py (runbook E2 control, three-way verdict); kept as a historical artifact -- its out/sequential-results.json is still cited by the runbook SS6 run 3.
 """62_test_sequential.py -- fire 3 transfers SEQUENTIALLY under the request-sum policy.
 
 Discriminates the two explanations for the concurrent $300:
