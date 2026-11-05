@@ -4,10 +4,13 @@
  * policy), plus an **animated K-sweep**: the concurrency-pool bound ``K``
  * (``--max-inflight``) that the verdict depends on.
  *
- *   K=1  -- the parallel-fire race is structurally unexpressible, so the
- *           buggy policy proves clean: a *masked* bug (false negative).
+ *   K=1  -- the parallel-fire race is structurally unexpressible, but the
+ *           buggy policy is still VIOLATED: the *sequential* off-by-one
+ *           (a fire admitted while the settled amount already equals the cap
+ *           settles past it).
  *   K>=2 -- the in-flight state space can express the race; the buggy policy
- *           is VIOLATED while the correct policy stays PROVEN.
+ *           is VIOLATED with the *parallel-fire* witness, while the correct
+ *           policy stays PROVEN at every K.
  *
  * The K-sweep is read straight from the registry (every ``spendcap-<variant>``
  * / ``spendcap-<variant>-k<N>`` trace, keyed by its ``policy.max_inflight``),
@@ -175,29 +178,35 @@
     for (var i = 0; i < series.length; i++) {
       if (series[i].K === K) {
         if (series[i].buggy === "proven") {
-          return "K=" + K + " — MASKED: the buggy policy proves clean because a " +
-            "single in-flight request cannot overshoot the cap. This is a false " +
-            "negative; the correct policy is indistinguishable from it here.";
+          return "K=" + K + " — the buggy policy is proven at this bound.";
         }
-        return "K=" + K + " — VISIBLE: the buggy policy is violated (the race needs " +
-          "this much in-flight), while the correct policy stays proven.";
+        if (K === 1) {
+          return "K=1 — VIOLATED: the buggy policy is violated by the sequential " +
+            "off-by-one (a fire admitted while the settled amount already " +
+            "equals the cap settles past it), while the correct policy stays " +
+            "proven.";
+        }
+        return "K=" + K + " — VIOLATED: the buggy policy is violated by the " +
+          "parallel-fire race (this much in-flight overshoots the cap), while " +
+          "the correct policy stays proven.";
       }
     }
     return "";
   }
 
-  /* Does this sweep expose the masking (the K=1 proven / K>=2 violated shape)?
-   *
-   * True when some K masks the bug (buggy proves clean) and some K exposes
-   * it (buggy violated) -- the K=1 trap the whole story is built around.
+  /* Does this sweep show the buggy policy is VIOLATED (the correct one stays
+   * PROVEN) -- the corrected story: the buggy policy is violated at every K,
+   * and the witness shape tracks K (K=1 the sequential off-by-one, K>=2 the
+   * parallel-fire). True when some K is violated and the correct policy is
+   * proven at that bound.
    */
   ROTCompare.sweepReveals = function (series) {
-    var masked = false, visible = false;
+    var visible = false, clean = false;
     for (var i = 0; i < series.length; i++) {
-      if (series[i].buggy === "proven") { masked = true; }
       if (series[i].buggy === "violated") { visible = true; }
+      if (series[i].correct === "proven") { clean = true; }
     }
-    return masked && visible;
+    return visible && clean;
   };
 
   /* The sweep block (controls + table + note) as an HTML string (E2). */

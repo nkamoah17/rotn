@@ -166,8 +166,9 @@
         " (the reachable state space is bounded)");
     }
     if (buggy) {
-      conds.push("K >= 2 (a burst of parallel fires exposes the bug; " +
-        "K = 1 masks it under settled-only accounting)");
+      conds.push("the buggy (settled-only) policy is VIOLATED at every K -- " +
+        "the witness shape tracks K (K = 1 -- the sequential off-by-one; " +
+        "K >= 2 -- the parallel-fire race)");
     }
     if (nStates != null) {
       conds.push("reachable state space explored: n_states = " + nStates);
@@ -313,7 +314,8 @@
       '    <li><span class="sb-k">rule</span>a spend-cap policy: up to K concurrent ' +
         "$100 calls under a $200 cap, one shared pool</li>",
       '    <li><span class="sb-k">attack</span>a bounded state-space model attacks ' +
-        "it; the concurrency pool K exposes — or masks — the bug</li>",
+        "it; the concurrency pool K shapes the witness — K=1 the sequential " +
+        "off-by-one, K>=2 the parallel fire</li>",
       '    <li><span class="sb-k">proof</span>the verdict is a hashed, re-derivable ' +
         "state-space proof: bounded, never an unbounded theorem</li>",
       '    <li><span class="sb-k">coach</span>the corrected policy is re-proven and ' +
@@ -396,8 +398,8 @@
         '<section class="compare-cta" aria-label="Compare">',
         "  <h2>Compare</h2>",
         '  <p class="lede">Put the buggy and correct spend-cap policy side by side, ' +
-        "and watch the K-sweep expose the concurrency bound the verdict depends on " +
-        "(at K=1 the bug is masked).</p>",
+        "and watch the K-sweep: the buggy policy is VIOLATED at every K, and the " +
+        "witness shape tracks K (K=1 the sequential off-by-one, K>=2 the parallel fire).</p>",
         "  <div class=\"compare-cta-btns\">"
       );
       pairs.forEach(function (pair) {

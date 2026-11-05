@@ -61,9 +61,9 @@ check("registry has 10 traces", Object.keys(reg).length === 10);
     (g.edges || []).every(function (e) {
       return ids[e.from] && ids[e.to] && !!e.action;
     }));
-  check("graph (buggy): no transition the buggy guard would not admit (settled=200, spend blocked)",
-    (g.edges || []).every(function (e) {
-      return !(e.from === "s200_0" && e.to === "s200_1");
+  check("graph (buggy): the buggy guard admits a spend at settled=CAP (the off-by-one)",
+    (g.edges || []).some(function (e) {
+      return e.from === "s200_0" && e.to === "s200_1" && e.action === "spend_ok";
     }));
   check("graph (buggy): counterexample path highlighted (nodes + edges)",
     (g.witness_path || []).length >= 2 &&
@@ -125,7 +125,7 @@ check("ksweep K values are 1,2,3,4",
   series.map(function (r) { return r.K; }).join(",") === "1,2,3,4");
 const byK = {};
 series.forEach(function (r) { byK[r.K] = r; });
-check("K=1 buggy proven (masked)", byK[1].buggy === "proven");
+check("K=1 buggy violated (sequential off-by-one)", byK[1].buggy === "violated");
 check("K=1 correct proven", byK[1].correct === "proven");
 check("K=2 buggy violated", byK[2].buggy === "violated");
 check("K=2 correct proven", byK[2].correct === "proven");
@@ -204,9 +204,12 @@ check("coach (buggy): hero -- to_proceed enabling condition",
 const coachClean = { innerHTML: "" };
 ROT.ROTCoach.mount(coachClean, reg["spendcap-correct"]);
 check("coach (correct): stays empty", coachClean.innerHTML === "");
-const coachMasked = { innerHTML: "" };
-ROT.ROTCoach.mount(coachMasked, reg["spendcap-buggy-k1"]);
-check("coach (buggy K=1, masked): stays empty", coachMasked.innerHTML === "");
+// The K=1 buggy trace is VIOLATED (the sequential off-by-one) and carries a
+// coaching artifact, so the coach RENDERS for it (unlike the proven/correct).
+const coachK1 = { innerHTML: "" };
+ROT.ROTCoach.mount(coachK1, reg["spendcap-buggy-k1"]);
+check("coach (buggy K=1): renders (VIOLATED, the sequential off-by-one)",
+  coachK1.innerHTML !== "" && coachK1.innerHTML.indexOf("coach-table") >= 0);
 
 console.log("");
 console.log(failures === 0 ? "ALL SMOKE CHECKS PASSED" : failures + " CHECK(S) FAILED");
