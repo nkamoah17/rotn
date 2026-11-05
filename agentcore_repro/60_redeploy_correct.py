@@ -12,12 +12,26 @@
 4. Expected: 2 ADMITTED ($200), 1 DENIED (would make $300 > $200) -- the
    cap is now enforced against in-flight authorized transfers.
 
+E1 control (evidence): update-policy already runs under the STRICT
+validation-mode default (FAIL_ON_ANY_FINDINGS); this step now also records
+the validator's findings.  After update-policy it polls get-policy to a
+terminal state and writes {status, statusReasons (verbatim), policyId,
+timestamp, validationMode} to out/validation-findings.json (last write
+wins -- it overwrites the buggy-policy capture from step 20).  If the
+updated policy is not ACTIVE the run is INCONCLUSIVE (exit 2) and the
+re-fire is skipped.
+
+Exit codes: 0 = fixed policy ACTIVE + re-fire recorded;
+            2 = INCONCLUSIVE (fixed policy not ACTIVE, findings recorded);
+            3 = hard error (common.die).
+
 Usage:  python 60_redeploy_correct.py
 """
 
 import importlib.util
 import json
 import os
+import sys
 import uuid
 
 import common as C
@@ -48,15 +62,6 @@ def render(fname, st):
     if "{{" in out:
         raise RuntimeError("unrendered placeholder in %s" % fname)
     return out
-
-
-def policy_status(pe_id, pol_id):
-    try:
-        d = C.aws_json("bedrock-agentcore-control", "get-policy",
-                       "--policy-engine-id", pe_id, "--policy-id", pol_id)
-        return d.get("status", d.get("policyStatus", "?"))
-    except Exception as e:
-        return "ERR:" + str(e)[:80]
 
 
 def deploy_fixed(st):
@@ -102,11 +107,26 @@ def main():
 
     accepted = deploy_fixed(st)
     print("  accepted form: %s" % accepted)
-    status = C.poll("policy %s" % st["policyId"],
-                    lambda: policy_status(pe_id, st["policyId"]),
-                    timeout=300, interval=5,
-                    want={"ACTIVE", "AVAILABLE", "READY"})
-    print("  policy ACTIVE: %s" % status)
+    # E1: record the validator's findings (update-policy already runs under
+    # the strict FAIL_ON_ANY_FINDINGS default) -- poll get-policy to a
+    # terminal state and save them to out/validation-findings.json.
+    record = C.capture_policy_findings(pe_id, st["policyId"])
+    status = record["status"]
+    print("  policy terminal status: %s" % status)
+    if status != "ACTIVE":
+        # UPDATE_FAILED (or any other non-ACTIVE terminal state): the run
+        # is INCONCLUSIVE, not a crash -- the findings are the evidence.
+        C.save_state({
+            "policyAcceptedFormFixed": accepted,
+            "policyStatusFixed": status,
+            "phase": "inconclusive",
+        })
+        print("\n" + "-" * 68)
+        print("  *** INCONCLUSIVE: fixed policy terminal status %s" % status)
+        print("      findings saved : out/validation-findings.json")
+        print("      (re-fire skipped -- the corrected policy is not ACTIVE)")
+        print("-" * 68)
+        sys.exit(2)
 
     # Re-fire with a FRESH session (policy update invalidates the old one).
     fire = load_fire_module()

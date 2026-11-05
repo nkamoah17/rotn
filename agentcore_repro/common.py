@@ -372,6 +372,73 @@ def extract_cedar_names(statement):
 
 
 # --------------------------------------------------------------------------
+# Policy validation findings (E1 control)
+# --------------------------------------------------------------------------
+
+def capture_policy_findings(policy_engine_id, policy_id,
+                            outfile="validation-findings.json",
+                            validation_mode="FAIL_ON_ANY_FINDINGS",
+                            timeout=300, interval=5):
+    """E1 control: poll ``get-policy`` to a terminal state and record the
+    validator's findings verbatim as evidence.
+
+    Writes ``out/<outfile>`` (default ``out/validation-findings.json``)
+    with exactly the fields the runbook's E1 control reads:
+
+      status          -- the terminal status from get-policy (ACTIVE,
+                         CREATE_FAILED, UPDATE_FAILED, DELETE_FAILED)
+      statusReasons   -- the verbatim list of finding strings (empty list
+                         when the API reports none)
+      policyId        -- the policy id
+      timestamp       -- UTC capture time
+      validationMode  -- the validation mode the deployment used
+                         (FAIL_ON_ANY_FINDINGS is the API default)
+
+    This is an evidence-capture helper, NOT a gate: it never dies or
+    raises on CREATE_FAILED (a poll timeout while the policy is still
+    CREATING/UPDATING does raise, like ``poll``).  The caller decides
+    the verdict -- 20_deploy_policy.py / 60_redeploy_correct.py exit
+    INCONCLUSIVE (code 2) when the terminal status is not ACTIVE.
+    Returns the captured dict (identical to the JSON written), so the
+    caller can branch on ``status``.
+    """
+    TERMINAL = {"ACTIVE", "CREATE_FAILED", "UPDATE_FAILED", "DELETE_FAILED"}
+    last = {}
+
+    def _status():
+        try:
+            d = aws_json("bedrock-agentcore-control", "get-policy",
+                         "--policy-engine-id", policy_engine_id,
+                         "--policy-id", policy_id)
+        except Exception as e:
+            return "ERR:" + str(e)[:80]
+        last.clear()
+        last.update(d)
+        return d.get("status", d.get("policyStatus", "?"))
+
+    status = poll("policy %s (findings)" % policy_id, _status,
+                  timeout=timeout, interval=interval, want=TERMINAL)
+
+    reasons = last.get("statusReasons")
+    if reasons is None:
+        reasons = last.get("statusReason")
+    if not isinstance(reasons, list):
+        reasons = [reasons] if reasons else []
+
+    record = {
+        "status": status,
+        "statusReasons": reasons,
+        "policyId": last.get("policyId") or policy_id,
+        "timestamp": now_iso(),
+        "validationMode": last.get("validationMode") or validation_mode,
+    }
+    p = write_json(outfile, record)
+    log("validation findings -> %s (status=%s, %d reason(s))"
+        % (p, status, len(reasons)))
+    return record
+
+
+# --------------------------------------------------------------------------
 # State, logging, templates
 # --------------------------------------------------------------------------
 

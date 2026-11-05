@@ -4,10 +4,21 @@
 Renders agentcore_repro/policies/spendcap-buggy-agentcore.dw with the real
 gateway ARN (+ the Cedar action name confirmed by 15_discover.py, if it
 differs from the conventional default), creates it in the policy engine
-(enforcementMode ACTIVE), and waits until ACTIVE.  If the real AgentCore
-validator rejects the primary syntax candidate, it automatically retries with
-the alternate candidate (spendcap-buggy-agentcore-alt.dw) and records which
+(enforcementMode ACTIVE, validationMode FAIL_ON_ANY_FINDINGS), and waits
+until the policy reaches a terminal state.  If the real AgentCore validator
+rejects the primary syntax candidate, it automatically retries with the
+alternate candidate (spendcap-buggy-agentcore-alt.dw) and records which
 form was accepted.
+
+E1 control (no suppressed findings): the deployment uses the STRICT
+validation mode FAIL_ON_ANY_FINDINGS (the API default), not
+IGNORE_ALL_FINDINGS.  After create-policy it polls get-policy to a
+terminal state and records {status, statusReasons (verbatim), policyId,
+timestamp, validationMode} to out/validation-findings.json
+(common.capture_policy_findings).  If the policy ends CREATE_FAILED, the
+run is INCONCLUSIVE (exit 2 -- not a crash): the findings are the
+evidence, and the live behavior of a rejected policy must not be read as
+an engine bug.
 
 The Cedar statement is submitted as the ``cedar`` member of the
 ``--definition`` tagged union (``{"cedar": {"statement": ...}}``); if the
@@ -16,6 +27,10 @@ API rejects that branch it retries with the ``policy`` branch.
 The deployed policy is the AgentCore-namespace twin of the repo's canonical
 samples/spendcap-buggy.dw (same semantics, Drupe -> AgentCore namespaces).
 ROTN's local verdict on the canonical file is what step 50 checks.
+
+Exit codes: 0 = policy ACTIVE (findings recorded);
+            2 = INCONCLUSIVE (terminal status != ACTIVE, findings recorded);
+            3 = hard error (common.die).
 
 Usage:  python 20_deploy_policy.py
 """
@@ -105,7 +120,7 @@ def main():
                  "--description",
                  "ROTN GAP-4 spendcap (temporal, 24h window, cap 200) [%s/%s]"
                  % (label, def_key),
-                 "--validation-mode", "IGNORE_ALL_FINDINGS",
+                 "--validation-mode", "FAIL_ON_ANY_FINDINGS",
                  "--enforcement-mode", "ACTIVE",
                  "--output", "json"],
                 check=False)
@@ -127,11 +142,34 @@ def main():
               "the real AgentCore validator -- see output above; adjust "
               "policies/*.dw (action name, temporal form) and retry")
 
-    status = C.poll("policy %s" % pol_id,
-                    lambda: policy_status(pe_id, pol_id),
-                    timeout=300, interval=5,
-                    want={"ACTIVE", "AVAILABLE", "READY"})
-    print("\n  policy ACTIVE: %s (accepted form: %s)" % (pol_id, accepted))
+    # E1: poll to a TERMINAL state (ACTIVE or CREATE_FAILED) and record the
+    # validator's findings verbatim to out/validation-findings.json.
+    record = C.capture_policy_findings(pe_id, pol_id)
+    status = record["status"]
+    print("\n  policy terminal status: %s (accepted form: %s)"
+          % (status, accepted))
+
+    if status != "ACTIVE":
+        # CREATE_FAILED (or any other non-ACTIVE terminal state): the run
+        # is INCONCLUSIVE, not a crash -- the findings are the evidence.
+        C.save_state({
+            "policyId": pol_id,
+            "policyName": st["names"]["policy"],
+            "policyAcceptedForm": accepted,
+            "policyDefinitionBranch": def_key_used,
+            "policyDeployedUtc": C.now_iso(),
+            "policyStatus": status,
+            "phase": "inconclusive",
+        })
+        print("\n" + "-" * 68)
+        print("  *** INCONCLUSIVE: policy terminal status %s under" % status)
+        print("      validationMode=FAIL_ON_ANY_FINDINGS")
+        print("      findings saved : out/validation-findings.json")
+        print("      (a run with unresolved findings is reported")
+        print("       inconclusive -- inspect the findings before reading")
+        print("       any live behavior as an engine bug)")
+        print("-" * 68)
+        sys.exit(2)
 
     C.save_state({
         "policyId": pol_id,
