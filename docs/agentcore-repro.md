@@ -143,7 +143,7 @@ All commands run from the repo root. State lives in
    surfaces findings and save them to `out/validation-findings.json`. A run
    with any unresolved finding is reported as **inconclusive**.
 4. **Buggy, sequential baseline** — 5 × $100, one session, session ID logged
-   on every call: `31_fire_sequential.py 100 5` **(to add)**. Spec
+   on every call: `31_fire_sequential.py 100 5`. Spec
    prediction: $300.
 5. **Buggy, parallel** — `python agentcore_repro\30_fire_parallel.py 100 5`.
    The difference from step 4 is the concurrency effect.
@@ -156,7 +156,7 @@ All commands run from the repo root. State lives in
    controls in §5.
 9. **Reference replay** — replay the recorded event sequence through
    Dogwood's reference interpreter with the same policy text:
-   `rot replay --oracle dogwood --events out/events.jsonl` **(to add)**.
+   `rot replay --oracle dogwood --events out/events.jsonl`.
 10. **Cleanup** — `python agentcore_repro\70_cleanup.py`.
 
 ## 5. Controls

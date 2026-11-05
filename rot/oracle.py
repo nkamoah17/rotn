@@ -126,6 +126,96 @@ def summarize(decisions):
     }
 
 
+# ---------------------------------------------------------------------------
+# E4 -- events.jsonl -> dogwood trace.log (pure, unit-testable)
+# ---------------------------------------------------------------------------
+
+# AgentCore namespace/type names for the recorded traces.  The principal is
+# the gateway's OAuth session: the AgentCore spend-cap policies constrain
+# only the action + resource scope (never the principal), so the choice of
+# principal type cannot change matching -- it only has to be one of the
+# action's declared principal types in the E4 schema.
+AGENTCORE_NS = "AgentCore"
+AGENTCORE_ACTION_ID = "TransferTarget___transfer"
+AGENTCORE_PRINCIPAL_TYPE = "OAuthUser"
+AGENTCORE_RESOURCE_TYPE = "Gateway"
+
+
+def _cedar_ref(namespace, type_, ident):
+    """A Cedar entity reference: ``Ns::Type::"id"``."""
+    return '%s::%s::"%s"' % (namespace, type_, ident)
+
+
+def events_to_trace(events, meta=None):
+    """Build dogwood ``trace.log`` lines for a recorded E2 event sequence.
+
+    Pure (no I/O, no binary): one ``events.jsonl`` event becomes two trace
+    timepoints -- a ``::request`` line followed by its ``::response`` line --
+    numbered ``@0, @1, @2, ...`` in order (fire k is the request at
+    timepoint ``@2(k-1)``).  The reference decides each request timepoint;
+    the response timepoints are observed into the temporal history, which is
+    exactly what the buggy (response-sum) policy reads.
+
+    Every line carries the AgentCore-namespace scope (``OAuthUser`` principal
+    keyed by the recorded session, ``Gateway`` resource keyed by the gateway
+    ARN), the action ``AgentCore::Action::"TransferTarget___transfer"``,
+    the request context ``input: { amount: <Long> }`` (request lines only),
+    and a per-event ``requestId`` so each request/response pair correlates.
+
+    ``meta`` (``events-meta.json``) supplies the identity: ``session_id``,
+    ``action`` (or a pre-rendered ``action_cedar``) and ``resource`` /
+    ``gateway_arn`` (or a pre-rendered ``resource_cedar``).  ``action`` and
+    the resource are required; the session defaults to ``"session"`` when
+    absent (harmless: the AgentCore policies never constrain the principal).
+
+    Raises ``ValueError`` on a malformed event or a meta without an
+    action/resource.  Window semantics (reflexive vs non-reflexive) are NOT
+    assumed here -- the reference's per-fire decisions are the evidence
+    (``64_replay_reference.py``); this function only transcribes the
+    recording into the wire format the reference parses.
+    """
+    meta = meta or {}
+    action = meta.get("action_cedar")
+    if not action:
+        action = _cedar_ref(AGENTCORE_NS, "Action",
+                            meta.get("action") or AGENTCORE_ACTION_ID)
+    resource = meta.get("resource_cedar")
+    if not resource:
+        arn = meta.get("resource") or meta.get("gateway_arn")
+        if not arn:
+            raise ValueError(
+                "events meta must carry 'resource' (or 'resource_cedar' / "
+                "'gateway_arn') for the trace's scope resource")
+        resource = _cedar_ref(AGENTCORE_NS, AGENTCORE_RESOURCE_TYPE, arn)
+    session = meta.get("session_id") or "session"
+    principal = _cedar_ref(AGENTCORE_NS, AGENTCORE_PRINCIPAL_TYPE, session)
+
+    if not isinstance(events, (list, tuple)):
+        raise ValueError("events must be a list of event objects")
+
+    lines = []
+    for idx, ev in enumerate(events):
+        if not isinstance(ev, dict):
+            raise ValueError("event %d is not an object: %r" % (idx + 1, ev))
+        try:
+            amount = str(int(ev["amount"]))
+        except (KeyError, TypeError, ValueError):
+            raise ValueError("event %d has no usable integer 'amount': %r"
+                             % (idx + 1, ev))
+        request_id = "req-%s" % ev.get("seq", idx + 1)
+        scope = "scope(principal: %s, resource: %s)" % (principal, resource)
+        fields = ("input: { amount: %s }, callerPrincipal: %s, "
+                  "callerResource: %s, requestId: \"%s\""
+                  % (amount, principal, resource, request_id))
+        lines.append(
+            "@%d %s request_context(input: { amount: %s }) %s::request(%s)"
+            % (2 * idx, scope, amount, action, fields))
+        lines.append(
+            "@%d %s %s::response(%s)"
+            % (2 * idx + 1, scope, action, fields))
+    return lines
+
+
 def _ref_block(ref):
     """Build the report block for one reference-interpreter run (or None)."""
     if ref is None:

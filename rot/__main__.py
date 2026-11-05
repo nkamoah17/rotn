@@ -1522,9 +1522,14 @@ def _cmd_replay_oracle_dogwood(args):
     interpreter and record the reference verdict next to ROTN's.
 
     Modes:
-      * ``--gate``  : run the APW-1/2/4 gate classes (fixtures) and write the
-        side-by-side report (JSON + Markdown).
-      * single      : ``--policy --trace --policy-schema`` for one class.
+      * ``--gate``    : run the APW-1/2/4 gate classes (fixtures) and write
+        the side-by-side report (JSON + Markdown).
+      * ``--events``  : E4 -- replay a recorded ``events.jsonl`` (the E2
+        recording): build the trace from the events + the sibling
+        ``events-meta.json``, resolve ``--policy``/``--policy-schema`` from
+        the meta (explicit flags override), run the single-mode path, and
+        report the reference decision per fire.
+      * single        : ``--policy --trace --policy-schema`` for one class.
     """
     import rot.oracle as oracle
 
@@ -1541,26 +1546,45 @@ def _cmd_replay_oracle_dogwood(args):
 
     if getattr(args, "gate", False):
         reports = oracle.run_gate(binary)
+    elif getattr(args, "events", None):
+        return _cmd_replay_events(binary, args, out_dir)
     else:
         if not (args.policy and args.trace and args.policy_schema):
             print("ERROR: --oracle dogwood needs --policy, --trace and "
-                  "--policy-schema (or --gate to run APW-1/2/4)",
+                  "--policy-schema (or --gate to run APW-1/2/4, or --events "
+                  "FILE for the E4 events replay)",
                   file=sys.stderr)
             return EXIT_ERROR
-        rot = oracle.run_rotn_check(args.policy)
-        ref_buggy = oracle.run_dogwood_replay(
-            binary, args.policy, args.policy_schema, args.trace)
-        ref_correct = None
-        if getattr(args, "correct", None):
-            ref_correct = oracle.run_dogwood_replay(
-                binary, args.correct, args.policy_schema, args.trace)
-        reports = [oracle.side_by_side(
-            rot.get("verdict"), rot.get("witness"), rot.get("property"),
-            ref_buggy, ref_correct)]
-        reports[0]["apw"] = getattr(args, "apw", None) or "custom"
-        reports[0]["name"] = "single policy"
-        reports[0]["policy_buggy"] = args.policy
-        reports[0]["trace"] = args.trace
+        reports = _run_single_class(binary, args)
+
+    return _persist_and_report(binary, args, out_dir, reports)
+
+
+def _run_single_class(binary, args):
+    """The single-class oracle path: ROTN leg + reference leg(s) on one
+    policy + trace, combined into the side-by-side report dict list."""
+    import rot.oracle as oracle
+
+    rot = oracle.run_rotn_check(args.policy)
+    ref_buggy = oracle.run_dogwood_replay(
+        binary, args.policy, args.policy_schema, args.trace)
+    ref_correct = None
+    if getattr(args, "correct", None):
+        ref_correct = oracle.run_dogwood_replay(
+            binary, args.correct, args.policy_schema, args.trace)
+    report = oracle.side_by_side(
+        rot.get("verdict"), rot.get("witness"), rot.get("property"),
+        ref_buggy, ref_correct)
+    report["apw"] = getattr(args, "apw", None) or "custom"
+    report["name"] = "single policy"
+    report["policy_buggy"] = args.policy
+    report["trace"] = args.trace
+    return [report]
+
+def _persist_and_report(binary, args, out_dir, reports):
+    """Persist the report (per-class JSON + combined JSON + Markdown),
+    print the human summary, and return the process exit code."""
+    import rot.oracle as oracle
 
     # Persist: per-class JSON, combined JSON, and the Markdown artifact.
     for r in reports:
@@ -1601,6 +1625,135 @@ def _cmd_replay_oracle_dogwood(args):
     print("  markdown  : %s" % md_path)
     print(_BAR)
     return EXIT_PROVEN if passed else EXIT_VIOLATED
+
+
+def _cmd_replay_events(binary, args, out_dir):
+    """E4 -- replay a recorded ``events.jsonl`` (the E2 recording) against
+    the reference interpreter.
+
+    Resolves ``--policy`` / ``--policy-schema`` from the events' sibling
+    ``events-meta.json`` (explicit flags override -- the meta records the
+    policy that was LIVE when the events were recorded, the E4 evidence
+    pair), builds the trace with ``rot.oracle.events_to_trace`` (written to
+    ``<out>/trace.log``), runs the existing single-mode oracle path on it,
+    and reports the reference decision per fire next to each fire's LIVE
+    verdict.
+
+    ``64_replay_reference.py`` wraps this command with the schema
+    generation, the ``dogwood validate`` guard, and the three-way
+    interpretation of the per-fire read.
+    """
+    import rot.oracle as oracle
+
+    events_path = args.events
+    if not os.path.isfile(events_path):
+        print("ERROR: events file not found: %s" % events_path,
+              file=sys.stderr)
+        return EXIT_ERROR
+
+    events = []
+    try:
+        with open(events_path, "r") as f:
+            for raw in f:
+                line = raw.strip()
+                if not line:
+                    continue
+                events.append(json.loads(line))
+    except (IOError, OSError, ValueError) as exc:
+        print("ERROR: cannot read events from %s: %s" % (events_path, exc),
+              file=sys.stderr)
+        return EXIT_ERROR
+    if not events:
+        print("ERROR: no events in %s (run 31_fire_sequential.py / E2 "
+              "first, or record a synthetic sequence)" % events_path,
+              file=sys.stderr)
+        return EXIT_ERROR
+
+    events_dir = os.path.dirname(os.path.abspath(events_path))
+    meta_path = os.path.join(events_dir, "events-meta.json")
+    meta = {}
+    if os.path.isfile(meta_path):
+        try:
+            with open(meta_path, "r") as f:
+                meta = json.load(f)
+        except (IOError, OSError, ValueError) as exc:
+            print("WARNING: unreadable %s (%s); explicit flags required"
+                  % (meta_path, exc), file=sys.stderr)
+    else:
+        print("WARNING: no events-meta.json beside %s; --policy and "
+              "--policy-schema must be given explicitly" % events_path,
+              file=sys.stderr)
+
+    # Explicit flags override the meta (step 3 of the E4 plan).
+    policy = args.policy or meta.get("policy_path_abs") \
+        or meta.get("policy_path")
+    schema = args.policy_schema or meta.get("policy_schema")
+    if not policy:
+        print("ERROR: --events could not resolve a policy (no --policy and "
+              "no policy_path in events-meta.json)", file=sys.stderr)
+        return EXIT_ERROR
+    if not schema:
+        print("ERROR: --events could not resolve a policy schema (no "
+              "--policy-schema and none in events-meta.json; "
+              "64_replay_reference.py generates out/e4-schema.cedarschema)",
+              file=sys.stderr)
+        return EXIT_ERROR
+
+    try:
+        lines = oracle.events_to_trace(events, meta)
+    except ValueError as exc:
+        print("ERROR: %s" % exc, file=sys.stderr)
+        return EXIT_ERROR
+    trace_path = os.path.join(out_dir, "trace.log")
+    with open(trace_path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    print("  trace     : %s (%d events, %d timepoints)"
+          % (trace_path, len(events), len(lines)))
+
+    # Run the EXISTING single-mode oracle path on the built trace.
+    args.policy = policy
+    args.policy_schema = schema
+    args.trace = trace_path
+    reports = _run_single_class(binary, args)
+    code = _persist_and_report(binary, args, out_dir, reports)
+
+    # The E4 read: the reference decision per fire (the PASS/FAIL gate line
+    # above is the APW "ROTN catches + reference admits" gate -- the
+    # catalog's credibility check, not the E4 evidence read).
+    _print_per_fire_read(out_dir, events)
+    return code
+
+
+def _print_per_fire_read(out_dir, events):
+    """E4 per-fire read: the reference decision on each recorded fire, next
+    to its LIVE verdict (from events.jsonl).
+
+    Fire k (1-based) is the request at trace timepoint ``@2(k-1)``; a
+    decision line ``@N`` therefore maps back to fire ``N // 2 + 1``.
+    """
+    report_path = os.path.join(out_dir, "reference-replay.json")
+    try:
+        with open(report_path, "r") as f:
+            reports = json.load(f)
+    except (IOError, OSError, ValueError):
+        return
+    if not reports:
+        return
+    ref = reports[0].get("dogwood_reference_buggy") or {}
+    by_n = {}
+    for d in (ref.get("decisions") or []):
+        n = d.get("seq")
+        if isinstance(n, int):
+            by_n[n] = d.get("decision", "?")
+    print(_BAR)
+    print("  E4 reference decision per fire (%d events)" % len(events))
+    print(_BAR)
+    for k, ev in enumerate(events):
+        n = 2 * k  # fire k (0-based) -> request at timepoint @2k
+        print("  fire #%d  @%-3d %-5s   (live: %-9s, $%s)"
+              % (k + 1, n, by_n.get(n, "?"),
+                 ev.get("live_verdict", "?"), ev.get("amount", "?")))
+    print(_BAR)
 
 
 # ---------------------------------------------------------------------------
@@ -2643,6 +2796,13 @@ def main(argv=None):
     p.add_argument("--gate", action="store_true",
                    help="(with --oracle dogwood) run the APW-1/2/4 gate "
                         "classes and write the side-by-side report")
+    p.add_argument("--events", default=None, metavar="FILE",
+                   help="(with --oracle dogwood, E4) replay a recorded "
+                        "events.jsonl: builds <out>/trace.log from the "
+                        "events + the sibling events-meta.json, resolves "
+                        "--policy/--policy-schema from the meta (explicit "
+                        "flags override), runs the single-mode path and "
+                        "reports the reference decision per fire")
     p.add_argument("--trace", default=None, metavar="FILE",
                    help="(oracle) the witness trace.log to replay")
     p.add_argument("--policy-schema", default=None, metavar="FILE",

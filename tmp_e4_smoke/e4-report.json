@@ -1,0 +1,146 @@
+{
+  "control": "E4",
+  "dogwood": {
+    "binary": "C:\\tools\\dogwood\\target\\debug\\dogwood.exe",
+    "version": "dogwood 1.1.0"
+  },
+  "events": {
+    "file": "events.jsonl",
+    "fired_at_utc": "2026-11-05T00:00:05Z",
+    "meta_file": "events-meta.json",
+    "n_fires": 5,
+    "session": "smoke-sess-1"
+  },
+  "generated_at_utc": "2026-11-05T19:32:40Z",
+  "note": "E4 is the local half of the investigation: it replays E2's recorded sequence against the local dogwood reference build (binary + version recorded above) and reads the per-fire decisions. Nothing here touched AWS.",
+  "policy": {
+    "adapted": "e4-policy-adapted.dw",
+    "adapted_sha256": "08dc418d191565c6838ffb8e636151e3504bab341d1f4b9c3a7bf27e988d6335",
+    "field_map": {
+      "eventResource": "callerResource"
+    },
+    "rendered": "e4-policy.rendered.dw",
+    "rendered_arn": "arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-e0umswk6ss",
+    "rendered_sha256": "05ac4cf641db29accde9522ed880dbfd0e46c59e02bfe4c134149bbbfb07d8e9",
+    "template": "agentcore_repro/policies/spendcap-correct-agentcore.dw",
+    "template_sha256": "smoke",
+    "which": "fixed"
+  },
+  "reading": "SPEC-CONFORMANT REFERENCE (reflexive window)",
+  "reading_detail": "The reference admitted exactly the in-cap fires (#1-2) and denied from fire #3: evaluation at position i includes the current event (spec SS6, j <= i). The live gateway's $300 admission is then the live-vs-reference gap to explain (runbook SS7 hypotheses B/C).",
+  "reading_source": "field_adapted",
+  "reference_decisions": [
+    {
+      "decision": "ALLOW",
+      "seq": 0,
+      "timepoint": 0
+    },
+    {
+      "decision": "ALLOW",
+      "seq": 2,
+      "timepoint": 1
+    },
+    {
+      "decision": "DENY",
+      "seq": 4,
+      "timepoint": 2
+    },
+    {
+      "decision": "DENY",
+      "seq": 6,
+      "timepoint": 3
+    },
+    {
+      "decision": "DENY",
+      "seq": 8,
+      "timepoint": 4
+    }
+  ],
+  "runs": {
+    "as_is": {
+      "decisions": [
+        {
+          "decision": "ALLOW",
+          "seq": 0,
+          "timepoint": 0
+        },
+        {
+          "decision": "ALLOW",
+          "seq": 2,
+          "timepoint": 1
+        },
+        {
+          "decision": "ALLOW",
+          "seq": 4,
+          "timepoint": 2
+        },
+        {
+          "decision": "ALLOW",
+          "seq": 6,
+          "timepoint": 3
+        },
+        {
+          "decision": "ALLOW",
+          "seq": 8,
+          "timepoint": 4
+        }
+      ],
+      "out_dir": "e4-as-is",
+      "policy": "e4-policy.rendered.dw",
+      "reading": "PREDICATE-MISMATCH EVIDENCE (hypothesis A)",
+      "reading_detail": "The reference admitted EVERY fire: its temporal predicate never matched a recorded event, so the sum is empty (0 <= cap) and the permit holds trivially on each fire. dogwood validate FAILED: error: predicate `AgentCore::Action::\"TransferTarget___transfer\"::request` mentions field `eventResource`, which is not declared on that event (declared fields: callerPrincipal, callerResource, input.amount, requestId, sessionId)\nFAILED: 1 error(s), 0 warning(s).\n The policy references the field `eventResource`, which this dogwood build's event schema does not declare (it declares callerResource) -- the reference cannot match the policy's predicate on this build.",
+      "replay_output_tail": "  trace     : C:\\Users\\jeren\\Documents\\KAMANU\\ROTN\\agentcore_repro\\out\\e4-as-is\\trace.log (5 events, 10 timepoints)\r\n==========================================================================\r\n  ROTN x Dogwood reference -- oracle replay\r\n==========================================================================\r\n  custom single policy                  ROTN=error    ref-admit=True  [no]\r\n==========================================================================\r\n  class      : FAIL (0 of 1 agree)\r\n  json      : C:\\Users\\jeren\\Documents\\KAMANU\\ROTN\\agentcore_repro\\out\\e4-as-is\\reference-replay.json\r\n  markdown  : C:\\Users\\jeren\\Documents\\KAMANU\\ROTN\\agentcore_repro\\out\\e4-as-is\\reference-replay.md\r\n==========================================================================\r\n==========================================================================\r\n  E4 reference decision per fire (5 events)\r\n==========================================================================\r\n  fire #1  @0   ALLOW   (live: ADMITTED , $100)\r\n  fire #2  @2   ALLOW   (live: ADMITTED , $100)\r\n  fire #3  @4   ALLOW   (live: ADMITTED , $100)\r\n  fire #4  @6   ALLOW   (live: ADMITTED , $100)\r\n  fire #5  @8   ALLOW   (live: ADMITTED , $100)\r\n==========================================================================\r\n",
+      "replay_rc": 1,
+      "validate": {
+        "ok": false,
+        "output": "error: predicate `AgentCore::Action::\"TransferTarget___transfer\"::request` mentions field `eventResource`, which is not declared on that event (declared fields: callerPrincipal, callerResource, input.amount, requestId, sessionId)\nFAILED: 1 error(s), 0 warning(s).\n",
+        "rc": 2
+      }
+    },
+    "field_adapted": {
+      "decisions": [
+        {
+          "decision": "ALLOW",
+          "seq": 0,
+          "timepoint": 0
+        },
+        {
+          "decision": "ALLOW",
+          "seq": 2,
+          "timepoint": 1
+        },
+        {
+          "decision": "DENY",
+          "seq": 4,
+          "timepoint": 2
+        },
+        {
+          "decision": "DENY",
+          "seq": 6,
+          "timepoint": 3
+        },
+        {
+          "decision": "DENY",
+          "seq": 8,
+          "timepoint": 4
+        }
+      ],
+      "out_dir": "e4",
+      "policy": "e4-policy-adapted.dw",
+      "reading": "SPEC-CONFORMANT REFERENCE (reflexive window)",
+      "reading_detail": "The reference admitted exactly the in-cap fires (#1-2) and denied from fire #3: evaluation at position i includes the current event (spec SS6, j <= i). The live gateway's $300 admission is then the live-vs-reference gap to explain (runbook SS7 hypotheses B/C).",
+      "replay_output_tail": "  trace     : C:\\Users\\jeren\\Documents\\KAMANU\\ROTN\\agentcore_repro\\out\\e4\\trace.log (5 events, 10 timepoints)\r\n==========================================================================\r\n  ROTN x Dogwood reference -- oracle replay\r\n==========================================================================\r\n  custom single policy                  ROTN=error    ref-admit=True  [no]\r\n==========================================================================\r\n  class      : FAIL (0 of 1 agree)\r\n  json      : C:\\Users\\jeren\\Documents\\KAMANU\\ROTN\\agentcore_repro\\out\\e4\\reference-replay.json\r\n  markdown  : C:\\Users\\jeren\\Documents\\KAMANU\\ROTN\\agentcore_repro\\out\\e4\\reference-replay.md\r\n==========================================================================\r\n==========================================================================\r\n  E4 reference decision per fire (5 events)\r\n==========================================================================\r\n  fire #1  @0   ALLOW   (live: ADMITTED , $100)\r\n  fire #2  @2   ALLOW   (live: ADMITTED , $100)\r\n  fire #3  @4   DENY    (live: ADMITTED , $100)\r\n  fire #4  @6   DENY    (live: ADMITTED , $100)\r\n  fire #5  @8   DENY    (live: ADMITTED , $100)\r\n==========================================================================\r\n",
+      "replay_rc": 1,
+      "validate": {
+        "ok": true,
+        "output": "OK: validation passed with no errors or warnings.\n",
+        "rc": 0
+      }
+    }
+  },
+  "schema": {
+    "file": "e4-schema.cedarschema",
+    "sha256": "a56d5b5de2a856ef0243e7fb55c30d87391dfe7c937219e72666af8f8ec02cc9"
+  },
+  "script": "64_replay_reference.py"
+}

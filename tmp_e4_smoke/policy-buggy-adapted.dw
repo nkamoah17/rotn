@@ -1,0 +1,39 @@
+// ROTN GAP-4 live repro -- SPEND-CAP policy, BUGGY variant (AgentCore namespace).
+//
+// This is the AgentCore-Gateway twin of samples/spendcap-buggy.dw (the Drupe
+// namespace file ROTN checks locally). One-word bug: the 24h running total
+// is summed over Transfer::response rows (SETTLED completions only).
+// In-flight (authorized, not-yet-returned) transfers are invisible to the
+// sum, so a parallel burst of authorized fires can overshoot the 200 cap.
+//
+// Official event semantics (AgentCore temporal policy docs):
+//   ::request  -- recorded for each AUTHORIZED request (input fields)
+//   ::response -- recorded only if a policy permitted the action AND it
+//                 completed; a denied action records an ::error instead.
+// Summing ::response therefore counts only money that has already settled.
+//
+// Expected live behavior (cap = 200, three parallel $100 fires, one session):
+//   fire#1 $100 -> ADMIT   (settled 0   <= 200)
+//   fire#2 $100 -> ADMIT   (settled 0/100 <= 200)
+//   fire#3 $100 -> ADMIT   (settled 200 <= 200)     <-- $300 committed > 200 cap
+//
+// Canonical aggregate form, exactly as in AWS's "Cap a running total"
+// temporal-policy example: a two-variable domain (amt: Long), (t: Timepoint)
+// with tp(t) so two payments of the same amount are counted twice rather
+// than deduplicated into one.
+// arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-e0umswk6ss is replaced with the real gateway ARN at deploy time.
+permit (
+    principal,
+    action == AgentCore::Action::"TransferTarget___transfer",
+    resource == AgentCore::Gateway::"arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-e0umswk6ss"
+)
+when temporal {
+    (sum amt for (amt: Long), (t: Timepoint). where (
+        formerly within 24h (
+            AgentCore::Action::"TransferTarget___transfer"::response{
+                callerResource: resource,
+                input.amount: amt
+            } && tp(t)
+        )
+    )) <= 200
+};

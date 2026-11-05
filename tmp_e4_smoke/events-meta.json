@@ -1,0 +1,20 @@
+{
+  "action": "TransferTarget___transfer",
+  "action_cedar": "AgentCore::Action::\"TransferTarget___transfer\"",
+  "amount": 100,
+  "cap": 200,
+  "control": "E4-SMOKE",
+  "fired_at_utc": "2026-11-05T00:00:05Z",
+  "gateway_arn": "arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-e0umswk6ss",
+  "nfires": 5,
+  "phase": "test",
+  "policy_path": "agentcore_repro/policies/spendcap-correct-agentcore.dw",
+  "policy_path_abs": "C:\\Users\\jeren\\Documents\\KAMANU\\ROTN\\agentcore_repro\\policies\\spendcap-correct-agentcore.dw",
+  "policy_schema": "C:\\Users\\jeren\\Documents\\KAMANU\\ROTN\\tmp_e4_smoke\\e4-schema.cedarschema",
+  "policy_sha256": "smoke",
+  "policy_which": "fixed",
+  "resource": "arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-e0umswk6ss",
+  "resource_cedar": "AgentCore::Gateway::\"arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-e0umswk6ss\"",
+  "script": "smoke",
+  "session_id": "smoke-sess-1"
+}
