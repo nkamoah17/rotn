@@ -1,8 +1,0 @@
-SETTLE txId=rot-d8a33fb36ade amount=100 status=SETTLED
-SETTLE txId=rot-6e5e82a725ae amount=50 status=SETTLED
-handler OK
-render OK
-classify OK
-settle regex OK
-names/state OK
-ALL_SANITY_OK

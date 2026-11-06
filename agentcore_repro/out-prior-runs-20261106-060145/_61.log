@@ -1,6 +1,0 @@
-====================================================================
-61_test_pluscurrent -- deploy `+ context.input.amount`, re-fire
-====================================================================
-
--- update-policy with spendcap-pluscurrent-agentcore.dw (branch: policy)
-[02:52:27] $ "C:\Program Files\Amazon\AWSCLIV2\aws.EXE" bedrock-agentcore-control update-policy --policy-engine-id rot_spendcap_engine-rzhlj_2hg9 --policy-id ...

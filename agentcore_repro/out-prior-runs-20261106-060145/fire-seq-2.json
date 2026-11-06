@@ -1,1 +1,0 @@
-{"jsonrpc":"2.0","id":2,"result":{"isError":false,"content":[{"type":"text","text":"{\"txId\":\"rot-6143552408a3\",\"amount\":100,\"status\":\"SETTLED\",\"currency\":\"USD\",\"mock\":true}"}]}}
