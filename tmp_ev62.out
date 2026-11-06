@@ -1,0 +1,18 @@
+====================================================================
+62_test_sequential -- 3 x $100, ONE AT A TIME (session cf467d76-236a-4015-a7f2-ef8b0ae1bb26)
+====================================================================
+[08:55:24] $ C:\Users\jeren\AppData\Roaming\npm\agentcore.CMD gateway invoke --id rot-spendcap-gw-ld9tskotbe --path /mcp --method ...
+  fire 1 : ADMITTED  rc=0 (4.43s)
+[08:55:29] $ C:\Users\jeren\AppData\Roaming\npm\agentcore.CMD gateway invoke --id rot-spendcap-gw-ld9tskotbe --path /mcp --method ...
+  fire 2 : ADMITTED  rc=0 (2.65s)
+[08:55:31] $ C:\Users\jeren\AppData\Roaming\npm\agentcore.CMD gateway invoke --id rot-spendcap-gw-ld9tskotbe --path /mcp --method ...
+  fire 3 : DENIED    rc=0 (2.42s)
+
+--------------------------------------------------------------------
+  ADMITTED : 2 fire(s), $200 committed
+  DENIED   : 1 fire(s)
+  => REFLEXIVE engine: sequential fire is capped ($200).
+     The concurrent $300 was a TOCTOU race, not a semantic gap.
+--------------------------------------------------------------------
+
+wrote out/sequential-results.json

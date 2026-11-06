@@ -1,0 +1,4178 @@
+
+create-gateway-target
+^^^^^^^^^^^^^^^^^^^^^
+
+
+Description
+***********
+
+Creates a target for a gateway. A target defines an endpoint that the
+gateway can connect to.
+
+See also: AWS API Documentation
+
+"create-gateway-target" uses document type values. Document types
+follow the JSON data model where valid values are: strings, numbers,
+booleans, null, arrays, and objects. For command input, options and
+nested parameters that are labeled with the type "document" must be
+provided as JSON. Shorthand syntax does not support document types.
+
+
+Synopsis
+********
+
+     create-gateway-target
+   --gateway-identifier <value>
+   [--name <value>]
+   [--description <value>]
+   [--client-token <value>]
+   --target-configuration <value>
+   [--credential-provider-configurations <value>]
+   [--metadata-configuration <value>]
+   [--private-endpoint <value>]
+   [--certificate-configurations <value>]
+   [--cli-input-json | --cli-input-yaml]
+   [--generate-cli-skeleton <value>]
+   [--debug]
+   [--endpoint-url <value>]
+   [--no-verify-ssl]
+   [--no-paginate]
+   [--output <value>]
+   [--query <value>]
+   [--profile <value>]
+   [--region <value>]
+   [--version <value>]
+   [--color <value>]
+   [--no-sign-request]
+   [--ca-bundle <value>]
+   [--cli-read-timeout <value>]
+   [--cli-connect-timeout <value>]
+   [--cli-binary-format <value>]
+   [--no-cli-pager]
+   [--cli-auto-prompt]
+   [--no-cli-auto-prompt]
+   [--cli-error-format <value>]
+
+
+Options
+*******
+
+"--gateway-identifier" (string) [required]
+
+   The identifier of the gateway to create a target for.
+
+   Constraints:
+
+   * pattern: "([0-9a-z][-]?){1,100}-[0-9a-z]{10}"
+
+"--name" (string)
+
+   The name of the gateway target. The name must be unique within the
+   gateway.
+
+   Constraints:
+
+   * pattern: "([0-9a-zA-Z][-]?){1,100}"
+
+"--description" (string)
+
+   The description of the gateway target.
+
+   Constraints:
+
+   * min: "1"
+
+   * max: "200"
+
+"--client-token" (string)
+
+   A unique, case-sensitive identifier to ensure that the API request
+   completes no more than one time. If you don't specify this field, a
+   value is randomly generated for you. If this token matches a
+   previous request, the service ignores the request, but doesn't
+   return an error. For more information, see Ensuring idempotency .
+
+   Constraints:
+
+   * min: "33"
+
+   * max: "256"
+
+   * pattern: "[a-zA-Z0-9](-*[a-zA-Z0-9]){0,256}"
+
+"--target-configuration" (tagged union structure) [required]
+
+   The configuration settings for the target, including endpoint
+   information and schema definitions.
+
+   Note: This is a Tagged Union structure. Only one of the following top
+     level keys can be set: "mcp", "http", "inference".
+
+   mcp -> (tagged union structure)
+
+      The Model Context Protocol (MCP) configuration for the target.
+      This configuration defines how the gateway uses MCP to
+      communicate with the target.
+
+      Note: This is a Tagged Union structure. Only one of the following
+        top level keys can be set: "openApiSchema", "smithyModel",
+        "lambda", "mcpServer", "apiGateway", "connector".
+
+      openApiSchema -> (tagged union structure)
+
+         The OpenAPI schema for the Model Context Protocol target.
+         This schema defines the API structure of the target.
+
+         Note: This is a Tagged Union structure. Only one of the following
+           top level keys can be set: "s3", "inlinePayload".
+
+         s3 -> (structure)
+
+            The Amazon S3 configuration for a gateway. This structure
+            defines how the gateway accesses files in Amazon S3.
+
+            uri -> (string)
+
+               The URI of the Amazon S3 object. This URI specifies the
+               location of the object in Amazon S3.
+
+               Constraints:
+
+               * pattern: "s3://.{1,2043}"
+
+            bucketOwnerAccountId -> (string)
+
+               The account ID of the Amazon S3 bucket owner. This ID
+               is used for cross-account access to the bucket.
+
+               Constraints:
+
+               * pattern: "[0-9]{12}"
+
+         inlinePayload -> (string)
+
+            The inline payload containing the API schema definition.
+
+      smithyModel -> (tagged union structure)
+
+         The Smithy model for the Model Context Protocol target. This
+         model defines the API structure of the target using the
+         Smithy specification.
+
+         Note: This is a Tagged Union structure. Only one of the following
+           top level keys can be set: "s3", "inlinePayload".
+
+         s3 -> (structure)
+
+            The Amazon S3 configuration for a gateway. This structure
+            defines how the gateway accesses files in Amazon S3.
+
+            uri -> (string)
+
+               The URI of the Amazon S3 object. This URI specifies the
+               location of the object in Amazon S3.
+
+               Constraints:
+
+               * pattern: "s3://.{1,2043}"
+
+            bucketOwnerAccountId -> (string)
+
+               The account ID of the Amazon S3 bucket owner. This ID
+               is used for cross-account access to the bucket.
+
+               Constraints:
+
+               * pattern: "[0-9]{12}"
+
+         inlinePayload -> (string)
+
+            The inline payload containing the API schema definition.
+
+      lambda -> (structure)
+
+         The Lambda configuration for the Model Context Protocol
+         target. This configuration defines how the gateway uses a
+         Lambda function to communicate with the target.
+
+         lambdaArn -> (string) [required]
+
+            The Amazon Resource Name (ARN) of the Lambda function.
+            This function is invoked by the gateway to communicate
+            with the target.
+
+            Constraints:
+
+            * min: "1"
+
+            * max: "170"
+
+            * pattern: "arn:(aws[a-zA-Z-]*)?:lambda:([a-z]{2}(-gov)?-
+              [a-z]+-\d{1}):(\d{12}):function:([a-zA-Z0-9-
+              _.]+)(:(\$LATEST|[a-zA-Z0-9-_]+))?"
+
+         toolSchema -> (tagged union structure) [required]
+
+            The tool schema for the Lambda function. This schema
+            defines the structure of the tools that the Lambda
+            function provides.
+
+            Note: This is a Tagged Union structure. Only one of the
+              following top level keys can be set: "s3",
+              "inlinePayload".
+
+            s3 -> (structure)
+
+               The Amazon S3 location of the tool schema. This
+               location contains the schema definition file.
+
+               uri -> (string)
+
+                  The URI of the Amazon S3 object. This URI specifies
+                  the location of the object in Amazon S3.
+
+                  Constraints:
+
+                  * pattern: "s3://.{1,2043}"
+
+               bucketOwnerAccountId -> (string)
+
+                  The account ID of the Amazon S3 bucket owner. This
+                  ID is used for cross-account access to the bucket.
+
+                  Constraints:
+
+                  * pattern: "[0-9]{12}"
+
+            inlinePayload -> (list)
+
+               The inline payload of the tool schema. This payload
+               contains the schema definition directly in the request.
+
+               (structure)
+
+                  A tool definition for a gateway target. This
+                  structure defines a tool that the target exposes
+                  through the Model Context Protocol.
+
+                  name -> (string) [required]
+
+                     The name of the tool. This name identifies the
+                     tool in the Model Context Protocol.
+
+                  description -> (string) [required]
+
+                     The description of the tool. This description
+                     provides information about the purpose and usage
+                     of the tool.
+
+                  inputSchema -> (structure) [required]
+
+                     The input schema for the tool. This schema
+                     defines the structure of the input that the tool
+                     accepts.
+
+                     type -> (string) [required]
+
+                        The type of the schema definition. This field
+                        specifies the data type of the schema.
+
+                        Possible values:
+
+                        * "string"
+
+                        * "number"
+
+                        * "object"
+
+                        * "array"
+
+                        * "boolean"
+
+                        * "integer"
+
+                     properties -> (map)
+
+                        The properties of the schema definition. These
+                        properties define the fields in the schema.
+
+                        key -> (string)
+
+                        value -> (structure)
+
+                           A schema definition for a gateway target.
+                           This structure defines the structure of the
+                           API that the target exposes.
+
+                           type -> (string) [required]
+
+                              The type of the schema definition. This
+                              field specifies the data type of the
+                              schema.
+
+                              Possible values:
+
+                              * "string"
+
+                              * "number"
+
+                              * "object"
+
+                              * "array"
+
+                              * "boolean"
+
+                              * "integer"
+
+                           properties -> (map)
+
+                              The properties of the schema definition.
+                              These properties define the fields in
+                              the schema.
+
+                              key -> (string)
+
+                              ( ... recursive ... )
+
+                           required -> (list)
+
+                              The required fields in the schema
+                              definition. These fields must be
+                              provided when using the schema.
+
+                              (string)
+
+                           ( ... recursive ... )description ->
+                           (string)
+
+                              The description of the schema
+                              definition. This description provides
+                              information about the purpose and usage
+                              of the schema.
+
+                     required -> (list)
+
+                        The required fields in the schema definition.
+                        These fields must be provided when using the
+                        schema.
+
+                        (string)
+
+                     items -> (structure)
+
+                        The items in the schema definition. This field
+                        is used for array types to define the
+                        structure of the array elements.
+
+                        type -> (string) [required]
+
+                           The type of the schema definition. This
+                           field specifies the data type of the
+                           schema.
+
+                           Possible values:
+
+                           * "string"
+
+                           * "number"
+
+                           * "object"
+
+                           * "array"
+
+                           * "boolean"
+
+                           * "integer"
+
+                        properties -> (map)
+
+                           The properties of the schema definition.
+                           These properties define the fields in the
+                           schema.
+
+                           key -> (string)
+
+                           ( ... recursive ... )
+
+                        required -> (list)
+
+                           The required fields in the schema
+                           definition. These fields must be provided
+                           when using the schema.
+
+                           (string)
+
+                        ( ... recursive ... )description -> (string)
+
+                           The description of the schema definition.
+                           This description provides information about
+                           the purpose and usage of the schema.
+
+                     description -> (string)
+
+                        The description of the schema definition. This
+                        description provides information about the
+                        purpose and usage of the schema.
+
+                  outputSchema -> (structure)
+
+                     The output schema for the tool. This schema
+                     defines the structure of the output that the tool
+                     produces.
+
+                     type -> (string) [required]
+
+                        The type of the schema definition. This field
+                        specifies the data type of the schema.
+
+                        Possible values:
+
+                        * "string"
+
+                        * "number"
+
+                        * "object"
+
+                        * "array"
+
+                        * "boolean"
+
+                        * "integer"
+
+                     properties -> (map)
+
+                        The properties of the schema definition. These
+                        properties define the fields in the schema.
+
+                        key -> (string)
+
+                        value -> (structure)
+
+                           A schema definition for a gateway target.
+                           This structure defines the structure of the
+                           API that the target exposes.
+
+                           type -> (string) [required]
+
+                              The type of the schema definition. This
+                              field specifies the data type of the
+                              schema.
+
+                              Possible values:
+
+                              * "string"
+
+                              * "number"
+
+                              * "object"
+
+                              * "array"
+
+                              * "boolean"
+
+                              * "integer"
+
+                           properties -> (map)
+
+                              The properties of the schema definition.
+                              These properties define the fields in
+                              the schema.
+
+                              key -> (string)
+
+                              ( ... recursive ... )
+
+                           required -> (list)
+
+                              The required fields in the schema
+                              definition. These fields must be
+                              provided when using the schema.
+
+                              (string)
+
+                           ( ... recursive ... )description ->
+                           (string)
+
+                              The description of the schema
+                              definition. This description provides
+                              information about the purpose and usage
+                              of the schema.
+
+                     required -> (list)
+
+                        The required fields in the schema definition.
+                        These fields must be provided when using the
+                        schema.
+
+                        (string)
+
+                     items -> (structure)
+
+                        The items in the schema definition. This field
+                        is used for array types to define the
+                        structure of the array elements.
+
+                        type -> (string) [required]
+
+                           The type of the schema definition. This
+                           field specifies the data type of the
+                           schema.
+
+                           Possible values:
+
+                           * "string"
+
+                           * "number"
+
+                           * "object"
+
+                           * "array"
+
+                           * "boolean"
+
+                           * "integer"
+
+                        properties -> (map)
+
+                           The properties of the schema definition.
+                           These properties define the fields in the
+                           schema.
+
+                           key -> (string)
+
+                           ( ... recursive ... )
+
+                        required -> (list)
+
+                           The required fields in the schema
+                           definition. These fields must be provided
+                           when using the schema.
+
+                           (string)
+
+                        ( ... recursive ... )description -> (string)
+
+                           The description of the schema definition.
+                           This description provides information about
+                           the purpose and usage of the schema.
+
+                     description -> (string)
+
+                        The description of the schema definition. This
+                        description provides information about the
+                        purpose and usage of the schema.
+
+      mcpServer -> (structure)
+
+         The MCP server specified as the gateway target.
+
+         endpoint -> (string) [required]
+
+            The endpoint for the MCP server target configuration.
+
+            Constraints:
+
+            * pattern: "https://.*"
+
+         mcpToolSchema -> (tagged union structure)
+
+            A static tool list for the MCP server target. It is
+            supported for all credential providers. Dynamic tool
+            discovery/synchronization will be disabled when a target
+            is configured with mcpToolSchema.
+
+            Note: This is a Tagged Union structure. Only one of the
+              following top level keys can be set: "s3",
+              "inlinePayload".
+
+            s3 -> (structure)
+
+               The Amazon S3 location of the tool schema. This
+               location contains the schema definition file.
+
+               uri -> (string)
+
+                  The URI of the Amazon S3 object. This URI specifies
+                  the location of the object in Amazon S3.
+
+                  Constraints:
+
+                  * pattern: "s3://.{1,2043}"
+
+               bucketOwnerAccountId -> (string)
+
+                  The account ID of the Amazon S3 bucket owner. This
+                  ID is used for cross-account access to the bucket.
+
+                  Constraints:
+
+                  * pattern: "[0-9]{12}"
+
+            inlinePayload -> (string)
+
+               The inline payload containing the MCP tool schema
+               definition.
+
+         listingMode -> (string)
+
+            The listing mode for the MCP server target configuration.
+            MCP resources for default targets are cached at the
+            control plane for faster access. MCP resources for dynamic
+            targets will be dynamically retrieved when listing tools.
+
+            Possible values:
+
+            * "DEFAULT"
+
+            * "DYNAMIC"
+
+         resourcePriority -> (integer)
+
+            Priority for resolving MCP server targets with shared
+            resource URIs. Lower values take precedence. Defaults to
+            1000 when not set.
+
+            Constraints:
+
+            * min: "0"
+
+            * max: "1000"
+
+      apiGateway -> (structure)
+
+         The configuration for an Amazon API Gateway target.
+
+         restApiId -> (string) [required]
+
+            The ID of the API Gateway REST API.
+
+         stage -> (string) [required]
+
+            The ID of the stage of the REST API to add as a target.
+
+         apiGatewayToolConfiguration -> (structure) [required]
+
+            The configuration for defining REST API tool filters and
+            overrides for the gateway target.
+
+            toolOverrides -> (list)
+
+               A list of explicit tool definitions with optional
+               custom names and descriptions.
+
+               (structure)
+
+                  Settings to override configurations for a tool.
+
+                  name -> (string) [required]
+
+                     The name of tool. Identifies the tool in the
+                     Model Context Protocol.
+
+                  description -> (string)
+
+                     The description of the tool. Provides information
+                     about the purpose and usage of the tool. If not
+                     provided, uses the description from the API's
+                     OpenAPI specification.
+
+                  path -> (string) [required]
+
+                     Resource path in the REST API (e.g., "/pets" ).
+                     Must explicitly match an existing path in the
+                     REST API.
+
+                  method -> (string) [required]
+
+                     The HTTP method to expose for the specified path.
+
+                     Possible values:
+
+                     * "GET"
+
+                     * "DELETE"
+
+                     * "HEAD"
+
+                     * "OPTIONS"
+
+                     * "PATCH"
+
+                     * "PUT"
+
+                     * "POST"
+
+            toolFilters -> (list) [required]
+
+               A list of path and method patterns to expose as tools
+               using metadata from the REST API's OpenAPI
+               specification.
+
+               (structure)
+
+                  Specifies which operations from an API Gateway REST
+                  API are exposed as tools. Tool names and
+                  descriptions are derived from the operationId and
+                  description fields in the API's exported OpenAPI
+                  specification.
+
+                  filterPath -> (string) [required]
+
+                     Resource path to match in the REST API. Supports
+                     exact paths (for example, "/pets" ) or wildcard
+                     paths (for example, "/pets/*" to match all paths
+                     under "/pets" ). Must match existing paths in the
+                     REST API.
+
+                  methods -> (list) [required]
+
+                     The methods to filter for.
+
+                     (string)
+
+                        Possible values:
+
+                        * "GET"
+
+                        * "DELETE"
+
+                        * "HEAD"
+
+                        * "OPTIONS"
+
+                        * "PATCH"
+
+                        * "PUT"
+
+                        * "POST"
+
+      connector -> (structure)
+
+         The connector integration configuration for the Model Context
+         Protocol target. This configuration defines how the gateway
+         uses a pre-built connector to communicate with the target.
+
+         source -> (structure) [required]
+
+            The source configuration identifying which connector to
+            use.
+
+            connectorId -> (string) [required]
+
+               The identifier for the connector integration (for
+               example, "bedrock-knowledge-bases" ).
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "256"
+
+            version -> (string)
+
+               The version of the connector to use (for example,
+               "1.1.0" ). If you don't specify a version, the service
+               uses the latest available version.
+
+               Constraints:
+
+               * min: "5"
+
+               * max: "32"
+
+               * pattern:
+                 "(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)"
+
+         enabled -> (list)
+
+            A list of tool names to enable from this connector. If
+            absent, all tools provided by the connector are enabled.
+
+            Constraints:
+
+            * min: "1"
+
+            * max: "50"
+
+            (string)
+
+         configurations -> (list)
+
+            A list of per-tool configurations for the connector.
+
+            (structure)
+
+               Configuration for a single tool within a connector.
+
+               name -> (string) [required]
+
+                  The tool or operation name (for example, "retrieve"
+                  or "webSearch" ).
+
+                  Constraints:
+
+                  * min: "0"
+
+                  * max: "64"
+
+                  * pattern: "[a-zA-Z][a-zA-Z0-9_-]*"
+
+               description -> (string)
+
+                  An agent-facing description override for this tool.
+
+                  Constraints:
+
+                  * min: "0"
+
+                  * max: "2000"
+
+               parameterValues -> (document)
+
+                  Parameters to set as fixed or default values when
+                  provisioning this tool.
+
+               parameterOverrides -> (list)
+
+                  Parameters to expose to the agent at runtime, with
+                  optional description overrides.
+
+                  (structure)
+
+                     Specifies a parameter override for a connector
+                     tool, allowing you to control parameter
+                     visibility and descriptions.
+
+                     path -> (string) [required]
+
+                        A JSON Pointer path identifying the parameter
+                        (for example, "/numberOfResults" or "/filter"
+                        ).
+
+                     description -> (string)
+
+                        An agent-facing description override for this
+                        parameter.
+
+                     visible -> (boolean)
+
+                        Whether this parameter is visible to the
+                        agent. If not specified, uses the service
+                        default.
+
+   http -> (tagged union structure)
+
+      The HTTP target configuration. Use this to route gateway
+      requests to an HTTP-based endpoint such as an AgentCore Runtime.
+
+      Note: This is a Tagged Union structure. Only one of the following
+        top level keys can be set: "agentcoreRuntime", "passthrough",
+        "connector".
+
+      agentcoreRuntime -> (structure)
+
+         The AgentCore Runtime target configuration for HTTP-based
+         communication with an agent runtime.
+
+         arn -> (string) [required]
+
+            The Amazon Resource Name (ARN) of the AgentCore Runtime to
+            route requests to.
+
+            Constraints:
+
+            * pattern: "arn:aws(-[^:]+)?:bedrock-agentcore:[a-z0-9-
+              ]+:[0-9]{12}:runtime/[a-zA-Z][a-zA-Z0-9_]{0,47}-[a-zA-
+              Z0-9]{10}"
+
+         qualifier -> (string)
+
+            The qualifier for the agent runtime, used to target a
+            specific endpoint version. If not specified, the default
+            endpoint is used.
+
+            Constraints:
+
+            * pattern:
+              ".*([1-9][0-9]{0,4})|([a-zA-Z][a-zA-Z0-9_]{0,47}).*"
+
+         schema -> (structure)
+
+            The API schema configuration that defines the structure of
+            the runtime target's API.
+
+            source -> (tagged union structure) [required]
+
+               Configuration for API schema.
+
+               Note: This is a Tagged Union structure. Only one of the
+                 following top level keys can be set: "s3",
+                 "inlinePayload".
+
+               s3 -> (structure)
+
+                  The Amazon S3 configuration for a gateway. This
+                  structure defines how the gateway accesses files in
+                  Amazon S3.
+
+                  uri -> (string)
+
+                     The URI of the Amazon S3 object. This URI
+                     specifies the location of the object in Amazon
+                     S3.
+
+                     Constraints:
+
+                     * pattern: "s3://.{1,2043}"
+
+                  bucketOwnerAccountId -> (string)
+
+                     The account ID of the Amazon S3 bucket owner.
+                     This ID is used for cross-account access to the
+                     bucket.
+
+                     Constraints:
+
+                     * pattern: "[0-9]{12}"
+
+               inlinePayload -> (string)
+
+                  The inline payload containing the API schema
+                  definition.
+
+      passthrough -> (structure)
+
+         The passthrough configuration for the HTTP target. A
+         passthrough target forwards requests directly to an external
+         HTTP endpoint.
+
+         endpoint -> (string) [required]
+
+            The HTTPS endpoint that the gateway forwards requests to
+            for this passthrough target.
+
+            Constraints:
+
+            * min: "1"
+
+            * max: "2048"
+
+            * pattern: "https://[a-zA-Z0-9\-\.]+(:[0-9]{1,5})?(/.*)?"
+
+         protocolType -> (string) [required]
+
+            The application protocol that the passthrough target
+            implements. This value is required for passthrough
+            targets:
+
+            * "MCP" - The Model Context Protocol.
+
+            * "A2A" - The Agent-to-Agent protocol.
+
+            * "INFERENCE" - The protocol for routing requests to a
+              large language model (LLM) provider.
+
+            * "CUSTOM" - A custom application protocol.
+
+            Possible values:
+
+            * "MCP"
+
+            * "A2A"
+
+            * "INFERENCE"
+
+            * "CUSTOM"
+
+         schema -> (structure)
+
+            The API schema configuration that defines the structure of
+            the passthrough target's API.
+
+            source -> (tagged union structure) [required]
+
+               Configuration for API schema.
+
+               Note: This is a Tagged Union structure. Only one of the
+                 following top level keys can be set: "s3",
+                 "inlinePayload".
+
+               s3 -> (structure)
+
+                  The Amazon S3 configuration for a gateway. This
+                  structure defines how the gateway accesses files in
+                  Amazon S3.
+
+                  uri -> (string)
+
+                     The URI of the Amazon S3 object. This URI
+                     specifies the location of the object in Amazon
+                     S3.
+
+                     Constraints:
+
+                     * pattern: "s3://.{1,2043}"
+
+                  bucketOwnerAccountId -> (string)
+
+                     The account ID of the Amazon S3 bucket owner.
+                     This ID is used for cross-account access to the
+                     bucket.
+
+                     Constraints:
+
+                     * pattern: "[0-9]{12}"
+
+               inlinePayload -> (string)
+
+                  The inline payload containing the API schema
+                  definition.
+
+         stickinessConfiguration -> (structure)
+
+            The session stickiness configuration for the passthrough
+            target. This configuration routes requests within the same
+            session to the same target.
+
+            identifier -> (string) [required]
+
+               The expression that identifies where to extract the
+               session identifier from the request (for example,
+               "$context.header.x-session-id" ).
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "256"
+
+            timeout -> (integer)
+
+               The session stickiness timeout, in seconds. After this
+               duration of inactivity, the session affinity expires.
+               Valid values range from 1 to 86400.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "86400"
+
+            compositeIdentifier -> (list)
+
+               Additional headers to include in session affinity
+               routing. When set, requests are only considered part of
+               the same session if both the "identifier" and all
+               composite identifier values match.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "5"
+
+               (string)
+
+                  Constraints:
+
+                  * min: "1"
+
+                  * max: "256"
+
+         staticQueryParameters -> (map)
+
+            A map of static query parameters that the gateway always
+            appends to the outbound URL when forwarding requests to
+            the target. The total outbound URL length, which includes
+            the endpoint and the percent-encoded query parameters, is
+            enforced by the service.
+
+            key -> (string)
+
+               The name of a static query parameter. Allowed
+               characters are letters, digits, "_" , "." , and "-" .
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "128"
+
+               * pattern: "[a-zA-Z0-9_.-]+"
+
+            value -> (string)
+
+               The value of a static query parameter. Control
+               characters (ASCII "0x00" -"0x1F" and "0x7F" ) are not
+               permitted. URI-reserved characters are allowed and are
+               percent-encoded by the gateway. Empty values are
+               allowed.
+
+               Constraints:
+
+               * pattern: "[^\x00-\x1F\x7F]*"
+
+         staticQueryParameterConflictResolution -> (string)
+
+            Controls precedence when a client request supplies a query
+            parameter whose name matches a configured static query
+            parameter. If not set, defaults to "CLIENT_OVERRIDE" :
+
+            * "CLIENT_OVERRIDE" - The client-supplied value overrides
+              the configured static value for that parameter name.
+
+            * "STATIC_OVERRIDE" - The configured static value is
+              retained, overriding the client-supplied value for that
+              parameter name.
+
+            Possible values:
+
+            * "CLIENT_OVERRIDE"
+
+            * "STATIC_OVERRIDE"
+
+      connector -> (structure)
+
+         The connector-based configuration for the HTTP target. Use
+         this configuration when you want to route HTTP requests
+         through a managed connector.
+
+         source -> (structure) [required]
+
+            The source configuration identifying which HTTP connector
+            to use.
+
+            connectorId -> (string) [required]
+
+               The identifier for the HTTP connector integration.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "256"
+
+         parameters -> (map)
+
+            The resource parameters for this connector (for example,
+            "memoryId" ). The service validates these parameters
+            against the request path at runtime.
+
+            Constraints:
+
+            * min: "0"
+
+            * max: "10"
+
+            key -> (string)
+
+               The name of a connector parameter (for example,
+               "memoryId" ). The name must start with a letter and
+               contain only letters, digits, underscores, and hyphens.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "128"
+
+               * pattern: "[a-zA-Z][a-zA-Z0-9_-]*"
+
+            value -> (string)
+
+               The value of a connector parameter. Length: 1–1,024
+               characters.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "1024"
+
+   inference -> (tagged union structure)
+
+      The inference configuration for the target. This configuration
+      routes requests to a large language model (LLM) provider.
+
+      Note: This is a Tagged Union structure. Only one of the following
+        top level keys can be set: "connector", "provider".
+
+      connector -> (structure)
+
+         The connector-based inference configuration. Use this option
+         to route requests to an LLM provider through a built-in
+         connector that includes predefined provider rules.
+
+         source -> (structure) [required]
+
+            The source configuration identifying which inference
+            connector to use.
+
+            connectorId -> (string) [required]
+
+               The identifier for the inference connector (for
+               example, "bedrock-mantle" , "openai" , or "anthropic"
+               ).
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "256"
+
+      provider -> (structure)
+
+         The provider-based inference configuration. Use this option
+         to explicitly configure the endpoint, model mapping, and
+         operations for an LLM provider.
+
+         endpoint -> (string) [required]
+
+            The HTTPS endpoint of the inference provider that the
+            gateway forwards requests to.
+
+            Constraints:
+
+            * min: "1"
+
+            * max: "2048"
+
+            * pattern: "https://[a-zA-Z0-9\-\.]+(:[0-9]{1,5})?(/.*)?"
+
+         modelMapping -> (structure)
+
+            The configuration that translates client-facing model IDs
+            to the model IDs expected by the provider.
+
+            providerPrefix -> (structure)
+
+               The provider prefix configuration used for model ID
+               translation.
+
+               strip -> (boolean)
+
+                  Whether clients can omit the provider prefix from
+                  model IDs. If "true" , the gateway accepts model IDs
+                  without the prefix and restores the full prefixed
+                  form before forwarding to the provider. The default
+                  is "false" .
+
+               separator -> (string)
+
+                  The single character that separates the provider
+                  prefix from the model name (for example, "." ). The
+                  default is "." .
+
+                  Constraints:
+
+                  * min: "1"
+
+                  * max: "1"
+
+         operations -> (list)
+
+            A list of per-operation configurations that map request
+            paths to the models supported for each operation.
+
+            Constraints:
+
+            * min: "1"
+
+            * max: "10"
+
+            (structure)
+
+               The configuration for a specific inference operation,
+               including its request path and the models that the
+               operation supports.
+
+               path -> (string) [required]
+
+                  The request path for this operation (for example,
+                  "/v1/messages" or "/v1/responses" ).
+
+                  Constraints:
+
+                  * min: "1"
+
+                  * max: "256"
+
+                  * pattern: "/[a-zA-Z0-9\-\._/{}]+"
+
+               providerPath -> (string)
+
+                  The provider path to forward requests to, if it
+                  differs from the request path. For example,
+                  "/anthropic/v1/messages" when the provider expects a
+                  different path than the client-facing "/v1/messages"
+                  .
+
+                  Constraints:
+
+                  * min: "1"
+
+                  * max: "256"
+
+                  * pattern: "/[a-zA-Z0-9\-\._/{}]+"
+
+               models -> (list)
+
+                  The list of models supported for this operation.
+
+                  Constraints:
+
+                  * min: "1"
+
+                  * max: "100"
+
+                  (structure)
+
+                     A model entry that specifies a model supported
+                     for an inference operation.
+
+                     model -> (string) [required]
+
+                        The model ID or glob pattern that identifies
+                        the model (for example, "anthropic.claude-
+                        opus-*" or "openai.gpt-oss-*" ).
+
+                        Constraints:
+
+                        * min: "1"
+
+                        * max: "2048"
+
+                        * pattern: "[a-zA-Z0-9\-\._\*\?@:]+(/[a-zA-Z0-
+                          9\-\._\*\?@:]+)*"
+
+JSON Syntax:
+
+   {
+     "mcp": {
+       "openApiSchema": {
+         "s3": {
+           "uri": "string",
+           "bucketOwnerAccountId": "string"
+         },
+         "inlinePayload": "string"
+       },
+       "smithyModel": {
+         "s3": {
+           "uri": "string",
+           "bucketOwnerAccountId": "string"
+         },
+         "inlinePayload": "string"
+       },
+       "lambda": {
+         "lambdaArn": "string",
+         "toolSchema": {
+           "s3": {
+             "uri": "string",
+             "bucketOwnerAccountId": "string"
+           },
+           "inlinePayload": [
+             {
+               "name": "string",
+               "description": "string",
+               "inputSchema": {
+                 "type": "string"|"number"|"object"|"array"|"boolean"|"integer",
+                 "properties": {"string": {
+                       "type": "string"|"number"|"object"|"array"|"boolean"|"integer",
+                       "properties": {"string": { ... recursive ... }
+                         ...},
+                       "required": ["string", ...],
+                       "items": { ... recursive ... },
+                       "description": "string"
+                     }
+                   ...},
+                 "required": ["string", ...],
+                 "items": {
+                   "type": "string"|"number"|"object"|"array"|"boolean"|"integer",
+                   "properties": {"string": { ... recursive ... }
+                     ...},
+                   "required": ["string", ...],
+                   "items": { ... recursive ... },
+                   "description": "string"
+                 },
+                 "description": "string"
+               },
+               "outputSchema": {
+                 "type": "string"|"number"|"object"|"array"|"boolean"|"integer",
+                 "properties": {"string": {
+                       "type": "string"|"number"|"object"|"array"|"boolean"|"integer",
+                       "properties": {"string": { ... recursive ... }
+                         ...},
+                       "required": ["string", ...],
+                       "items": { ... recursive ... },
+                       "description": "string"
+                     }
+                   ...},
+                 "required": ["string", ...],
+                 "items": {
+                   "type": "string"|"number"|"object"|"array"|"boolean"|"integer",
+                   "properties": {"string": { ... recursive ... }
+                     ...},
+                   "required": ["string", ...],
+                   "items": { ... recursive ... },
+                   "description": "string"
+                 },
+                 "description": "string"
+               }
+             }
+             ...
+           ]
+         }
+       },
+       "mcpServer": {
+         "endpoint": "string",
+         "mcpToolSchema": {
+           "s3": {
+             "uri": "string",
+             "bucketOwnerAccountId": "string"
+           },
+           "inlinePayload": "string"
+         },
+         "listingMode": "DEFAULT"|"DYNAMIC",
+         "resourcePriority": integer
+       },
+       "apiGateway": {
+         "restApiId": "string",
+         "stage": "string",
+         "apiGatewayToolConfiguration": {
+           "toolOverrides": [
+             {
+               "name": "string",
+               "description": "string",
+               "path": "string",
+               "method": "GET"|"DELETE"|"HEAD"|"OPTIONS"|"PATCH"|"PUT"|"POST"
+             }
+             ...
+           ],
+           "toolFilters": [
+             {
+               "filterPath": "string",
+               "methods": ["GET"|"DELETE"|"HEAD"|"OPTIONS"|"PATCH"|"PUT"|"POST", ...]
+             }
+             ...
+           ]
+         }
+       },
+       "connector": {
+         "source": {
+           "connectorId": "string",
+           "version": "string"
+         },
+         "enabled": ["string", ...],
+         "configurations": [
+           {
+             "name": "string",
+             "description": "string",
+             "parameterValues": {...},
+             "parameterOverrides": [
+               {
+                 "path": "string",
+                 "description": "string",
+                 "visible": true|false
+               }
+               ...
+             ]
+           }
+           ...
+         ]
+       }
+     },
+     "http": {
+       "agentcoreRuntime": {
+         "arn": "string",
+         "qualifier": "string",
+         "schema": {
+           "source": {
+             "s3": {
+               "uri": "string",
+               "bucketOwnerAccountId": "string"
+             },
+             "inlinePayload": "string"
+           }
+         }
+       },
+       "passthrough": {
+         "endpoint": "string",
+         "protocolType": "MCP"|"A2A"|"INFERENCE"|"CUSTOM",
+         "schema": {
+           "source": {
+             "s3": {
+               "uri": "string",
+               "bucketOwnerAccountId": "string"
+             },
+             "inlinePayload": "string"
+           }
+         },
+         "stickinessConfiguration": {
+           "identifier": "string",
+           "timeout": integer,
+           "compositeIdentifier": ["string", ...]
+         },
+         "staticQueryParameters": {"string": "string"
+           ...},
+         "staticQueryParameterConflictResolution": "CLIENT_OVERRIDE"|"STATIC_OVERRIDE"
+       },
+       "connector": {
+         "source": {
+           "connectorId": "string"
+         },
+         "parameters": {"string": "string"
+           ...}
+       }
+     },
+     "inference": {
+       "connector": {
+         "source": {
+           "connectorId": "string"
+         }
+       },
+       "provider": {
+         "endpoint": "string",
+         "modelMapping": {
+           "providerPrefix": {
+             "strip": true|false,
+             "separator": "string"
+           }
+         },
+         "operations": [
+           {
+             "path": "string",
+             "providerPath": "string",
+             "models": [
+               {
+                 "model": "string"
+               }
+               ...
+             ]
+           }
+           ...
+         ]
+       }
+     }
+   }
+
+"--credential-provider-configurations" (list)
+
+   The credential provider configurations for the target. These
+   configurations specify how the gateway authenticates with the
+   target endpoint.
+
+   Constraints:
+
+   * min: "1"
+
+   * max: "1"
+
+   (structure)
+
+      The configuration for a credential provider. This structure
+      defines how the gateway authenticates with the target endpoint.
+
+      credentialProviderType -> (string) [required]
+
+         The type of credential provider. This field specifies which
+         authentication method the gateway uses.
+
+         Possible values:
+
+         * "GATEWAY_IAM_ROLE"
+
+         * "OAUTH"
+
+         * "API_KEY"
+
+         * "CALLER_IAM_CREDENTIALS"
+
+         * "JWT_PASSTHROUGH"
+
+      credentialProvider -> (tagged union structure)
+
+         The credential provider. This field contains the specific
+         configuration for the credential provider type.
+
+         Note: This is a Tagged Union structure. Only one of the following
+           top level keys can be set: "oauthCredentialProvider",
+           "apiKeyCredentialProvider", "iamCredentialProvider".
+
+         oauthCredentialProvider -> (structure)
+
+            The OAuth credential provider. This provider uses OAuth
+            authentication to access the target endpoint.
+
+            providerArn -> (string) [required]
+
+               The Amazon Resource Name (ARN) of the OAuth credential
+               provider. This ARN identifies the provider in Amazon
+               Web Services.
+
+               Constraints:
+
+               * pattern:
+                 "arn:([^:]*):([^:]*):([^:]*):([0-9]{12})?:(.+)"
+
+            scopes -> (list) [required]
+
+               The OAuth scopes for the credential provider. These
+               scopes define the level of access requested from the
+               OAuth provider.
+
+               Constraints:
+
+               * min: "0"
+
+               * max: "100"
+
+               (string)
+
+                  Constraints:
+
+                  * min: "1"
+
+                  * max: "64"
+
+            customParameters -> (map)
+
+               The custom parameters for the OAuth credential
+               provider. These parameters provide additional
+               configuration for the OAuth authentication process.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "10"
+
+               key -> (string)
+
+                  Constraints:
+
+                  * min: "1"
+
+                  * max: "256"
+
+               value -> (string)
+
+                  Constraints:
+
+                  * min: "1"
+
+                  * max: "2048"
+
+            grantType -> (string)
+
+               Specifies the kind of credentials to use for
+               authorization:
+
+               * "CLIENT_CREDENTIALS" - Authorization with a client ID
+                 and secret.
+
+               * "AUTHORIZATION_CODE" - Authorization with a token
+                 that is specific to an individual end user.
+
+               * "TOKEN_EXCHANGE" - Authorization using on-behalf-of
+                 token exchange. An inbound user token is exchanged
+                 for a downstream access token scoped to the target
+                 audience.
+
+               Possible values:
+
+               * "CLIENT_CREDENTIALS"
+
+               * "AUTHORIZATION_CODE"
+
+               * "TOKEN_EXCHANGE"
+
+            defaultReturnUrl -> (string)
+
+               The URL where the end user's browser is redirected
+               after obtaining the authorization code. Generally
+               points to the customer's application.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "2048"
+
+               * pattern: "\w+:(\/?\/?)[^\s]+"
+
+         apiKeyCredentialProvider -> (structure)
+
+            The API key credential provider. This provider uses an API
+            key to authenticate with the target endpoint.
+
+            providerArn -> (string) [required]
+
+               The Amazon Resource Name (ARN) of the API key
+               credential provider. This ARN identifies the provider
+               in Amazon Web Services.
+
+               Constraints:
+
+               * pattern:
+                 "arn:([^:]*):([^:]*):([^:]*):([0-9]{12})?:(.+)"
+
+            credentialParameterName -> (string)
+
+               The name of the credential parameter for the API key.
+               This parameter name is used when sending the API key to
+               the target endpoint.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "64"
+
+            credentialPrefix -> (string)
+
+               The prefix for the API key credential. This prefix is
+               added to the API key when sending it to the target
+               endpoint.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "64"
+
+            credentialLocation -> (string)
+
+               The location of the API key credential. This field
+               specifies where in the request the API key should be
+               placed.
+
+               Possible values:
+
+               * "HEADER"
+
+               * "QUERY_PARAMETER"
+
+         iamCredentialProvider -> (structure)
+
+            The IAM credential provider. This provider uses IAM
+            authentication with SigV4 signing to access the target
+            endpoint.
+
+            service -> (string) [required]
+
+               The target Amazon Web Services service name used for
+               SigV4 signing. This value identifies the service that
+               the gateway authenticates with when making requests to
+               the target endpoint.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "64"
+
+               * pattern: "[a-zA-Z0-9._-]+"
+
+            region -> (string)
+
+               The Amazon Web Services Region used for SigV4 signing.
+               If not specified, defaults to the gateway's Region.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "32"
+
+               * pattern: "[a-zA-Z0-9-]+"
+
+JSON Syntax:
+
+   [
+     {
+       "credentialProviderType": "GATEWAY_IAM_ROLE"|"OAUTH"|"API_KEY"|"CALLER_IAM_CREDENTIALS"|"JWT_PASSTHROUGH",
+       "credentialProvider": {
+         "oauthCredentialProvider": {
+           "providerArn": "string",
+           "scopes": ["string", ...],
+           "customParameters": {"string": "string"
+             ...},
+           "grantType": "CLIENT_CREDENTIALS"|"AUTHORIZATION_CODE"|"TOKEN_EXCHANGE",
+           "defaultReturnUrl": "string"
+         },
+         "apiKeyCredentialProvider": {
+           "providerArn": "string",
+           "credentialParameterName": "string",
+           "credentialPrefix": "string",
+           "credentialLocation": "HEADER"|"QUERY_PARAMETER"
+         },
+         "iamCredentialProvider": {
+           "service": "string",
+           "region": "string"
+         }
+       }
+     }
+     ...
+   ]
+
+"--metadata-configuration" (structure)
+
+   Optional configuration for HTTP header and query parameter
+   propagation to and from the gateway target.
+
+   allowedRequestHeaders -> (list)
+
+      A list of HTTP headers that are allowed to be propagated from
+      incoming client requests to the target.
+
+      Constraints:
+
+      * min: "1"
+
+      * max: "10"
+
+      (string)
+
+         Constraints:
+
+         * min: "1"
+
+         * max: "100"
+
+   allowedQueryParameters -> (list)
+
+      A list of URL query parameters that are allowed to be propagated
+      from incoming gateway URL to the target.
+
+      Constraints:
+
+      * min: "1"
+
+      * max: "10"
+
+      (string)
+
+         Constraints:
+
+         * min: "1"
+
+         * max: "40"
+
+   allowedResponseHeaders -> (list)
+
+      A list of HTTP headers that are allowed to be propagated from
+      the target response back to the client.
+
+      Constraints:
+
+      * min: "1"
+
+      * max: "10"
+
+      (string)
+
+         Constraints:
+
+         * min: "1"
+
+         * max: "100"
+
+Shorthand Syntax:
+
+   allowedRequestHeaders=string,string,allowedQueryParameters=string,string,allowedResponseHeaders=string,string
+
+JSON Syntax:
+
+   {
+     "allowedRequestHeaders": ["string", ...],
+     "allowedQueryParameters": ["string", ...],
+     "allowedResponseHeaders": ["string", ...]
+   }
+
+"--private-endpoint" (tagged union structure)
+
+   The private endpoint configuration for the gateway target. Use this
+   to connect the gateway to private resources in your VPC.
+
+   Note: This is a Tagged Union structure. Only one of the following top
+     level keys can be set: "selfManagedLatticeResource",
+     "managedVpcResource".
+
+   selfManagedLatticeResource -> (tagged union structure)
+
+      Configuration for connecting to a private resource using a self-
+      managed VPC Lattice resource configuration.
+
+      Note: This is a Tagged Union structure. Only one of the following
+        top level keys can be set: "resourceConfigurationIdentifier".
+
+      resourceConfigurationIdentifier -> (string)
+
+         The ARN or ID of the VPC Lattice resource configuration.
+
+         Constraints:
+
+         * min: "20"
+
+         * max: "2048"
+
+         * pattern: "((rcfg-[0-9a-z]{17})|(arn:[a-z0-9\-]+:vpc-lattice
+           :[a-zA-Z0-9\-]+:\d{12}:resourceconfiguration/rcfg-[0-9a-
+           z]{17}))"
+
+   managedVpcResource -> (structure)
+
+      Configuration for connecting to a private resource using a
+      managed VPC Lattice resource. The gateway creates and manages
+      the VPC Lattice resources on your behalf.
+
+      vpcIdentifier -> (string) [required]
+
+         The ID of the VPC that contains your private resource.
+
+         Constraints:
+
+         * pattern: "vpc-(([0-9a-z]{8})|([0-9a-z]{17}))"
+
+      subnetIds -> (list) [required]
+
+         The subnet IDs within the VPC where the VPC Lattice resource
+         gateway is placed.
+
+         (string)
+
+            Constraints:
+
+            * pattern: "subnet-[0-9a-zA-Z]{8,17}"
+
+      endpointIpAddressType -> (string) [required]
+
+         The IP address type for the resource configuration endpoint.
+
+         Possible values:
+
+         * "IPV4"
+
+         * "IPV6"
+
+      securityGroupIds -> (list)
+
+         The security group IDs to associate with the VPC Lattice
+         resource gateway. If not specified, the default security
+         group for the VPC is used.
+
+         Constraints:
+
+         * min: "0"
+
+         * max: "5"
+
+         (string)
+
+            Constraints:
+
+            * pattern: "sg-(([0-9a-z]{8})|([0-9a-z]{17}))"
+
+      tags -> (map)
+
+         Tags to apply to the managed VPC Lattice resource gateway.
+
+         Constraints:
+
+         * min: "0"
+
+         * max: "50"
+
+         key -> (string)
+
+            Constraints:
+
+            * min: "1"
+
+            * max: "128"
+
+            * pattern: "[a-zA-Z0-9\s._:/=+@-]*"
+
+         value -> (string)
+
+            Constraints:
+
+            * min: "0"
+
+            * max: "256"
+
+            * pattern: "[a-zA-Z0-9\s._:/=+@-]*"
+
+      routingDomain -> (string)
+
+         An intermediate domain to use as the resource configuration
+         endpoint instead of the actual target domain. Use this when
+         you want to route traffic through an intermediate component
+         such as a VPC endpoint or internal load balancer. For more
+         information, see xref:lattice-vpc-egress-routing-domain[Route
+         traffic through an intermediate domain].
+
+         Constraints:
+
+         * min: "3"
+
+         * max: "255"
+
+Shorthand Syntax:
+
+   selfManagedLatticeResource={resourceConfigurationIdentifier=string},managedVpcResource={vpcIdentifier=string,subnetIds=[string,string],endpointIpAddressType=string,securityGroupIds=[string,string],tags={KeyName1=string,KeyName2=string},routingDomain=string}
+
+JSON Syntax:
+
+   {
+     "selfManagedLatticeResource": {
+       "resourceConfigurationIdentifier": "string"
+     },
+     "managedVpcResource": {
+       "vpcIdentifier": "string",
+       "subnetIds": ["string", ...],
+       "endpointIpAddressType": "IPV4"|"IPV6",
+       "securityGroupIds": ["string", ...],
+       "tags": {"string": "string"
+         ...},
+       "routingDomain": "string"
+     }
+   }
+
+"--certificate-configurations" (list)
+
+   The private certificate authority (CA) configurations for the
+   gateway target. Use this to have the gateway trust a private CA
+   when it establishes TLS connections to the target endpoint. Provide
+   each certificate by reference to an Amazon S3 object or an Amazon
+   Web Services Secrets Manager secret. You can specify only one
+   certificate authority configuration in this list.
+
+   Constraints:
+
+   * min: "1"
+
+   * max: "1"
+
+   (tagged union structure)
+
+      A reference to a private certificate authority (CA) certificate
+      that the gateway uses to verify TLS connections to the target
+      endpoint. Use this when the target presents a certificate issued
+      by a private CA that is not trusted by default. Specify exactly
+      one certificate source. The configuration is a reference only
+      and never contains the certificate content.
+
+      Note: This is a Tagged Union structure. Only one of the following
+        top level keys can be set: "s3", "secretsManager".
+
+      s3 -> (structure)
+
+         The Amazon S3 location of the PEM-encoded private CA
+         certificate.
+
+         uri -> (string) [required]
+
+            The URI of the Amazon S3 object that contains the PEM-
+            encoded certificate.
+
+            Constraints:
+
+            * pattern: "s3://.{1,2043}"
+
+         bucketOwnerAccountId -> (string)
+
+            The account ID of the Amazon S3 bucket owner. This ID is
+            used for cross-account access to the bucket.
+
+            Constraints:
+
+            * pattern: "[0-9]{12}"
+
+      secretsManager -> (structure)
+
+         The Amazon Web Services Secrets Manager location of the PEM-
+         encoded private CA certificate.
+
+         secretArn -> (string) [required]
+
+            The Amazon Resource Name (ARN) of the Amazon Web Services
+            Secrets Manager secret that contains the PEM-encoded
+            certificate.
+
+            Constraints:
+
+            * pattern: "arn:aws(-[^:]+)?:secretsmanager:[a-z0-9-]+:[0-
+              9]{12}:secret:.+"
+
+Shorthand Syntax:
+
+   s3={uri=string,bucketOwnerAccountId=string},secretsManager={secretArn=string} ...
+
+JSON Syntax:
+
+   [
+     {
+       "s3": {
+         "uri": "string",
+         "bucketOwnerAccountId": "string"
+       },
+       "secretsManager": {
+         "secretArn": "string"
+       }
+     }
+     ...
+   ]
+
+"--cli-input-json" | "--cli-input-yaml" (string) Reads arguments from
+the JSON string provided. The JSON string follows the format provided
+by "--generate-cli-skeleton". If other arguments are provided on the
+command line, those values will override the JSON-provided values. It
+is not possible to pass arbitrary binary values using a JSON-provided
+value as the string will be taken literally. This may not be specified
+along with "--cli-input-yaml".
+
+"--generate-cli-skeleton" (string) Prints a JSON skeleton to standard
+output without sending an API request. If provided with no value or
+the value "input", prints a sample input JSON that can be used as an
+argument for "--cli-input-json". Similarly, if provided "yaml-input"
+it will print a sample input YAML that can be used with "--cli-input-
+yaml". If provided with the value "output", it validates the command
+inputs and returns a sample output JSON for that command. The
+generated JSON skeleton is not stable between versions of the AWS CLI
+and there are no backwards compatibility guarantees in the JSON
+skeleton generated.
+
+
+Global Options
+**************
+
+"--debug" (boolean)
+
+Turn on debug logging.
+
+"--endpoint-url" (string)
+
+Override command's default URL with the given URL.
+
+"--no-verify-ssl" (boolean)
+
+By default, the AWS CLI uses SSL when communicating with AWS services.
+For each SSL connection, the AWS CLI will verify SSL certificates.
+This option overrides the default behavior of verifying SSL
+certificates.
+
+"--no-paginate" (boolean)
+
+Disable automatic pagination. If automatic pagination is disabled, the
+AWS CLI will only make one call, for the first page of results.
+
+"--output" (string)
+
+The formatting style for command output.
+
+* json
+
+* text
+
+* table
+
+* yaml
+
+* yaml-stream
+
+* off
+
+"--query" (string)
+
+A JMESPath query to use in filtering the response data.
+
+"--profile" (string)
+
+Use a specific profile from your credential file.
+
+"--region" (string)
+
+The region to use. Overrides config/env settings.
+
+"--version" (string)
+
+Display the version of this tool.
+
+"--color" (string)
+
+Turn on/off color output.
+
+* on
+
+* off
+
+* auto
+
+"--no-sign-request" (boolean)
+
+Do not sign requests. Credentials will not be loaded if this argument
+is provided.
+
+"--ca-bundle" (string)
+
+The CA certificate bundle to use when verifying SSL certificates.
+Overrides config/env settings.
+
+"--cli-read-timeout" (int)
+
+The maximum socket read time in seconds. If the value is set to 0, the
+socket read will be blocking and not timeout. The default value is 60
+seconds.
+
+"--cli-connect-timeout" (int)
+
+The maximum socket connect time in seconds. If the value is set to 0,
+the socket connect will be blocking and not timeout. The default value
+is 60 seconds.
+
+"--cli-binary-format" (string)
+
+The formatting style to be used for binary blobs. The default format
+is base64. The base64 format expects binary blobs to be provided as a
+base64 encoded string. The raw-in-base64-out format preserves
+compatibility with AWS CLI V1 behavior and binary values must be
+passed literally. When providing contents from a file that map to a
+binary blob "fileb://" will always be treated as binary and use the
+file contents directly regardless of the "cli-binary-format" setting.
+When using "file://" the file contents will need to properly formatted
+for the configured "cli-binary-format".
+
+* base64
+
+* raw-in-base64-out
+
+"--no-cli-pager" (boolean)
+
+Disable cli pager for output.
+
+"--cli-auto-prompt" (boolean)
+
+Automatically prompt for CLI input parameters.
+
+"--no-cli-auto-prompt" (boolean)
+
+Disable automatically prompt for CLI input parameters.
+
+"--cli-error-format" (string)
+
+The formatting style for error output. By default, errors are
+displayed in enhanced format.
+
+* legacy
+
+* json
+
+* yaml
+
+* text
+
+* table
+
+* enhanced
+
+
+Output
+******
+
+gatewayArn -> (string)
+
+   The Amazon Resource Name (ARN) of the gateway.
+
+   Constraints:
+
+   * pattern: "arn:aws(|-cn|-us-gov):bedrock-agentcore:[a-z0-9-
+     ]{1,20}:[0-9]{12}:gateway/([0-9a-z][-]?){1,48}-[a-z0-9]{10}"
+
+targetId -> (string)
+
+   The unique identifier of the created target.
+
+   Constraints:
+
+   * pattern: "[0-9a-zA-Z]{10}"
+
+createdAt -> (timestamp)
+
+   The timestamp when the target was created.
+
+updatedAt -> (timestamp)
+
+   The timestamp when the target was last updated.
+
+status -> (string)
+
+   The current status of the target.
+
+   Possible values:
+
+   * "CREATING"
+
+   * "UPDATING"
+
+   * "UPDATE_UNSUCCESSFUL"
+
+   * "DELETING"
+
+   * "READY"
+
+   * "FAILED"
+
+   * "SYNCHRONIZING"
+
+   * "SYNCHRONIZE_UNSUCCESSFUL"
+
+   * "CREATE_PENDING_AUTH"
+
+   * "UPDATE_PENDING_AUTH"
+
+   * "SYNCHRONIZE_PENDING_AUTH"
+
+statusReasons -> (list)
+
+   The reasons for the current status of the target.
+
+   Constraints:
+
+   * min: "0"
+
+   * max: "100"
+
+   (string)
+
+      Constraints:
+
+      * min: "0"
+
+      * max: "2048"
+
+name -> (string)
+
+   The name of the target.
+
+   Constraints:
+
+   * pattern: "([0-9a-zA-Z][-]?){1,100}"
+
+description -> (string)
+
+   The description of the target.
+
+   Constraints:
+
+   * min: "1"
+
+   * max: "200"
+
+targetConfiguration -> (tagged union structure)
+
+   The configuration settings for the target.
+
+   Note: This is a Tagged Union structure. Only one of the following top
+     level keys can be set: "mcp", "http", "inference".
+
+   mcp -> (tagged union structure)
+
+      The Model Context Protocol (MCP) configuration for the target.
+      This configuration defines how the gateway uses MCP to
+      communicate with the target.
+
+      Note: This is a Tagged Union structure. Only one of the following
+        top level keys can be set: "openApiSchema", "smithyModel",
+        "lambda", "mcpServer", "apiGateway", "connector".
+
+      openApiSchema -> (tagged union structure)
+
+         The OpenAPI schema for the Model Context Protocol target.
+         This schema defines the API structure of the target.
+
+         Note: This is a Tagged Union structure. Only one of the following
+           top level keys can be set: "s3", "inlinePayload".
+
+         s3 -> (structure)
+
+            The Amazon S3 configuration for a gateway. This structure
+            defines how the gateway accesses files in Amazon S3.
+
+            uri -> (string)
+
+               The URI of the Amazon S3 object. This URI specifies the
+               location of the object in Amazon S3.
+
+               Constraints:
+
+               * pattern: "s3://.{1,2043}"
+
+            bucketOwnerAccountId -> (string)
+
+               The account ID of the Amazon S3 bucket owner. This ID
+               is used for cross-account access to the bucket.
+
+               Constraints:
+
+               * pattern: "[0-9]{12}"
+
+         inlinePayload -> (string)
+
+            The inline payload containing the API schema definition.
+
+      smithyModel -> (tagged union structure)
+
+         The Smithy model for the Model Context Protocol target. This
+         model defines the API structure of the target using the
+         Smithy specification.
+
+         Note: This is a Tagged Union structure. Only one of the following
+           top level keys can be set: "s3", "inlinePayload".
+
+         s3 -> (structure)
+
+            The Amazon S3 configuration for a gateway. This structure
+            defines how the gateway accesses files in Amazon S3.
+
+            uri -> (string)
+
+               The URI of the Amazon S3 object. This URI specifies the
+               location of the object in Amazon S3.
+
+               Constraints:
+
+               * pattern: "s3://.{1,2043}"
+
+            bucketOwnerAccountId -> (string)
+
+               The account ID of the Amazon S3 bucket owner. This ID
+               is used for cross-account access to the bucket.
+
+               Constraints:
+
+               * pattern: "[0-9]{12}"
+
+         inlinePayload -> (string)
+
+            The inline payload containing the API schema definition.
+
+      lambda -> (structure)
+
+         The Lambda configuration for the Model Context Protocol
+         target. This configuration defines how the gateway uses a
+         Lambda function to communicate with the target.
+
+         lambdaArn -> (string) [required]
+
+            The Amazon Resource Name (ARN) of the Lambda function.
+            This function is invoked by the gateway to communicate
+            with the target.
+
+            Constraints:
+
+            * min: "1"
+
+            * max: "170"
+
+            * pattern: "arn:(aws[a-zA-Z-]*)?:lambda:([a-z]{2}(-gov)?-
+              [a-z]+-\d{1}):(\d{12}):function:([a-zA-Z0-9-
+              _.]+)(:(\$LATEST|[a-zA-Z0-9-_]+))?"
+
+         toolSchema -> (tagged union structure) [required]
+
+            The tool schema for the Lambda function. This schema
+            defines the structure of the tools that the Lambda
+            function provides.
+
+            Note: This is a Tagged Union structure. Only one of the
+              following top level keys can be set: "s3",
+              "inlinePayload".
+
+            s3 -> (structure)
+
+               The Amazon S3 location of the tool schema. This
+               location contains the schema definition file.
+
+               uri -> (string)
+
+                  The URI of the Amazon S3 object. This URI specifies
+                  the location of the object in Amazon S3.
+
+                  Constraints:
+
+                  * pattern: "s3://.{1,2043}"
+
+               bucketOwnerAccountId -> (string)
+
+                  The account ID of the Amazon S3 bucket owner. This
+                  ID is used for cross-account access to the bucket.
+
+                  Constraints:
+
+                  * pattern: "[0-9]{12}"
+
+            inlinePayload -> (list)
+
+               The inline payload of the tool schema. This payload
+               contains the schema definition directly in the request.
+
+               (structure)
+
+                  A tool definition for a gateway target. This
+                  structure defines a tool that the target exposes
+                  through the Model Context Protocol.
+
+                  name -> (string) [required]
+
+                     The name of the tool. This name identifies the
+                     tool in the Model Context Protocol.
+
+                  description -> (string) [required]
+
+                     The description of the tool. This description
+                     provides information about the purpose and usage
+                     of the tool.
+
+                  inputSchema -> (structure) [required]
+
+                     The input schema for the tool. This schema
+                     defines the structure of the input that the tool
+                     accepts.
+
+                     type -> (string) [required]
+
+                        The type of the schema definition. This field
+                        specifies the data type of the schema.
+
+                        Possible values:
+
+                        * "string"
+
+                        * "number"
+
+                        * "object"
+
+                        * "array"
+
+                        * "boolean"
+
+                        * "integer"
+
+                     properties -> (map)
+
+                        The properties of the schema definition. These
+                        properties define the fields in the schema.
+
+                        key -> (string)
+
+                        value -> (structure)
+
+                           A schema definition for a gateway target.
+                           This structure defines the structure of the
+                           API that the target exposes.
+
+                           type -> (string) [required]
+
+                              The type of the schema definition. This
+                              field specifies the data type of the
+                              schema.
+
+                              Possible values:
+
+                              * "string"
+
+                              * "number"
+
+                              * "object"
+
+                              * "array"
+
+                              * "boolean"
+
+                              * "integer"
+
+                           properties -> (map)
+
+                              The properties of the schema definition.
+                              These properties define the fields in
+                              the schema.
+
+                              key -> (string)
+
+                              ( ... recursive ... )
+
+                           required -> (list)
+
+                              The required fields in the schema
+                              definition. These fields must be
+                              provided when using the schema.
+
+                              (string)
+
+                           ( ... recursive ... )description ->
+                           (string)
+
+                              The description of the schema
+                              definition. This description provides
+                              information about the purpose and usage
+                              of the schema.
+
+                     required -> (list)
+
+                        The required fields in the schema definition.
+                        These fields must be provided when using the
+                        schema.
+
+                        (string)
+
+                     items -> (structure)
+
+                        The items in the schema definition. This field
+                        is used for array types to define the
+                        structure of the array elements.
+
+                        type -> (string) [required]
+
+                           The type of the schema definition. This
+                           field specifies the data type of the
+                           schema.
+
+                           Possible values:
+
+                           * "string"
+
+                           * "number"
+
+                           * "object"
+
+                           * "array"
+
+                           * "boolean"
+
+                           * "integer"
+
+                        properties -> (map)
+
+                           The properties of the schema definition.
+                           These properties define the fields in the
+                           schema.
+
+                           key -> (string)
+
+                           ( ... recursive ... )
+
+                        required -> (list)
+
+                           The required fields in the schema
+                           definition. These fields must be provided
+                           when using the schema.
+
+                           (string)
+
+                        ( ... recursive ... )description -> (string)
+
+                           The description of the schema definition.
+                           This description provides information about
+                           the purpose and usage of the schema.
+
+                     description -> (string)
+
+                        The description of the schema definition. This
+                        description provides information about the
+                        purpose and usage of the schema.
+
+                  outputSchema -> (structure)
+
+                     The output schema for the tool. This schema
+                     defines the structure of the output that the tool
+                     produces.
+
+                     type -> (string) [required]
+
+                        The type of the schema definition. This field
+                        specifies the data type of the schema.
+
+                        Possible values:
+
+                        * "string"
+
+                        * "number"
+
+                        * "object"
+
+                        * "array"
+
+                        * "boolean"
+
+                        * "integer"
+
+                     properties -> (map)
+
+                        The properties of the schema definition. These
+                        properties define the fields in the schema.
+
+                        key -> (string)
+
+                        value -> (structure)
+
+                           A schema definition for a gateway target.
+                           This structure defines the structure of the
+                           API that the target exposes.
+
+                           type -> (string) [required]
+
+                              The type of the schema definition. This
+                              field specifies the data type of the
+                              schema.
+
+                              Possible values:
+
+                              * "string"
+
+                              * "number"
+
+                              * "object"
+
+                              * "array"
+
+                              * "boolean"
+
+                              * "integer"
+
+                           properties -> (map)
+
+                              The properties of the schema definition.
+                              These properties define the fields in
+                              the schema.
+
+                              key -> (string)
+
+                              ( ... recursive ... )
+
+                           required -> (list)
+
+                              The required fields in the schema
+                              definition. These fields must be
+                              provided when using the schema.
+
+                              (string)
+
+                           ( ... recursive ... )description ->
+                           (string)
+
+                              The description of the schema
+                              definition. This description provides
+                              information about the purpose and usage
+                              of the schema.
+
+                     required -> (list)
+
+                        The required fields in the schema definition.
+                        These fields must be provided when using the
+                        schema.
+
+                        (string)
+
+                     items -> (structure)
+
+                        The items in the schema definition. This field
+                        is used for array types to define the
+                        structure of the array elements.
+
+                        type -> (string) [required]
+
+                           The type of the schema definition. This
+                           field specifies the data type of the
+                           schema.
+
+                           Possible values:
+
+                           * "string"
+
+                           * "number"
+
+                           * "object"
+
+                           * "array"
+
+                           * "boolean"
+
+                           * "integer"
+
+                        properties -> (map)
+
+                           The properties of the schema definition.
+                           These properties define the fields in the
+                           schema.
+
+                           key -> (string)
+
+                           ( ... recursive ... )
+
+                        required -> (list)
+
+                           The required fields in the schema
+                           definition. These fields must be provided
+                           when using the schema.
+
+                           (string)
+
+                        ( ... recursive ... )description -> (string)
+
+                           The description of the schema definition.
+                           This description provides information about
+                           the purpose and usage of the schema.
+
+                     description -> (string)
+
+                        The description of the schema definition. This
+                        description provides information about the
+                        purpose and usage of the schema.
+
+      mcpServer -> (structure)
+
+         The MCP server specified as the gateway target.
+
+         endpoint -> (string) [required]
+
+            The endpoint for the MCP server target configuration.
+
+            Constraints:
+
+            * pattern: "https://.*"
+
+         mcpToolSchema -> (tagged union structure)
+
+            A static tool list for the MCP server target. It is
+            supported for all credential providers. Dynamic tool
+            discovery/synchronization will be disabled when a target
+            is configured with mcpToolSchema.
+
+            Note: This is a Tagged Union structure. Only one of the
+              following top level keys can be set: "s3",
+              "inlinePayload".
+
+            s3 -> (structure)
+
+               The Amazon S3 location of the tool schema. This
+               location contains the schema definition file.
+
+               uri -> (string)
+
+                  The URI of the Amazon S3 object. This URI specifies
+                  the location of the object in Amazon S3.
+
+                  Constraints:
+
+                  * pattern: "s3://.{1,2043}"
+
+               bucketOwnerAccountId -> (string)
+
+                  The account ID of the Amazon S3 bucket owner. This
+                  ID is used for cross-account access to the bucket.
+
+                  Constraints:
+
+                  * pattern: "[0-9]{12}"
+
+            inlinePayload -> (string)
+
+               The inline payload containing the MCP tool schema
+               definition.
+
+         listingMode -> (string)
+
+            The listing mode for the MCP server target configuration.
+            MCP resources for default targets are cached at the
+            control plane for faster access. MCP resources for dynamic
+            targets will be dynamically retrieved when listing tools.
+
+            Possible values:
+
+            * "DEFAULT"
+
+            * "DYNAMIC"
+
+         resourcePriority -> (integer)
+
+            Priority for resolving MCP server targets with shared
+            resource URIs. Lower values take precedence. Defaults to
+            1000 when not set.
+
+            Constraints:
+
+            * min: "0"
+
+            * max: "1000"
+
+      apiGateway -> (structure)
+
+         The configuration for an Amazon API Gateway target.
+
+         restApiId -> (string) [required]
+
+            The ID of the API Gateway REST API.
+
+         stage -> (string) [required]
+
+            The ID of the stage of the REST API to add as a target.
+
+         apiGatewayToolConfiguration -> (structure) [required]
+
+            The configuration for defining REST API tool filters and
+            overrides for the gateway target.
+
+            toolOverrides -> (list)
+
+               A list of explicit tool definitions with optional
+               custom names and descriptions.
+
+               (structure)
+
+                  Settings to override configurations for a tool.
+
+                  name -> (string) [required]
+
+                     The name of tool. Identifies the tool in the
+                     Model Context Protocol.
+
+                  description -> (string)
+
+                     The description of the tool. Provides information
+                     about the purpose and usage of the tool. If not
+                     provided, uses the description from the API's
+                     OpenAPI specification.
+
+                  path -> (string) [required]
+
+                     Resource path in the REST API (e.g., "/pets" ).
+                     Must explicitly match an existing path in the
+                     REST API.
+
+                  method -> (string) [required]
+
+                     The HTTP method to expose for the specified path.
+
+                     Possible values:
+
+                     * "GET"
+
+                     * "DELETE"
+
+                     * "HEAD"
+
+                     * "OPTIONS"
+
+                     * "PATCH"
+
+                     * "PUT"
+
+                     * "POST"
+
+            toolFilters -> (list) [required]
+
+               A list of path and method patterns to expose as tools
+               using metadata from the REST API's OpenAPI
+               specification.
+
+               (structure)
+
+                  Specifies which operations from an API Gateway REST
+                  API are exposed as tools. Tool names and
+                  descriptions are derived from the operationId and
+                  description fields in the API's exported OpenAPI
+                  specification.
+
+                  filterPath -> (string) [required]
+
+                     Resource path to match in the REST API. Supports
+                     exact paths (for example, "/pets" ) or wildcard
+                     paths (for example, "/pets/*" to match all paths
+                     under "/pets" ). Must match existing paths in the
+                     REST API.
+
+                  methods -> (list) [required]
+
+                     The methods to filter for.
+
+                     (string)
+
+                        Possible values:
+
+                        * "GET"
+
+                        * "DELETE"
+
+                        * "HEAD"
+
+                        * "OPTIONS"
+
+                        * "PATCH"
+
+                        * "PUT"
+
+                        * "POST"
+
+      connector -> (structure)
+
+         The connector integration configuration for the Model Context
+         Protocol target. This configuration defines how the gateway
+         uses a pre-built connector to communicate with the target.
+
+         source -> (structure) [required]
+
+            The source configuration identifying which connector to
+            use.
+
+            connectorId -> (string) [required]
+
+               The identifier for the connector integration (for
+               example, "bedrock-knowledge-bases" ).
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "256"
+
+            version -> (string)
+
+               The version of the connector to use (for example,
+               "1.1.0" ). If you don't specify a version, the service
+               uses the latest available version.
+
+               Constraints:
+
+               * min: "5"
+
+               * max: "32"
+
+               * pattern:
+                 "(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)"
+
+         enabled -> (list)
+
+            A list of tool names to enable from this connector. If
+            absent, all tools provided by the connector are enabled.
+
+            Constraints:
+
+            * min: "1"
+
+            * max: "50"
+
+            (string)
+
+         configurations -> (list)
+
+            A list of per-tool configurations for the connector.
+
+            (structure)
+
+               Configuration for a single tool within a connector.
+
+               name -> (string) [required]
+
+                  The tool or operation name (for example, "retrieve"
+                  or "webSearch" ).
+
+                  Constraints:
+
+                  * min: "0"
+
+                  * max: "64"
+
+                  * pattern: "[a-zA-Z][a-zA-Z0-9_-]*"
+
+               description -> (string)
+
+                  An agent-facing description override for this tool.
+
+                  Constraints:
+
+                  * min: "0"
+
+                  * max: "2000"
+
+               parameterValues -> (document)
+
+                  Parameters to set as fixed or default values when
+                  provisioning this tool.
+
+               parameterOverrides -> (list)
+
+                  Parameters to expose to the agent at runtime, with
+                  optional description overrides.
+
+                  (structure)
+
+                     Specifies a parameter override for a connector
+                     tool, allowing you to control parameter
+                     visibility and descriptions.
+
+                     path -> (string) [required]
+
+                        A JSON Pointer path identifying the parameter
+                        (for example, "/numberOfResults" or "/filter"
+                        ).
+
+                     description -> (string)
+
+                        An agent-facing description override for this
+                        parameter.
+
+                     visible -> (boolean)
+
+                        Whether this parameter is visible to the
+                        agent. If not specified, uses the service
+                        default.
+
+   http -> (tagged union structure)
+
+      The HTTP target configuration. Use this to route gateway
+      requests to an HTTP-based endpoint such as an AgentCore Runtime.
+
+      Note: This is a Tagged Union structure. Only one of the following
+        top level keys can be set: "agentcoreRuntime", "passthrough",
+        "connector".
+
+      agentcoreRuntime -> (structure)
+
+         The AgentCore Runtime target configuration for HTTP-based
+         communication with an agent runtime.
+
+         arn -> (string) [required]
+
+            The Amazon Resource Name (ARN) of the AgentCore Runtime to
+            route requests to.
+
+            Constraints:
+
+            * pattern: "arn:aws(-[^:]+)?:bedrock-agentcore:[a-z0-9-
+              ]+:[0-9]{12}:runtime/[a-zA-Z][a-zA-Z0-9_]{0,47}-[a-zA-
+              Z0-9]{10}"
+
+         qualifier -> (string)
+
+            The qualifier for the agent runtime, used to target a
+            specific endpoint version. If not specified, the default
+            endpoint is used.
+
+            Constraints:
+
+            * pattern:
+              ".*([1-9][0-9]{0,4})|([a-zA-Z][a-zA-Z0-9_]{0,47}).*"
+
+         schema -> (structure)
+
+            The API schema configuration that defines the structure of
+            the runtime target's API.
+
+            source -> (tagged union structure) [required]
+
+               Configuration for API schema.
+
+               Note: This is a Tagged Union structure. Only one of the
+                 following top level keys can be set: "s3",
+                 "inlinePayload".
+
+               s3 -> (structure)
+
+                  The Amazon S3 configuration for a gateway. This
+                  structure defines how the gateway accesses files in
+                  Amazon S3.
+
+                  uri -> (string)
+
+                     The URI of the Amazon S3 object. This URI
+                     specifies the location of the object in Amazon
+                     S3.
+
+                     Constraints:
+
+                     * pattern: "s3://.{1,2043}"
+
+                  bucketOwnerAccountId -> (string)
+
+                     The account ID of the Amazon S3 bucket owner.
+                     This ID is used for cross-account access to the
+                     bucket.
+
+                     Constraints:
+
+                     * pattern: "[0-9]{12}"
+
+               inlinePayload -> (string)
+
+                  The inline payload containing the API schema
+                  definition.
+
+      passthrough -> (structure)
+
+         The passthrough configuration for the HTTP target. A
+         passthrough target forwards requests directly to an external
+         HTTP endpoint.
+
+         endpoint -> (string) [required]
+
+            The HTTPS endpoint that the gateway forwards requests to
+            for this passthrough target.
+
+            Constraints:
+
+            * min: "1"
+
+            * max: "2048"
+
+            * pattern: "https://[a-zA-Z0-9\-\.]+(:[0-9]{1,5})?(/.*)?"
+
+         protocolType -> (string) [required]
+
+            The application protocol that the passthrough target
+            implements. This value is required for passthrough
+            targets:
+
+            * "MCP" - The Model Context Protocol.
+
+            * "A2A" - The Agent-to-Agent protocol.
+
+            * "INFERENCE" - The protocol for routing requests to a
+              large language model (LLM) provider.
+
+            * "CUSTOM" - A custom application protocol.
+
+            Possible values:
+
+            * "MCP"
+
+            * "A2A"
+
+            * "INFERENCE"
+
+            * "CUSTOM"
+
+         schema -> (structure)
+
+            The API schema configuration that defines the structure of
+            the passthrough target's API.
+
+            source -> (tagged union structure) [required]
+
+               Configuration for API schema.
+
+               Note: This is a Tagged Union structure. Only one of the
+                 following top level keys can be set: "s3",
+                 "inlinePayload".
+
+               s3 -> (structure)
+
+                  The Amazon S3 configuration for a gateway. This
+                  structure defines how the gateway accesses files in
+                  Amazon S3.
+
+                  uri -> (string)
+
+                     The URI of the Amazon S3 object. This URI
+                     specifies the location of the object in Amazon
+                     S3.
+
+                     Constraints:
+
+                     * pattern: "s3://.{1,2043}"
+
+                  bucketOwnerAccountId -> (string)
+
+                     The account ID of the Amazon S3 bucket owner.
+                     This ID is used for cross-account access to the
+                     bucket.
+
+                     Constraints:
+
+                     * pattern: "[0-9]{12}"
+
+               inlinePayload -> (string)
+
+                  The inline payload containing the API schema
+                  definition.
+
+         stickinessConfiguration -> (structure)
+
+            The session stickiness configuration for the passthrough
+            target. This configuration routes requests within the same
+            session to the same target.
+
+            identifier -> (string) [required]
+
+               The expression that identifies where to extract the
+               session identifier from the request (for example,
+               "$context.header.x-session-id" ).
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "256"
+
+            timeout -> (integer)
+
+               The session stickiness timeout, in seconds. After this
+               duration of inactivity, the session affinity expires.
+               Valid values range from 1 to 86400.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "86400"
+
+            compositeIdentifier -> (list)
+
+               Additional headers to include in session affinity
+               routing. When set, requests are only considered part of
+               the same session if both the "identifier" and all
+               composite identifier values match.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "5"
+
+               (string)
+
+                  Constraints:
+
+                  * min: "1"
+
+                  * max: "256"
+
+         staticQueryParameters -> (map)
+
+            A map of static query parameters that the gateway always
+            appends to the outbound URL when forwarding requests to
+            the target. The total outbound URL length, which includes
+            the endpoint and the percent-encoded query parameters, is
+            enforced by the service.
+
+            key -> (string)
+
+               The name of a static query parameter. Allowed
+               characters are letters, digits, "_" , "." , and "-" .
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "128"
+
+               * pattern: "[a-zA-Z0-9_.-]+"
+
+            value -> (string)
+
+               The value of a static query parameter. Control
+               characters (ASCII "0x00" -"0x1F" and "0x7F" ) are not
+               permitted. URI-reserved characters are allowed and are
+               percent-encoded by the gateway. Empty values are
+               allowed.
+
+               Constraints:
+
+               * pattern: "[^\x00-\x1F\x7F]*"
+
+         staticQueryParameterConflictResolution -> (string)
+
+            Controls precedence when a client request supplies a query
+            parameter whose name matches a configured static query
+            parameter. If not set, defaults to "CLIENT_OVERRIDE" :
+
+            * "CLIENT_OVERRIDE" - The client-supplied value overrides
+              the configured static value for that parameter name.
+
+            * "STATIC_OVERRIDE" - The configured static value is
+              retained, overriding the client-supplied value for that
+              parameter name.
+
+            Possible values:
+
+            * "CLIENT_OVERRIDE"
+
+            * "STATIC_OVERRIDE"
+
+      connector -> (structure)
+
+         The connector-based configuration for the HTTP target. Use
+         this configuration when you want to route HTTP requests
+         through a managed connector.
+
+         source -> (structure) [required]
+
+            The source configuration identifying which HTTP connector
+            to use.
+
+            connectorId -> (string) [required]
+
+               The identifier for the HTTP connector integration.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "256"
+
+         parameters -> (map)
+
+            The resource parameters for this connector (for example,
+            "memoryId" ). The service validates these parameters
+            against the request path at runtime.
+
+            Constraints:
+
+            * min: "0"
+
+            * max: "10"
+
+            key -> (string)
+
+               The name of a connector parameter (for example,
+               "memoryId" ). The name must start with a letter and
+               contain only letters, digits, underscores, and hyphens.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "128"
+
+               * pattern: "[a-zA-Z][a-zA-Z0-9_-]*"
+
+            value -> (string)
+
+               The value of a connector parameter. Length: 1–1,024
+               characters.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "1024"
+
+   inference -> (tagged union structure)
+
+      The inference configuration for the target. This configuration
+      routes requests to a large language model (LLM) provider.
+
+      Note: This is a Tagged Union structure. Only one of the following
+        top level keys can be set: "connector", "provider".
+
+      connector -> (structure)
+
+         The connector-based inference configuration. Use this option
+         to route requests to an LLM provider through a built-in
+         connector that includes predefined provider rules.
+
+         source -> (structure) [required]
+
+            The source configuration identifying which inference
+            connector to use.
+
+            connectorId -> (string) [required]
+
+               The identifier for the inference connector (for
+               example, "bedrock-mantle" , "openai" , or "anthropic"
+               ).
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "256"
+
+      provider -> (structure)
+
+         The provider-based inference configuration. Use this option
+         to explicitly configure the endpoint, model mapping, and
+         operations for an LLM provider.
+
+         endpoint -> (string) [required]
+
+            The HTTPS endpoint of the inference provider that the
+            gateway forwards requests to.
+
+            Constraints:
+
+            * min: "1"
+
+            * max: "2048"
+
+            * pattern: "https://[a-zA-Z0-9\-\.]+(:[0-9]{1,5})?(/.*)?"
+
+         modelMapping -> (structure)
+
+            The configuration that translates client-facing model IDs
+            to the model IDs expected by the provider.
+
+            providerPrefix -> (structure)
+
+               The provider prefix configuration used for model ID
+               translation.
+
+               strip -> (boolean)
+
+                  Whether clients can omit the provider prefix from
+                  model IDs. If "true" , the gateway accepts model IDs
+                  without the prefix and restores the full prefixed
+                  form before forwarding to the provider. The default
+                  is "false" .
+
+               separator -> (string)
+
+                  The single character that separates the provider
+                  prefix from the model name (for example, "." ). The
+                  default is "." .
+
+                  Constraints:
+
+                  * min: "1"
+
+                  * max: "1"
+
+         operations -> (list)
+
+            A list of per-operation configurations that map request
+            paths to the models supported for each operation.
+
+            Constraints:
+
+            * min: "1"
+
+            * max: "10"
+
+            (structure)
+
+               The configuration for a specific inference operation,
+               including its request path and the models that the
+               operation supports.
+
+               path -> (string) [required]
+
+                  The request path for this operation (for example,
+                  "/v1/messages" or "/v1/responses" ).
+
+                  Constraints:
+
+                  * min: "1"
+
+                  * max: "256"
+
+                  * pattern: "/[a-zA-Z0-9\-\._/{}]+"
+
+               providerPath -> (string)
+
+                  The provider path to forward requests to, if it
+                  differs from the request path. For example,
+                  "/anthropic/v1/messages" when the provider expects a
+                  different path than the client-facing "/v1/messages"
+                  .
+
+                  Constraints:
+
+                  * min: "1"
+
+                  * max: "256"
+
+                  * pattern: "/[a-zA-Z0-9\-\._/{}]+"
+
+               models -> (list)
+
+                  The list of models supported for this operation.
+
+                  Constraints:
+
+                  * min: "1"
+
+                  * max: "100"
+
+                  (structure)
+
+                     A model entry that specifies a model supported
+                     for an inference operation.
+
+                     model -> (string) [required]
+
+                        The model ID or glob pattern that identifies
+                        the model (for example, "anthropic.claude-
+                        opus-*" or "openai.gpt-oss-*" ).
+
+                        Constraints:
+
+                        * min: "1"
+
+                        * max: "2048"
+
+                        * pattern: "[a-zA-Z0-9\-\._\*\?@:]+(/[a-zA-Z0-
+                          9\-\._\*\?@:]+)*"
+
+credentialProviderConfigurations -> (list)
+
+   The credential provider configurations for the target.
+
+   Constraints:
+
+   * min: "1"
+
+   * max: "1"
+
+   (structure)
+
+      The configuration for a credential provider. This structure
+      defines how the gateway authenticates with the target endpoint.
+
+      credentialProviderType -> (string) [required]
+
+         The type of credential provider. This field specifies which
+         authentication method the gateway uses.
+
+         Possible values:
+
+         * "GATEWAY_IAM_ROLE"
+
+         * "OAUTH"
+
+         * "API_KEY"
+
+         * "CALLER_IAM_CREDENTIALS"
+
+         * "JWT_PASSTHROUGH"
+
+      credentialProvider -> (tagged union structure)
+
+         The credential provider. This field contains the specific
+         configuration for the credential provider type.
+
+         Note: This is a Tagged Union structure. Only one of the following
+           top level keys can be set: "oauthCredentialProvider",
+           "apiKeyCredentialProvider", "iamCredentialProvider".
+
+         oauthCredentialProvider -> (structure)
+
+            The OAuth credential provider. This provider uses OAuth
+            authentication to access the target endpoint.
+
+            providerArn -> (string) [required]
+
+               The Amazon Resource Name (ARN) of the OAuth credential
+               provider. This ARN identifies the provider in Amazon
+               Web Services.
+
+               Constraints:
+
+               * pattern:
+                 "arn:([^:]*):([^:]*):([^:]*):([0-9]{12})?:(.+)"
+
+            scopes -> (list) [required]
+
+               The OAuth scopes for the credential provider. These
+               scopes define the level of access requested from the
+               OAuth provider.
+
+               Constraints:
+
+               * min: "0"
+
+               * max: "100"
+
+               (string)
+
+                  Constraints:
+
+                  * min: "1"
+
+                  * max: "64"
+
+            customParameters -> (map)
+
+               The custom parameters for the OAuth credential
+               provider. These parameters provide additional
+               configuration for the OAuth authentication process.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "10"
+
+               key -> (string)
+
+                  Constraints:
+
+                  * min: "1"
+
+                  * max: "256"
+
+               value -> (string)
+
+                  Constraints:
+
+                  * min: "1"
+
+                  * max: "2048"
+
+            grantType -> (string)
+
+               Specifies the kind of credentials to use for
+               authorization:
+
+               * "CLIENT_CREDENTIALS" - Authorization with a client ID
+                 and secret.
+
+               * "AUTHORIZATION_CODE" - Authorization with a token
+                 that is specific to an individual end user.
+
+               * "TOKEN_EXCHANGE" - Authorization using on-behalf-of
+                 token exchange. An inbound user token is exchanged
+                 for a downstream access token scoped to the target
+                 audience.
+
+               Possible values:
+
+               * "CLIENT_CREDENTIALS"
+
+               * "AUTHORIZATION_CODE"
+
+               * "TOKEN_EXCHANGE"
+
+            defaultReturnUrl -> (string)
+
+               The URL where the end user's browser is redirected
+               after obtaining the authorization code. Generally
+               points to the customer's application.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "2048"
+
+               * pattern: "\w+:(\/?\/?)[^\s]+"
+
+         apiKeyCredentialProvider -> (structure)
+
+            The API key credential provider. This provider uses an API
+            key to authenticate with the target endpoint.
+
+            providerArn -> (string) [required]
+
+               The Amazon Resource Name (ARN) of the API key
+               credential provider. This ARN identifies the provider
+               in Amazon Web Services.
+
+               Constraints:
+
+               * pattern:
+                 "arn:([^:]*):([^:]*):([^:]*):([0-9]{12})?:(.+)"
+
+            credentialParameterName -> (string)
+
+               The name of the credential parameter for the API key.
+               This parameter name is used when sending the API key to
+               the target endpoint.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "64"
+
+            credentialPrefix -> (string)
+
+               The prefix for the API key credential. This prefix is
+               added to the API key when sending it to the target
+               endpoint.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "64"
+
+            credentialLocation -> (string)
+
+               The location of the API key credential. This field
+               specifies where in the request the API key should be
+               placed.
+
+               Possible values:
+
+               * "HEADER"
+
+               * "QUERY_PARAMETER"
+
+         iamCredentialProvider -> (structure)
+
+            The IAM credential provider. This provider uses IAM
+            authentication with SigV4 signing to access the target
+            endpoint.
+
+            service -> (string) [required]
+
+               The target Amazon Web Services service name used for
+               SigV4 signing. This value identifies the service that
+               the gateway authenticates with when making requests to
+               the target endpoint.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "64"
+
+               * pattern: "[a-zA-Z0-9._-]+"
+
+            region -> (string)
+
+               The Amazon Web Services Region used for SigV4 signing.
+               If not specified, defaults to the gateway's Region.
+
+               Constraints:
+
+               * min: "1"
+
+               * max: "32"
+
+               * pattern: "[a-zA-Z0-9-]+"
+
+lastSynchronizedAt -> (timestamp)
+
+   The last synchronization of the target.
+
+metadataConfiguration -> (structure)
+
+   The metadata configuration that was applied to the created gateway
+   target.
+
+   allowedRequestHeaders -> (list)
+
+      A list of HTTP headers that are allowed to be propagated from
+      incoming client requests to the target.
+
+      Constraints:
+
+      * min: "1"
+
+      * max: "10"
+
+      (string)
+
+         Constraints:
+
+         * min: "1"
+
+         * max: "100"
+
+   allowedQueryParameters -> (list)
+
+      A list of URL query parameters that are allowed to be propagated
+      from incoming gateway URL to the target.
+
+      Constraints:
+
+      * min: "1"
+
+      * max: "10"
+
+      (string)
+
+         Constraints:
+
+         * min: "1"
+
+         * max: "40"
+
+   allowedResponseHeaders -> (list)
+
+      A list of HTTP headers that are allowed to be propagated from
+      the target response back to the client.
+
+      Constraints:
+
+      * min: "1"
+
+      * max: "10"
+
+      (string)
+
+         Constraints:
+
+         * min: "1"
+
+         * max: "100"
+
+privateEndpoint -> (tagged union structure)
+
+   The private endpoint configuration for the gateway target.
+
+   Note: This is a Tagged Union structure. Only one of the following top
+     level keys can be set: "selfManagedLatticeResource",
+     "managedVpcResource".
+
+   selfManagedLatticeResource -> (tagged union structure)
+
+      Configuration for connecting to a private resource using a self-
+      managed VPC Lattice resource configuration.
+
+      Note: This is a Tagged Union structure. Only one of the following
+        top level keys can be set: "resourceConfigurationIdentifier".
+
+      resourceConfigurationIdentifier -> (string)
+
+         The ARN or ID of the VPC Lattice resource configuration.
+
+         Constraints:
+
+         * min: "20"
+
+         * max: "2048"
+
+         * pattern: "((rcfg-[0-9a-z]{17})|(arn:[a-z0-9\-]+:vpc-lattice
+           :[a-zA-Z0-9\-]+:\d{12}:resourceconfiguration/rcfg-[0-9a-
+           z]{17}))"
+
+   managedVpcResource -> (structure)
+
+      Configuration for connecting to a private resource using a
+      managed VPC Lattice resource. The gateway creates and manages
+      the VPC Lattice resources on your behalf.
+
+      vpcIdentifier -> (string) [required]
+
+         The ID of the VPC that contains your private resource.
+
+         Constraints:
+
+         * pattern: "vpc-(([0-9a-z]{8})|([0-9a-z]{17}))"
+
+      subnetIds -> (list) [required]
+
+         The subnet IDs within the VPC where the VPC Lattice resource
+         gateway is placed.
+
+         (string)
+
+            Constraints:
+
+            * pattern: "subnet-[0-9a-zA-Z]{8,17}"
+
+      endpointIpAddressType -> (string) [required]
+
+         The IP address type for the resource configuration endpoint.
+
+         Possible values:
+
+         * "IPV4"
+
+         * "IPV6"
+
+      securityGroupIds -> (list)
+
+         The security group IDs to associate with the VPC Lattice
+         resource gateway. If not specified, the default security
+         group for the VPC is used.
+
+         Constraints:
+
+         * min: "0"
+
+         * max: "5"
+
+         (string)
+
+            Constraints:
+
+            * pattern: "sg-(([0-9a-z]{8})|([0-9a-z]{17}))"
+
+      tags -> (map)
+
+         Tags to apply to the managed VPC Lattice resource gateway.
+
+         Constraints:
+
+         * min: "0"
+
+         * max: "50"
+
+         key -> (string)
+
+            Constraints:
+
+            * min: "1"
+
+            * max: "128"
+
+            * pattern: "[a-zA-Z0-9\s._:/=+@-]*"
+
+         value -> (string)
+
+            Constraints:
+
+            * min: "0"
+
+            * max: "256"
+
+            * pattern: "[a-zA-Z0-9\s._:/=+@-]*"
+
+      routingDomain -> (string)
+
+         An intermediate domain to use as the resource configuration
+         endpoint instead of the actual target domain. Use this when
+         you want to route traffic through an intermediate component
+         such as a VPC endpoint or internal load balancer. For more
+         information, see xref:lattice-vpc-egress-routing-domain[Route
+         traffic through an intermediate domain].
+
+         Constraints:
+
+         * min: "3"
+
+         * max: "255"
+
+privateEndpointManagedResources -> (list)
+
+   The managed resources created by the gateway for private endpoint
+   connectivity.
+
+   (structure)
+
+      Details of a resource created and managed by the gateway for
+      private endpoint connectivity.
+
+      domain -> (string)
+
+         The domain associated with this managed resource.
+
+      resourceGatewayArn -> (string)
+
+         The ARN of the VPC Lattice resource gateway created in your
+         account.
+
+         Constraints:
+
+         * pattern: "arn:[a-z0-9\-]+:vpc-lattice:[a-zA-Z0-9\-
+           ]+:\d{12}:resourcegateway/rgw-[0-9a-z]{17}"
+
+      resourceAssociationArn -> (string)
+
+         The ARN of the service network resource association.
+
+         Constraints:
+
+         * pattern: "arn:[a-z0-9\-]+:vpc-lattice:[a-zA-Z0-9\-
+           ]+:\d{12}:servicenetworkresourceassociation/snra-[0-9a-
+           f]{17}"
+
+authorizationData -> (tagged union structure)
+
+   OAuth2 authorization data for the created gateway target. This data
+   is returned when a target is configured with a credential provider
+   with authorization code grant type and requires user federation.
+
+   Note: This is a Tagged Union structure. Only one of the following top
+     level keys can be set: "oauth2".
+
+   oauth2 -> (structure)
+
+      OAuth2 authorization data for the gateway target.
+
+      authorizationUrl -> (string) [required]
+
+         The URL to initiate the authorization process. This URL is
+         provided when the OAuth2 access token requires user
+         authorization.
+
+         Constraints:
+
+         * min: "1"
+
+      userId -> (string)
+
+         The user identifier associated with the OAuth2 authorization
+         session that is defined by AgentCore Gateway.
+
+         Constraints:
+
+         * min: "1"
+
+         * max: "128"
+
+protocolType -> (string)
+
+   The protocol type of the created gateway target.
+
+   Possible values:
+
+   * "MCP"
+
+   * "HTTP"
+
+certificateConfigurations -> (list)
+
+   The private certificate authority (CA) configurations for the
+   gateway target.
+
+   Constraints:
+
+   * min: "1"
+
+   * max: "1"
+
+   (tagged union structure)
+
+      A reference to a private certificate authority (CA) certificate
+      that the gateway uses to verify TLS connections to the target
+      endpoint. Use this when the target presents a certificate issued
+      by a private CA that is not trusted by default. Specify exactly
+      one certificate source. The configuration is a reference only
+      and never contains the certificate content.
+
+      Note: This is a Tagged Union structure. Only one of the following
+        top level keys can be set: "s3", "secretsManager".
+
+      s3 -> (structure)
+
+         The Amazon S3 location of the PEM-encoded private CA
+         certificate.
+
+         uri -> (string) [required]
+
+            The URI of the Amazon S3 object that contains the PEM-
+            encoded certificate.
+
+            Constraints:
+
+            * pattern: "s3://.{1,2043}"
+
+         bucketOwnerAccountId -> (string)
+
+            The account ID of the Amazon S3 bucket owner. This ID is
+            used for cross-account access to the bucket.
+
+            Constraints:
+
+            * pattern: "[0-9]{12}"
+
+      secretsManager -> (structure)
+
+         The Amazon Web Services Secrets Manager location of the PEM-
+         encoded private CA certificate.
+
+         secretArn -> (string) [required]
+
+            The Amazon Resource Name (ARN) of the Amazon Web Services
+            Secrets Manager secret that contains the PEM-encoded
+            certificate.
+
+            Constraints:
+
+            * pattern: "arn:aws(-[^:]+)?:secretsmanager:[a-z0-9-]+:[0-
+              9]{12}:secret:.+"
+

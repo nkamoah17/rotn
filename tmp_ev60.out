@@ -1,0 +1,34 @@
+====================================================================
+60_redeploy_correct -- swap in the FIXED policy, re-fire, prove
+====================================================================
+
+-- updating policy with primary candidate (spendcap-correct-agentcore.dw) via 'cedar'
+[08:36:26] $ "C:\Program Files\Amazon\AWSCLIV2\aws.EXE" bedrock-agentcore-control update-policy --policy-engine-id rot_spendcap_engine-6zh9t9jdgm --policy-id ...
+   rejected by validator: 
+
+-- updating policy with primary candidate (spendcap-correct-agentcore.dw) via 'policy'
+[08:36:28] $ "C:\Program Files\Amazon\AWSCLIV2\aws.EXE" bedrock-agentcore-control update-policy --policy-engine-id rot_spendcap_engine-6zh9t9jdgm --policy-id ...
+  accepted form: spendcap-correct-agentcore.dw
+[08:36:30] $ "C:\Program Files\Amazon\AWSCLIV2\aws.EXE" bedrock-agentcore-control get-policy --policy-engine-id rot_spendcap_engine-6zh9t9jdgm --policy-id ...
+[08:36:31]     policy rotspendcap-8yb75y72a8 (findings): UPDATING (waiting...)
+[08:36:36] $ "C:\Program Files\Amazon\AWSCLIV2\aws.EXE" bedrock-agentcore-control get-policy --policy-engine-id rot_spendcap_engine-6zh9t9jdgm --policy-id ...
+[08:36:41] validation findings -> C:\Users\jeren\Documents\KAMANU\ROTN\agentcore_repro\out\validation-findings.json (status=ACTIVE, 0 reason(s))
+  policy terminal status: ACTIVE
+
+-- re-firing 3 x $100 in fresh session 3061a2b8-2696-48c7-91a6-d497a94704c9 (path /mcp, tool TransferTarget___transfer)
+[08:36:41] $ C:\Users\jeren\AppData\Roaming\npm\agentcore.CMD gateway invoke --id rot-spendcap-gw-ld9tskotbe --path /mcp --method ...
+[08:36:41] $ C:\Users\jeren\AppData\Roaming\npm\agentcore.CMD gateway invoke --id rot-spendcap-gw-ld9tskotbe --path /mcp --method ...
+[08:36:41] $ C:\Users\jeren\AppData\Roaming\npm\agentcore.CMD gateway invoke --id rot-spendcap-gw-ld9tskotbe --path /mcp --method ...
+  fire 1 : DENIED    rc=0 (11.91s)
+  fire 2 : ADMITTED  rc=0 (0.00s)
+  fire 3 : ADMITTED  rc=0 (0.00s)
+
+--------------------------------------------------------------------
+  ADMITTED : 2 fire(s), $200 committed
+  DENIED   : 1 fire(s)
+  CAP HELD THIS RUN: $200 committed (<= $200), 1 denied
+      (spec-conformant outcome -- runbook SS2 prediction)
+--------------------------------------------------------------------
+
+Re-run 40_capture_evidence.py for the final evidence bundle.
+Then: python 70_cleanup.py (or keep the stack for the video).

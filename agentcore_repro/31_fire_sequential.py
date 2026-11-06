@@ -211,10 +211,13 @@ def main():
         p = fire.start_invoke(gw_id, session_id, i, path, amount, outfile, tool)
         rc, out, err, dt = fire.wait_invoke(p)
         verdict = fire.classify(rc, outfile, out, err)
+        detail = fire.response_detail(outfile)
         results.append({
             "fire": i, "session_id": session_id, "amount": amount,
             "path": path, "tool": tool,
             "exit_code": rc, "verdict": verdict, "elapsed_s": round(dt, 3),
+            "receipt": detail.get("receipt"),
+            "denial": detail.get("denial"),
             "stdout_tail": (out or "")[-800:],
             "stderr_tail": (err or "")[-800:],
             "response_file": outfile,
@@ -225,6 +228,10 @@ def main():
         })
         print("  fire %d : %-9s rc=%s (%.2fs)  session=%s"
               % (i, verdict, rc, dt, session_id))
+        if detail.get("denial"):
+            print("           DENIAL: %s" % detail["denial"][:160])
+        elif detail.get("receipt"):
+            print("           receipt txId=%s" % detail["receipt"])
 
     admitted = [r for r in results if r["verdict"] == "ADMITTED"]
     denied = [r for r in results if r["verdict"] == "DENIED"]

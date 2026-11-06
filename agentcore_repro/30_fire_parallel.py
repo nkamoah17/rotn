@@ -85,9 +85,17 @@ def wait_invoke(p, timeout=120):
 def classify(rc, outfile, out_text, err_text):
     """Classify a gateway response as ADMITTED / DENIED / UNKNOWN.
 
-    rc==0 means the gateway let the tool run (admitted).  A policy denial
-    surfaces as a non-2xx (403) whose body/CLI error text mentions the
-    denial.
+    The response BODY is authoritative -- NOT the CLI exit code.  The
+    agentcore CLI exits 0 even when the gateway DENIES the tool call: the
+    denial is a JSON-RPC error object inside the body (e.g. -32002
+    "Tool Execution Denied: ... policy enforcement"), while an admitted
+    call carries a top-level "result".  So:
+
+      body has "result" (and no "error")  -> ADMITTED
+      body has "error"                    -> DENIED
+
+    The rc/blob heuristics below are only the fallback for cases with no
+    parseable JSON-RPC body (CLI-level failure, timeout, ...).
     """
     body = ""
     if outfile and os.path.exists(outfile):
@@ -96,6 +104,16 @@ def classify(rc, outfile, out_text, err_text):
                 body = f.read()
         except Exception:
             body = ""
+    parsed = None
+    try:
+        parsed = json.loads(body) if body.strip() else None
+    except Exception:
+        parsed = None
+    if isinstance(parsed, dict):
+        if "result" in parsed and "error" not in parsed:
+            return "ADMITTED"
+        if "error" in parsed:
+            return "DENIED"
     blob = ((body or "") + " " + (out_text or "") + " " + (err_text or "")).lower()
     if rc == 0:
         return "ADMITTED"
@@ -103,6 +121,38 @@ def classify(rc, outfile, out_text, err_text):
                                "accessdenied", "permissiondenied")):
         return "DENIED"
     return "UNKNOWN"
+
+
+def response_detail(outfile):
+    """Extract the business receipt (txId) or the denial message from a body.
+
+    Admitted:  result.content[0].text -> {"txId": ..., "amount": ...}
+    Denied:    error.message          -> "Tool Execution Denied: ..."
+    """
+    detail = {}
+    try:
+        with open(outfile, "r", errors="replace") as f:
+            d = json.loads(f.read())
+    except Exception:
+        return detail
+    if not isinstance(d, dict):
+        return detail
+    if "error" in d:
+        err = d["error"]
+        detail["denial"] = (str(err.get("message", err))[:400]
+                            if isinstance(err, dict) else str(err)[:400])
+        return detail
+    r = d.get("result")
+    if isinstance(r, dict):
+        for c in (r.get("content") or []):
+            try:
+                inner = json.loads((c or {}).get("text", ""))
+            except Exception:
+                inner = None
+            if isinstance(inner, dict) and inner.get("txId"):
+                detail["receipt"] = inner["txId"]
+                break
+    return detail
 
 
 def looks_like_notfound(results):
@@ -127,15 +177,22 @@ def fire_all(gw_id, sid, path, tool, amount, nfires):
     for (i, p, outfile) in started:
         rc, out, err, dt = wait_invoke(p)
         verdict = classify(rc, outfile, out, err)
+        detail = response_detail(outfile)
         results.append({
             "fire": i, "session_id": sid, "amount": amount,
             "path": path, "tool": tool,
             "exit_code": rc, "verdict": verdict, "elapsed_s": round(dt, 3),
+            "receipt": detail.get("receipt"),
+            "denial": detail.get("denial"),
             "stdout_tail": (out or "")[-800:],
             "stderr_tail": (err or "")[-800:],
             "response_file": outfile,
         })
         print("  fire %d : %-9s rc=%s (%.2fs)" % (i, verdict, rc, dt))
+        if detail.get("denial"):
+            print("           DENIAL: %s" % detail["denial"][:160])
+        elif detail.get("receipt"):
+            print("           receipt txId=%s" % detail["receipt"])
     return results
 
 

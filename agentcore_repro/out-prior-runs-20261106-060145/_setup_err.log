@@ -1,0 +1,7 @@
+
+aws: [ERROR]: An error occurred (ParamValidation): Unknown options: region
+
+aws: [ERROR]: An error occurred (ResourceConflictException) when calling the AddPermission operation: The statement id (rot-agentcore-gateway) provided already exists. Please provide a new statement id, or remove the existing statement.
+
+Additional error details:
+Type: User

@@ -1,0 +1,30 @@
+{
+  "admitted_count": 3,
+  "committed_usd": 300,
+  "denied_count": 0,
+  "results": [
+    {
+      "amount": 100,
+      "elapsed_s": 9.195,
+      "exit_code": 0,
+      "fire": 1,
+      "verdict": "ADMITTED"
+    },
+    {
+      "amount": 100,
+      "elapsed_s": 7.819,
+      "exit_code": 0,
+      "fire": 2,
+      "verdict": "ADMITTED"
+    },
+    {
+      "amount": 100,
+      "elapsed_s": 3.518,
+      "exit_code": 0,
+      "fire": 3,
+      "verdict": "ADMITTED"
+    }
+  ],
+  "sequential_cap_enforced": false,
+  "session_id": "3abbc517-f414-46ad-b570-bcdf487ef644"
+}

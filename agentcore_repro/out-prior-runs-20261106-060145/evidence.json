@@ -1,0 +1,814 @@
+{
+  "captured_at_utc": "2026-11-05T02:41:40Z",
+  "cloudwatch": {
+    "all_metric_names": [
+      "AllowDecisions",
+      "DenyDecisions",
+      "DeterminingPolicies",
+      "Duration",
+      "Invocations",
+      "Latency",
+      "SystemErrors",
+      "TargetExecutionTime",
+      "TargetType.LAMBDA",
+      "TemporalLatency",
+      "Throttles",
+      "TotalMismatchedPolicies",
+      "UserErrors",
+      "WorkloadAccessTokenFetchSuccess"
+    ],
+    "metrics": [
+      {
+        "datapoints": [
+          {
+            "SampleCount": 1.0,
+            "Sum": 1.0,
+            "Timestamp": "2026-11-05T02:00:00+00:00",
+            "Unit": "Milliseconds"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "TargetResource",
+            "Value": "rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "ToolName",
+            "Value": "TransferTarget___transfer"
+          },
+          {
+            "Name": "OperationName",
+            "Value": "PartiallyAuthorizeActions"
+          },
+          {
+            "Name": "Mode",
+            "Value": "ENFORCE"
+          }
+        ],
+        "name": "DenyDecisions"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 1.0,
+            "Sum": 1.0,
+            "Timestamp": "2026-11-05T02:00:00+00:00",
+            "Unit": "Milliseconds"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "TargetResource",
+            "Value": "rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "ToolName",
+            "Value": "TransferTarget___transfer"
+          },
+          {
+            "Name": "OperationName",
+            "Value": "PartiallyAuthorizeActions"
+          },
+          {
+            "Name": "Mode",
+            "Value": "ENFORCE"
+          },
+          {
+            "Name": "PolicyEngine",
+            "Value": "rot_spendcap_engine-rzhlj_2hg9"
+          }
+        ],
+        "name": "DenyDecisions"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 1.0,
+            "Sum": 1.0,
+            "Timestamp": "2026-11-05T02:00:00+00:00",
+            "Unit": "Milliseconds"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "TargetResource",
+            "Value": "rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "ToolName",
+            "Value": "TransferTarget___transfer"
+          },
+          {
+            "Name": "OperationName",
+            "Value": "PartiallyAuthorizeActions"
+          },
+          {
+            "Name": "PolicyEngine",
+            "Value": "rot_spendcap_engine-rzhlj_2hg9"
+          }
+        ],
+        "name": "DenyDecisions"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 1.0,
+            "Sum": 1.0,
+            "Timestamp": "2026-11-05T02:00:00+00:00",
+            "Unit": "Milliseconds"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "TargetResource",
+            "Value": "rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "ToolName",
+            "Value": "TransferTarget___transfer"
+          },
+          {
+            "Name": "OperationName",
+            "Value": "PartiallyAuthorizeActions"
+          }
+        ],
+        "name": "DenyDecisions"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 1.0,
+            "Sum": 19.0,
+            "Timestamp": "2026-11-05T02:00:00+00:00",
+            "Unit": "Milliseconds"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "TargetResource",
+            "Value": "rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "OperationName",
+            "Value": "PartiallyAuthorizeActions"
+          }
+        ],
+        "name": "Latency"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 1.0,
+            "Sum": 0.0,
+            "Timestamp": "2026-11-05T02:00:00+00:00",
+            "Unit": "Count"
+          },
+          {
+            "SampleCount": 3.0,
+            "Sum": 0.0,
+            "Timestamp": "2026-11-05T02:18:00+00:00",
+            "Unit": "Count"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "Resource",
+            "Value": "arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "Operation",
+            "Value": "InvokeGateway"
+          },
+          {
+            "Name": "Protocol",
+            "Value": "MCP"
+          }
+        ],
+        "name": "Throttles"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 1.0,
+            "Sum": 0.0,
+            "Timestamp": "2026-11-05T02:00:00+00:00",
+            "Unit": "Count"
+          },
+          {
+            "SampleCount": 3.0,
+            "Sum": 0.0,
+            "Timestamp": "2026-11-05T02:18:00+00:00",
+            "Unit": "Count"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "Resource",
+            "Value": "arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "Operation",
+            "Value": "InvokeGateway"
+          },
+          {
+            "Name": "Protocol",
+            "Value": "MCP"
+          }
+        ],
+        "name": "SystemErrors"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 1.0,
+            "Sum": 0.0,
+            "Timestamp": "2026-11-05T02:00:00+00:00",
+            "Unit": "Count"
+          },
+          {
+            "SampleCount": 3.0,
+            "Sum": 0.0,
+            "Timestamp": "2026-11-05T02:18:00+00:00",
+            "Unit": "Count"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "Resource",
+            "Value": "arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "Operation",
+            "Value": "InvokeGateway"
+          },
+          {
+            "Name": "Protocol",
+            "Value": "MCP"
+          }
+        ],
+        "name": "UserErrors"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 1.0,
+            "Sum": 0.0,
+            "Timestamp": "2026-11-05T02:00:00+00:00",
+            "Unit": "Count"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "Resource",
+            "Value": "arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "Operation",
+            "Value": "InvokeGateway"
+          },
+          {
+            "Name": "Method",
+            "Value": "tools/list"
+          },
+          {
+            "Name": "Protocol",
+            "Value": "MCP"
+          }
+        ],
+        "name": "UserErrors"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 1.0,
+            "Sum": 89.0,
+            "Timestamp": "2026-11-05T02:00:00+00:00",
+            "Unit": "Milliseconds"
+          },
+          {
+            "SampleCount": 3.0,
+            "Sum": 1426.0,
+            "Timestamp": "2026-11-05T02:18:00+00:00",
+            "Unit": "Milliseconds"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "Resource",
+            "Value": "arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "Operation",
+            "Value": "InvokeGateway"
+          },
+          {
+            "Name": "Protocol",
+            "Value": "MCP"
+          }
+        ],
+        "name": "Latency"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 1.0,
+            "Sum": 89.0,
+            "Timestamp": "2026-11-05T02:00:00+00:00",
+            "Unit": "Milliseconds"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "Resource",
+            "Value": "arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "Operation",
+            "Value": "InvokeGateway"
+          },
+          {
+            "Name": "Method",
+            "Value": "tools/list"
+          },
+          {
+            "Name": "Protocol",
+            "Value": "MCP"
+          }
+        ],
+        "name": "Latency"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 1.0,
+            "Sum": 0.0,
+            "Timestamp": "2026-11-05T02:00:00+00:00",
+            "Unit": "Count"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "Resource",
+            "Value": "arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "Operation",
+            "Value": "InvokeGateway"
+          },
+          {
+            "Name": "Method",
+            "Value": "tools/list"
+          },
+          {
+            "Name": "Protocol",
+            "Value": "MCP"
+          }
+        ],
+        "name": "Throttles"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 1.0,
+            "Sum": 0.0,
+            "Timestamp": "2026-11-05T02:00:00+00:00",
+            "Unit": "Count"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "Resource",
+            "Value": "arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "Operation",
+            "Value": "InvokeGateway"
+          },
+          {
+            "Name": "Method",
+            "Value": "tools/list"
+          },
+          {
+            "Name": "Protocol",
+            "Value": "MCP"
+          }
+        ],
+        "name": "SystemErrors"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 3.0,
+            "Sum": 3.0,
+            "Timestamp": "2026-11-05T02:18:00+00:00",
+            "Unit": "Count"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "Policy",
+            "Value": "rotspendcap-nrjoll9d_k"
+          },
+          {
+            "Name": "TargetResource",
+            "Value": "rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "OperationName",
+            "Value": "AuthorizeAction"
+          },
+          {
+            "Name": "Mode",
+            "Value": "ENFORCE"
+          },
+          {
+            "Name": "PolicyEngine",
+            "Value": "rot_spendcap_engine-rzhlj_2hg9"
+          }
+        ],
+        "name": "AllowDecisions"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 3.0,
+            "Sum": 3.0,
+            "Timestamp": "2026-11-05T02:18:00+00:00",
+            "Unit": "Count"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "TargetResource",
+            "Value": "rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "OperationName",
+            "Value": "AuthorizeAction"
+          },
+          {
+            "Name": "Mode",
+            "Value": "ENFORCE"
+          },
+          {
+            "Name": "PolicyEngine",
+            "Value": "rot_spendcap_engine-rzhlj_2hg9"
+          }
+        ],
+        "name": "AllowDecisions"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 3.0,
+            "Sum": 3.0,
+            "Timestamp": "2026-11-05T02:18:00+00:00",
+            "Unit": "Count"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "Policy",
+            "Value": "rotspendcap-nrjoll9d_k"
+          },
+          {
+            "Name": "TargetResource",
+            "Value": "rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "OperationName",
+            "Value": "AuthorizeAction"
+          },
+          {
+            "Name": "PolicyEngine",
+            "Value": "rot_spendcap_engine-rzhlj_2hg9"
+          }
+        ],
+        "name": "AllowDecisions"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 3.0,
+            "Sum": 3.0,
+            "Timestamp": "2026-11-05T02:18:00+00:00",
+            "Unit": "Count"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "Policy",
+            "Value": "rotspendcap-nrjoll9d_k"
+          },
+          {
+            "Name": "TargetResource",
+            "Value": "rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "OperationName",
+            "Value": "AuthorizeAction"
+          }
+        ],
+        "name": "AllowDecisions"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 3.0,
+            "Sum": 3.0,
+            "Timestamp": "2026-11-05T02:18:00+00:00",
+            "Unit": "Count"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "Policy",
+            "Value": "rotspendcap-nrjoll9d_k"
+          },
+          {
+            "Name": "TargetResource",
+            "Value": "rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "OperationName",
+            "Value": "AuthorizeAction"
+          },
+          {
+            "Name": "Mode",
+            "Value": "ENFORCE"
+          }
+        ],
+        "name": "AllowDecisions"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 3.0,
+            "Sum": 3.0,
+            "Timestamp": "2026-11-05T02:18:00+00:00",
+            "Unit": "Count"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "TargetResource",
+            "Value": "rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "OperationName",
+            "Value": "AuthorizeAction"
+          }
+        ],
+        "name": "AllowDecisions"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 3.0,
+            "Sum": 3.0,
+            "Timestamp": "2026-11-05T02:18:00+00:00",
+            "Unit": "Count"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "TargetResource",
+            "Value": "rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "OperationName",
+            "Value": "AuthorizeAction"
+          },
+          {
+            "Name": "PolicyEngine",
+            "Value": "rot_spendcap_engine-rzhlj_2hg9"
+          }
+        ],
+        "name": "AllowDecisions"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 3.0,
+            "Sum": 3.0,
+            "Timestamp": "2026-11-05T02:18:00+00:00",
+            "Unit": "Count"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "OperationName",
+            "Value": "AuthorizeAction"
+          },
+          {
+            "Name": "PolicyEngine",
+            "Value": "rot_spendcap_engine-rzhlj_2hg9"
+          }
+        ],
+        "name": "AllowDecisions"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 3.0,
+            "Sum": 3.0,
+            "Timestamp": "2026-11-05T02:18:00+00:00",
+            "Unit": "Count"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "OperationName",
+            "Value": "AuthorizeAction"
+          },
+          {
+            "Name": "Mode",
+            "Value": "ENFORCE"
+          },
+          {
+            "Name": "PolicyEngine",
+            "Value": "rot_spendcap_engine-rzhlj_2hg9"
+          }
+        ],
+        "name": "AllowDecisions"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 3.0,
+            "Sum": 3.0,
+            "Timestamp": "2026-11-05T02:18:00+00:00",
+            "Unit": "Count"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "TargetResource",
+            "Value": "rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "OperationName",
+            "Value": "AuthorizeAction"
+          },
+          {
+            "Name": "Mode",
+            "Value": "ENFORCE"
+          }
+        ],
+        "name": "AllowDecisions"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 3.0,
+            "Sum": 77.0,
+            "Timestamp": "2026-11-05T02:18:00+00:00",
+            "Unit": "Milliseconds"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "TargetResource",
+            "Value": "rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "OperationName",
+            "Value": "AuthorizeAction"
+          }
+        ],
+        "name": "TemporalLatency"
+      },
+      {
+        "datapoints": [
+          {
+            "SampleCount": 3.0,
+            "Sum": 0.0,
+            "Timestamp": "2026-11-05T02:18:00+00:00",
+            "Unit": "Count"
+          }
+        ],
+        "dimensions": [
+          {
+            "Name": "Resource",
+            "Value": "arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-e0umswk6ss"
+          },
+          {
+            "Name": "Operation",
+            "Value": "InvokeGateway"
+          },
+          {
+            "Name": "Method",
+            "Value": "tools/call"
+          },
+          {
+            "Name": "Protocol",
+            "Value": "MCP"
+          }
+        ],
+        "name": "SystemErrors"
+      }
+    ],
+    "namespace": "AWS/Bedrock-AgentCore"
+  },
+  "cross_check": {
+    "admitted_usd_per_responses": 300,
+    "consistent": true,
+    "settled_usd_per_logs": 300
+  },
+  "fire_results": {
+    "admitted_count": 3,
+    "amount": 100,
+    "committed_usd": 300,
+    "denied_count": 0,
+    "fired_at_utc": "2026-11-05T02:18:29Z",
+    "nfires": 3,
+    "path": "/mcp",
+    "phase": "buggy-deployed",
+    "results": [
+      {
+        "amount": 100,
+        "elapsed_s": 3.36,
+        "exit_code": 0,
+        "fire": 1,
+        "path": "/mcp",
+        "response_file": "C:\\Users\\jeren\\Documents\\KAMANU\\ROTN\\agentcore_repro\\out\\fire-1.json",
+        "session_id": "18884ad6-de14-40ce-a016-375a39573fd0",
+        "stderr_tail": "status=200 content-type=application/json runtime-session-id=- mcp-session-id=- mcp-protocol-version=- request-id=4b897060-9e79-4e46-a841-07bcc828320e complete=true bytes=193\n",
+        "stdout_tail": "",
+        "tool": "TransferTarget___transfer",
+        "verdict": "ADMITTED"
+      },
+      {
+        "amount": 100,
+        "elapsed_s": 0.0,
+        "exit_code": 0,
+        "fire": 2,
+        "path": "/mcp",
+        "response_file": "C:\\Users\\jeren\\Documents\\KAMANU\\ROTN\\agentcore_repro\\out\\fire-2.json",
+        "session_id": "18884ad6-de14-40ce-a016-375a39573fd0",
+        "stderr_tail": "status=200 content-type=application/json runtime-session-id=- mcp-session-id=- mcp-protocol-version=- request-id=307cd4b4-b169-49ac-addd-d8a0c102515f complete=true bytes=193\n",
+        "stdout_tail": "",
+        "tool": "TransferTarget___transfer",
+        "verdict": "ADMITTED"
+      },
+      {
+        "amount": 100,
+        "elapsed_s": 0.0,
+        "exit_code": 0,
+        "fire": 3,
+        "path": "/mcp",
+        "response_file": "C:\\Users\\jeren\\Documents\\KAMANU\\ROTN\\agentcore_repro\\out\\fire-3.json",
+        "session_id": "18884ad6-de14-40ce-a016-375a39573fd0",
+        "stderr_tail": "status=200 content-type=application/json runtime-session-id=- mcp-session-id=- mcp-protocol-version=- request-id=09279375-d5b6-4089-b176-be68951eb9dd complete=true bytes=193\n",
+        "stdout_tail": "",
+        "tool": "TransferTarget___transfer",
+        "verdict": "ADMITTED"
+      }
+    ],
+    "session_id": "18884ad6-de14-40ce-a016-375a39573fd0",
+    "tool": "TransferTarget___transfer"
+  },
+  "gatewayArn": "arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-e0umswk6ss",
+  "lambda_logs": {
+    "function": "rot-transfer-mock",
+    "raw_tail": "INIT_START Runtime Version: python:3.12.mainlinev2.v82\tRuntime Version ARN: arn:aws:lambda:us-east-1::runtime:a8b19198a828662ade07d066a1dce047429a5869166346747ab7d57435583a29\n\nSTART RequestId: b79c97c5-6aa5-4574-a8c3-a83f85d9d814 Version: $LATEST\n\nSETTLE txId=rot-21c39914a00c amount=100 status=SETTLED\n\nEND RequestId: b79c97c5-6aa5-4574-a8c3-a83f85d9d814\n\nREPORT RequestId: b79c97c5-6aa5-4574-a8c3-a83f85d9d814\tDuration: 2.01 ms\tBilled Duration: 91 ms\tMemory Size: 128 MB\tMax Memory Used: 33 MB\tInit Duration: 88.54 ms\t\nXRAY TraceId: 1-6aebe773-6fc27b8d28a7fa0a54f5787a\tSampled: true\t\n\nINIT_START Runtime Version: python:3.12.mainlinev2.v82\tRuntime Version ARN: arn:aws:lambda:us-east-1::runtime:a8b19198a828662ade07d066a1dce047429a5869166346747ab7d57435583a29\n\nSTART RequestId: a3bc46d2-4ec8-47b2-a545-30151119dc22 Version: $LATEST\n\nSETTLE txId=rot-1e0ff80a5e18 amount=100 status=SETTLED\n\nEND RequestId: a3bc46d2-4ec8-47b2-a545-30151119dc22\n\nREPORT RequestId: a3bc46d2-4ec8-47b2-a545-30151119dc22\tDuration: 1.85 ms\tBilled Duration: 89 ms\tMemory Size: 128 MB\tMax Memory Used: 33 MB\tInit Duration: 86.53 ms\t\nXRAY TraceId: 1-6aebe773-0269f9097ebf0eb71044ec6b\tSampled: true\t\n\nINIT_START Runtime Version: python:3.12.mainlinev2.v82\tRuntime Version ARN: arn:aws:lambda:us-east-1::runtime:a8b19198a828662ade07d066a1dce047429a5869166346747ab7d57435583a29\n\nSTART RequestId: f1d12f7f-c411-4031-b5db-0a94f24cef58 Version: $LATEST\n\nSETTLE txId=rot-306def820a18 amount=100 status=SETTLED\n\nEND RequestId: f1d12f7f-c411-4031-b5db-0a94f24cef58\n\nREPORT RequestId: f1d12f7f-c411-4031-b5db-0a94f24cef58\tDuration: 1.99 ms\tBilled Duration: 87 ms\tMemory Size: 128 MB\tMax Memory Used: 33 MB\tInit Duration: 84.19 ms\t\nXRAY TraceId: 1-6aebe773-755070f3401e483b3c1db9b9\tSampled: true\t\n",
+    "settle_lines": [
+      {
+        "amount": 100,
+        "status": "SETTLED",
+        "txId": "rot-21c39914a00c"
+      },
+      {
+        "amount": 100,
+        "status": "SETTLED",
+        "txId": "rot-1e0ff80a5e18"
+      },
+      {
+        "amount": 100,
+        "status": "SETTLED",
+        "txId": "rot-306def820a18"
+      }
+    ]
+  },
+  "region": "us-east-1",
+  "responses": {
+    "responses": [
+      {
+        "body": "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"isError\":false,\"content\":[{\"type\":\"text\",\"text\":\"{\\\"txId\\\":\\\"rot-1e0ff80a5e18\\\",\\\"amount\\\":100,\\\"status\\\":\\\"SETTLED\\\",\\\"currency\\\":\\\"USD\\\",\\\"mock\\\":true}\"}]}}",
+        "file": "fire-1.json"
+      },
+      {
+        "body": "{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"isError\":false,\"content\":[{\"type\":\"text\",\"text\":\"{\\\"txId\\\":\\\"rot-306def820a18\\\",\\\"amount\\\":100,\\\"status\\\":\\\"SETTLED\\\",\\\"currency\\\":\\\"USD\\\",\\\"mock\\\":true}\"}]}}",
+        "file": "fire-2.json"
+      },
+      {
+        "body": "{\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{\"isError\":false,\"content\":[{\"type\":\"text\",\"text\":\"{\\\"txId\\\":\\\"rot-21c39914a00c\\\",\\\"amount\\\":100,\\\"status\\\":\\\"SETTLED\\\",\\\"currency\\\":\\\"USD\\\",\\\"mock\\\":true}\"}]}}",
+        "file": "fire-3.json"
+      },
+      {
+        "body": "{\n  \"admitted_count\": 3,\n  \"amount\": 100,\n  \"committed_usd\": 300,\n  \"denied_count\": 0,\n  \"fired_at_utc\": \"2026-11-05T02:18:29Z\",\n  \"nfires\": 3,\n  \"path\": \"/mcp\",\n  \"phase\": \"buggy-deployed\",\n  \"results\": [\n    {\n      \"amount\": 100,\n      \"elapsed_s\": 3.36,\n      \"exit_code\": 0,\n      \"fire\": 1,\n      \"path\": \"/mcp\",\n      \"response_file\": \"C:\\\\Users\\\\jeren\\\\Documents\\\\KAMANU\\\\ROTN\\\\agentcore_repro\\\\out\\\\fire-1.json\",\n      \"session_id\": \"18884ad6-de14-40ce-a016-375a39573fd0\",\n      \"stderr_tail\": \"status=200 content-type=application/json runtime-session-id=- mcp-session-id=- mcp-protocol-version=- request-id=4b897060-9e79-4e46-a841-07bcc828320e complete=true bytes=193\\n\",\n      \"stdout_tail\": \"\",\n      \"tool\": \"TransferTarget___transfer\",\n      \"verdict\": \"ADMITTED\"\n    },\n    {\n      \"amount\": 100,\n      \"elapsed_s\": 0.0,\n      \"exit_code\": 0,\n      \"fire\": 2,\n      \"path\": \"/mcp\",\n      \"response_file\": \"C:\\\\Users\\\\jeren\\\\Documents\\\\KAMANU\\\\ROTN\\\\agentcore_repro\\\\out\\\\fire-2.json\",\n      \"session_id\": \"18884ad6-de14-40ce-a016-375a39573fd0\",\n      \"stderr_tail\": \"status=200 content-type=application/json runtime-session-id=- mcp-session-id=- mcp-protocol-version=- request-id=307cd4b4-b169-49ac-addd-d8a0c102515f complete=true bytes=193\\n\",\n      \"stdout_tail\": \"\",\n      \"tool\": \"TransferTarget___transfer\",\n      \"verdict\": \"ADMITTED\"\n    },\n    {\n      \"amount\": 100,\n      \"elapsed_s\": 0.0,\n      \"exit_code\": 0,\n      \"fire\": 3,\n      \"path\": \"/mcp\",\n      \"response_file\": \"C:\\\\Users\\\\jeren\\\\Documents\\\\KAMANU\\\\ROTN\\\\agentcore_repro\\\\out\\\\fire-3.json\",\n      \"session_id\": \"18884ad6-de14-40ce-a016-375a39573fd0\",\n      \"stderr_tail\": \"status=200 content-type=application/json runtime-session-id=- mcp-session-id=- mcp-protocol-version=- request-id=09279375-d5b6-4089-b176-be68951eb9dd complete=true bytes=193\\n\",\n      \"stdout_tail\": \"\",\n      \"tool\": \"TransferTarget___transfer\",\n      \"verdict\": \"ADMITTED\"\n    }\n  ],\n  \"session_id\": \"18884ad6-de14-40ce-a016-375a39573fd0\",",
+        "file": "fire-results.json"
+      }
+    ]
+  }
+}

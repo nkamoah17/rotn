@@ -1,0 +1,7 @@
+
+aws: [ERROR]: An error occurred (ValidationException) when calling the UpdatePolicy operation: When parsing the policy statement, the following errors occurred:
+* unexpected token `temporal`
+
+Additional error details:
+fieldList: <complex value>
+Use "--cli-error-format json" or another error format to see the full details.

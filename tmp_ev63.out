@@ -1,0 +1,20 @@
+====================================================================
+63_test_single300 -- E3: ONE $300 transfer, ONE fresh session
+  gateway : arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-ld9tskotbe
+  session : b89d9c56-e8b9-49c2-95cd-74789b121de5
+  path    : /mcp   tool: TransferTarget___transfer
+  policy  : policies\spendcap-correct-agentcore.dw  (fixed twin, sha256 88c22ae1f83a998c)
+  cap     : 200 (24h window)
+====================================================================
+[08:58:32] E3 fire  SEQUENTIAL (single)  session=b89d9c56-e8b9-49c2-95cd-74789b121de5
+[08:58:32] $ C:\Users\jeren\AppData\Roaming\npm\agentcore.CMD gateway invoke --id rot-spendcap-gw-ld9tskotbe --path /mcp --method ...
+  fire   : DENIED    rc=0 (5.87s)  session=b89d9c56-e8b9-49c2-95cd-74789b121de5
+
+--------------------------------------------------------------------
+  LIVE    : DENIED (one $300 transfer, fresh session)
+  READING : REFLEXIVE / SPEC-CONFORMANT FOR THE SINGLE-FIRE CASE
+           A lone over-cap fire was DENIED: the predicate matches this gateway's events (hypothesis A ruled out) and the window includes the current request (spec SS6: evaluation at position i reads positions j <= i). The unexplained $300 from the parallel runs is now isolated to the concurrent/in-flight regime -- see the E2/E4 read.
+--------------------------------------------------------------------
+wrote out/single300.json
+
+Next: python 64_replay_reference.py   (E4 -- reference replay of E2)
