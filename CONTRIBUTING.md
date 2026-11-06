@@ -41,7 +41,7 @@ cargo build                                               # target/debug/dogwood
 ## Tests
 
 ```bash
-python -m unittest discover -s tests                        # full suite (1025 tests, green in a bare env)
+python -m unittest discover -s tests                        # full suite (1082 tests, green in a bare env)
 python -m unittest discover -s tests -p 'test_apw*.py'      # the six APW catalog legs
 ```
 
@@ -72,10 +72,13 @@ DOGWOOD_BIN=/path/to/dogwood(.exe) rot replay --oracle dogwood --gate
   `3` = error (binary missing, bad arguments). The *test suite* skips the
   binary leg when the binary is absent (CI stays green in a bare env); the
   CLI reports the error — it does not fabricate a pass.
-- **Reports:** `out/reference-replay.json` + `out/reference-replay.md`
-  (plus per-class JSON). The committed copy is
-  [`docs/reference-replay.md`](docs/reference-replay.md) — regenerate and
-  commit it whenever the binary, the fixtures, or the spec change.
+- **Reports:** the v2 bidirectional gate (the default for `--gate`) writes
+  `out/gate/report.json` + `out/gate/report.md` (spec §6 schema). The legacy
+  one-sided gate (`rot replay --oracle dogwood --gate --onesided`) writes
+  `out/reference-replay.json` + `out/reference-replay.md`. The committed copy
+  is [`docs/reference-replay.md`](docs/reference-replay.md) — regenerate and
+  commit it whenever the binary, the fixtures, the spec, or the waivers
+  change.
 - **Pinned reference:** the gate's claims are made against
   `dogwood-ref@4ec5e2c01b44ff3882a231ae5d315b330b38fa25`. If you build a
   different commit, record it in the report — upstream drift is expected

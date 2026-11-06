@@ -1545,19 +1545,69 @@ def _cmd_replay_oracle_dogwood(args):
         os.makedirs(out_dir)
 
     if getattr(args, "gate", False):
-        reports = oracle.run_gate(binary)
+        if getattr(args, "onesided", False):
+            # Back-compat: the legacy one-sided gate (oracle.run_gate).
+            reports = oracle.run_gate(binary)
+            return _persist_and_report(binary, args, out_dir, reports)
+        # v2 bidirectional reference gate (docs/reference-gate.md) — default.
+        return _cmd_replay_gate_v2(args, binary)
     elif getattr(args, "events", None):
         return _cmd_replay_events(binary, args, out_dir)
     else:
         if not (args.policy and args.trace and args.policy_schema):
             print("ERROR: --oracle dogwood needs --policy, --trace and "
-                  "--policy-schema (or --gate to run APW-1/2/4, or --events "
-                  "FILE for the E4 events replay)",
+                  "--policy-schema (or --gate to run the APW gate, or "
+                  "--events FILE for the E4 events replay)",
                   file=sys.stderr)
             return EXIT_ERROR
         reports = _run_single_class(binary, args)
 
     return _persist_and_report(binary, args, out_dir, reports)
+
+
+def _cmd_replay_gate_v2(args, binary):
+    """The v2 bidirectional reference gate (docs/reference-gate.md).
+
+    Runs ``rot.gate.run_bidirectional_gate`` over the gateable + non-lowering
+    APW classes, writes ``out/gate/report.{json,md}``, and returns the gate's
+    exit code (spec §5: 0 AGREE/waived, 1 DISAGREE/VACUOUS, 2 UNKNOWN over
+    threshold, 3 error). The exit codes coincide with the ROTN CLI codes
+    (EXIT_PROVEN/VIOLATED/UNKNOWN/ERROR), so CI can ``fail on exit 1``.
+    """
+    import rot.gate as gate
+
+    try:
+        profile = gate.parse_profile(getattr(args, "profile", None))
+    except ValueError as exc:
+        print("ERROR: %s" % exc, file=sys.stderr)
+        return EXIT_ERROR
+
+    out_dir = args.out or os.path.join(_repo_root(), "out", "gate")
+    try:
+        result = gate.run_bidirectional_gate(binary=binary, profile=profile)
+    except Exception as exc:  # noqa: BLE001 - surface any gate error as exit 3
+        print("ERROR: gate failed: %s" % exc, file=sys.stderr)
+        return EXIT_ERROR
+
+    json_path, md_path = gate.write_report(result, out_dir)
+
+    print(_BAR)
+    print("  ROTN x Dogwood reference -- v2 bidirectional gate")
+    print(_BAR)
+    print("  profile   : %s (commit %s)"
+          % (profile.name, profile.commit[:12]))
+    print("  engine    : %s" % result["engine"])
+    for row in result["rows"]:
+        waiver = row.get("waiver_id") or ""
+        suffix = ("  [waived: %s]" % waiver) if waiver else ""
+        print("  %-6s %-22s%s" % (row.get("apw_class"),
+                                   row.get("outcome"), suffix))
+    print(_BAR)
+    print("  exit      : %d" % result["exit_code"])
+    print("  json      : %s" % json_path)
+    print("  markdown  : %s" % md_path)
+    print(_BAR)
+    return result["exit_code"]
 
 
 def _run_single_class(binary, args):
@@ -2794,8 +2844,21 @@ def main(argv=None):
                         "'dogwood' runs `dogwood replay` and records its "
                         "verdict next to ROTN's")
     p.add_argument("--gate", action="store_true",
-                   help="(with --oracle dogwood) run the APW-1/2/4 gate "
-                        "classes and write the side-by-side report")
+                   help="(with --oracle dogwood) run the APW gate classes "
+                        "and write the conformance report. Default is the "
+                        "bidirectional v2 gate (docs/reference-gate.md); "
+                        "use --onesided for the legacy one-sided gate")
+    p.add_argument("--bidirectional", action="store_true",
+                   help="(with --oracle dogwood --gate) run the bidirectional "
+                        "v2 reference gate (G1-G6). This is the default for "
+                        "--gate; the flag is accepted for explicitness")
+    p.add_argument("--onesided", action="store_true",
+                   help="(with --oracle dogwood --gate) back-compat: run the "
+                        "legacy one-sided gate (oracle.run_gate) instead of "
+                        "the v2 bidirectional gate")
+    p.add_argument("--profile", default=None, metavar="NAME",
+                   help="(with --oracle dogwood --gate) the semantics profile "
+                        "to record [default: dogwood-ref@<commit>]")
     p.add_argument("--events", default=None, metavar="FILE",
                    help="(with --oracle dogwood, E4) replay a recorded "
                         "events.jsonl: builds <out>/trace.log from the "

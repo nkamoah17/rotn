@@ -1,0 +1,74 @@
+# ROTN CI -- reference-gate drift detector (docs/reference-gate.md §9).
+#
+# A SEPARATE, NON-BLOCKING job (spec §9): it reruns the bidirectional
+# reference gate against Dogwood's `main` branch -- NOT the pinned commit --
+# to detect upstream semantic changes.  It lives in its own workflow, so it
+# never gates a merge: a non-zero gate exit is the DRIFT SIGNAL we want to
+# surface, so the run always succeeds and archives the report for a human to
+# review (pin a new commit + renew waivers if the divergence is real).
+name: reference-gate-drift
+
+on:
+  schedule:
+    # Nightly, UTC 02:00 (spec §9: "a non-blocking nightly job").
+    - cron: "0 2 * * *"
+  # A maintainer can also kick it off on demand.
+  workflow_dispatch:
+
+jobs:
+  drift:
+    name: reference gate vs dogwood main (drift detector)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the package (zero runtime deps)
+        run: python -m pip install .
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build the Dogwood reference interpreter @ main (drift branch)
+        # main's HEAD is the "upstream" commit this run measures against; we
+        # record its SHA in the profile so the drift report is reproducible.
+        run: |
+          set -e
+          git clone --depth 1 \
+            https://github.com/dogwood-policy/dogwood.git dogwood-main
+          cd dogwood-main
+          MAIN_SHA="$(git rev-parse HEAD)"
+          cargo build -p dogwood-cli
+          cd ..
+          echo "DOGWOOD_BIN=$(pwd)/dogwood-main/target/debug/dogwood" >> "$GITHUB_ENV"
+          echo "DOGWOOD_MAIN_SHA=$MAIN_SHA" >> "$GITHUB_ENV"
+
+      - name: Run the gate against dogwood main (NON-BLOCKING)
+        # The exit code is the drift signal, not a failure: 0 means main
+        # still agrees with the pinned-commit verdicts, non-zero means the
+        # upstream semantics changed.  We always exit 0 and archive the report.
+        run: |
+          code=0; rot replay --oracle dogwood --gate --bidirectional \
+            --profile "dogwood-ref@${DOGWOOD_MAIN_SHA:0:7}" \
+            --out out/gate-drift || code=$?
+          echo "drift gate exit code vs dogwood main (${DOGWOOD_MAIN_SHA}): $code"
+          if [ "$code" -eq 0 ]; then
+            echo "OK: dogwood main still agrees with the pinned-commit verdicts."
+          else
+            echo "DRIFT: dogwood main diverges (exit $code) -- review the report,"
+            echo "then pin a new commit and renew waivers if the change is real."
+          fi
+          exit 0
+
+      - name: Upload the drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rotn-reference-gate-drift
+          path: out/gate-drift
+          if-no-files-found: warn

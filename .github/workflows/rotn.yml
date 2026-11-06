@@ -113,3 +113,65 @@ jobs:
             out/attack.jsonl
             out-mcp/mcp_findings.json
           if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # The bidirectional reference gate (docs/reference-gate.md, WS4).
+  #
+  # A SEPARATE job on purpose: the `stdlib` job above stays binary-free (no
+  # Java, no Z3, no Rust, no network) so it is green in a bare Python env.
+  # This job is the merge-blocking leg: it builds the EXACT pinned Dogwood
+  # commit (spec §9), points DOGWOOD_BIN at it, and runs the v2 gate.
+  # A non-zero gate exit (DISAGREE / VACUOUS / UNKNOWN-over-threshold /
+  # error) FAILS the merge.
+  # ---------------------------------------------------------------------------
+  reference-gate:
+    name: reference gate (bidirectional, dogwood @ 4ec5e2c)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the package (zero runtime deps)
+        run: python -m pip install .
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build the Dogwood reference interpreter @ pinned commit
+        # `dogwood-cli` is the `dogwood` binary (see the dogwood workspace);
+        # `cargo build -p dogwood-cli` builds just the binary + its deps.
+        run: |
+          set -e
+          git init dogwood-ref
+          cd dogwood-ref
+          git remote add origin https://github.com/dogwood-policy/dogwood.git
+          git fetch --depth 1 origin 4ec5e2c01b44ff3882a231ae5d315b330b38fa25
+          git checkout FETCH_HEAD
+          cargo build -p dogwood-cli
+          cd ..
+          echo "DOGWOOD_BIN=$(pwd)/dogwood-ref/target/debug/dogwood" >> "$GITHUB_ENV"
+
+      - name: Run the bidirectional reference gate (merge-blocking)
+        # Exit 0 = all AGREE or waived; 1 = any DISAGREE / VACUOUS;
+        # 2 = UNKNOWN over threshold; 3 = error (spec §4/§5).  Non-zero
+        # blocks the merge.
+        run: |
+          set -e
+          code=0; rot replay --oracle dogwood --gate --bidirectional \
+            --profile dogwood-ref@4ec5e2c \
+            --out out/gate || code=$?
+          echo "reference-gate exit code: $code"
+          [ "$code" -eq 0 ]
+
+      - name: Upload the gate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rotn-reference-gate
+          path: out/gate
+          if-no-files-found: warn

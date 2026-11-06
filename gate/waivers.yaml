@@ -1,0 +1,30 @@
+# gate/waivers.yaml — labeled divergences (spec: docs/reference-gate.md §4).
+#
+# A waiver accepts a documented ROTN/reference divergence. Rules
+# (CONTRIBUTING.md "Waiver rules"):
+#   * Always labeled: an accepted divergence is reported as
+#     LABELED-DIVERGENCE — a pass *with a warning* that names the waiver —
+#     never a bare PASS, and never only in a footnote.
+#   * Strict-subset keys: class, rule, owner, expiry, reason. Anything else
+#     is rejected by the parser (rot.gate.parse_waivers).
+#   * Owner + expiry are mandatory. An expired waiver FAILS the gate — a
+#     waiver cannot lapse into a pass.
+#   * Explain, don't delete: the reason states WHY the two engines differ.
+#   * Re-review at expiry: renew with an updated reason, or re-label the class.
+#
+# Format: one entry per `- class:` marker; the following indented
+# `key: value` lines are that entry's fields. Comments start with `#`.
+
+# --- APW-4 / G2 : the partitioned (per-recipient) cap -------------------
+# Dogwood's reference shards temporal aggregates by the request's pinned key
+# (input.recipient), so the "correct" APW-4 policy enforces a PER-RECIPIENT
+# cap (each recipient is charged <= 3), not a global distinct-recipient cap.
+# ROTN's model checks the global-distinct class, which is a real bug class.
+# The reference therefore admits a cross-recipient burst (4 ALLOW / 0 DENY)
+# that the model's proof (distinct <= 3) forbids -> a DISAGREE-PROVEN that is
+# a documented semantic difference, not a model defect. Waived here.
+- class: APW-4
+  rule: G2
+  owner: nkamoah17
+  expiry: 2027-02-04
+  reason: Dogwood partitions temporal aggregates by input.recipient, so the correct policy is a per-recipient cap; ROTN checks the global-distinct class (a real bug class). Documented semantic difference, not a model defect.

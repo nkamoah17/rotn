@@ -106,7 +106,7 @@ holds, counter = ModelFinder.from_ir(ir).forall_reachable(ir.pinned_property.eva
 # counter -> {"completed": 0, "inflight": 3}
 ```
 
-**CI**: the suite is pure-stdlib (no Java, no Z3, no network) and green in a bare Python env — **1025 tests**, deterministic, exit-code aware. See `.github/workflows/rotn.yml` (tests) and `.github/workflows/publish.yml` (PyPI).
+**CI**: the suite is pure-stdlib (no Java, no Z3, no network) and green in a bare Python env — **1082 tests**, deterministic, exit-code aware. See `.github/workflows/rotn.yml` (tests) and `.github/workflows/publish.yml` (PyPI).
 
 ## License — all Apache-2.0, one product
 
@@ -135,7 +135,9 @@ See [`docs/licensing.md`](docs/licensing.md) for the full position.
 ## Go deeper
 
 - [`docs/positioning.md`](docs/positioning.md) — **the positioning: AgentCore writes the policy, ROTN proves it can't be bypassed** (the two facts, the complementary-not-competing stance, the multi-language neutral checker, and the AP2 mandate mapping)
-- [`docs/apw-catalog.md`](docs/apw-catalog.md) — **the APW catalog: six ways agent policies fail under concurrency** (the named bug classes, each with a buggy/correct pair, a lowering, and a witness from a hand-written oracle, cross-checked against the reference interpreter)
+- [`docs/apw-catalog.md`](docs/apw-catalog.md) — **the APW catalog: six ways agent policies fail under concurrency** (the named bug classes, each with a buggy/correct pair, a lowering, and a witness from a hand-written oracle)
+- [`docs/reference-gate.md`](docs/reference-gate.md) — **the bidirectional reference gate (v2): every verdict must agree with Dogwood's reference interpreter in both directions** (G1–G6, the outcomes, waivers with owner + expiry, the CI merge-blocking job and the nightly drift job)
+- [`docs/reference-replay.md`](docs/reference-replay.md) — the committed first-run gate report (APW-1 AGREE, APW-2 measured DISAGREE-PROVEN, APW-4 waived LABELED-DIVERGENCE, APW-3/5/6 UNKNOWN)
 - [`docs/architecture.md`](docs/architecture.md) — the pipeline, the engines, the bounded re-check
 - [`docs/spendcap-demo.md`](docs/spendcap-demo.md) — the demo walkthrough
 - [`docs/spendcap-usage.md`](docs/spendcap-usage.md) — the CLI reference

@@ -36,43 +36,64 @@ correct→PROVEN legs for all six.
 
 ## Reference-interpreter agreement (the credibility backbone)
 
-The hand-written oracle is the *internal* leg. The *external* leg is the one that
-matters for trust: **replaying every gate-class counterexample against
-Dogwood's own reference interpreter** (`dogwood replay`) and recording the
-reference verdict next to ROTN's, on the *same* trace -- the "Dogwood admits
-it, ROTN catches it" side-by-side.
+The hand-written oracle is the *internal* leg. The *external* leg is the one
+that matters for trust: the **bidirectional reference gate** (spec
+[`docs/reference-gate.md`](reference-gate.md), WS4) — every shipped verdict is
+replayed against Dogwood's own reference interpreter (`dogwood replay`) at the
+pinned commit, and **both directions** must agree: violations must be real
+(G1) and proofs must hold (G2). Disagreements block merges.
 
-For each of the three **gate classes** (APW-1, APW-2, APW-4), the replay must
-show **ROTN = VIOLATED** and the **reference = admitted** (the buggy policy
-admits the violating requests). On this machine the gate passes:
+The gate runs the **gateable** classes (APW-1, APW-2, APW-4) and reports the
+**non-lowering** classes (APW-3, APW-5, APW-6) as UNKNOWN. First-run
+outcomes (spec §7):
 
-| APW | class | ROTN | reference (buggy) | reference (correct) | gate |
-|-----|-------|------|-------------------|---------------------|------|
-| **APW-1** | Settled-sum cap bypass | VIOLATED | 4 ALLOW / 0 DENY | 2 ALLOW / 2 DENY | **AGREE** |
-| **APW-2** | Approval replay | VIOLATED | 3 ALLOW / 1 DENY | 1 ALLOW / 3 DENY | **AGREE** |
-| **APW-4** | Distinct-count race | VIOLATED | 4 ALLOW / 0 DENY | 4 ALLOW / 0 DENY | **AGREE** |
+| APW | class | model | outcome | note |
+|-----|-------|-------|---------|------|
+| **APW-1** | Settled-sum cap bypass | VIOLATED / PROVEN | **AGREE** | reference: 2 ALLOW / 2 DENY on the 4-fire burst |
+| **APW-2** | Approval replay | VIOLATED / PROVEN | **DISAGREE-PROVEN** | concurrent replay: reference admits 3 where the model proves 1 — *measured*, not waived |
+| **APW-4** | Distinct-count race | VIOLATED / PROVEN | **LABELED-DIVERGENCE** | waived (`gate/waivers.yaml`, `APW-4/G2/nkamoah17`) — a pass *with a warning*, never a silent PASS |
+| **APW-3** | Taint race | n/a (no lowering) | **UNKNOWN** | egress is data-dependent; concept until it lowers |
+| **APW-5** | Session splitting | n/a (no lowering) | **UNKNOWN** | per-session cap is a concept until it lowers |
+| **APW-6** | Window-boundary burst | n/a (no lowering) | **UNKNOWN** | absolute windows don't ship yet |
 
-**Gate: PASS -- 3 of 3 gate classes agree.**
+**Gate: exit 1** — APW-2 is an honest DISAGREE-PROVEN (a concurrent-replay
+divergence the team must fix or waive) and APW-4 is a documented, waived
+divergence; APW-3/5/6 are UNKNOWN (never a pass). See
+[`docs/reference-gate.md` §7](reference-gate.md) for the first-run
+expectations, and the full per-probe detail in
+[`docs/reference-replay.md`](reference-replay.md).
 
-Two caveats are empirically verified in the report, and they keep the claim
-honest. First, the reference is Cedar-default-deny, so the "admits the
-violation" leg is shown on the **permit** form (the gateway's authorize-action
-form); ROTN's shape detection reads the policy's *intent* (permit/forbid) to
-disambiguate the formerly-gated shape — a **permit** gated on a prior
-approval event is APW-2 (approval replay), a **forbid** on egress after a
-confidential read is APW-3 (taint race). Second, the
-reference window is **reflexive** (the current event is included in its own
-temporal aggregate -- spec §6: evaluation at position i reads positions j <= i;
-the APW-1 correct policy decides the 4 x $100 burst as 2 ALLOW / 2 DENY), and
-APW-4's `count` is a **per-recipient** count in the
-reference (a partition guarantee), so the reference does not deny the
-cross-recipient burst there -- ROTN still catches the global distinct-recipient
-class. APW-3 (taint race) and APW-5/6 (concept / forward-looking) are not gate
-classes: APW-3's egress is data-dependent, and APW-5/6 do not yet lower to a
-reference-interpretable shape.
+Two caveats are empirically verified and keep the claim honest. First, the
+reference is Cedar-default-deny, so the "admits the violation" leg is shown on
+the **permit** form (the gateway's authorize-action form); ROTN's shape
+detection reads the policy's *intent* (permit/forbid) to disambiguate the
+formerly-gated shape — a **permit** gated on a prior approval event is APW-2
+(approval replay), a **forbid** on egress after a confidential read is APW-3
+(taint race). Second, the reference window is **reflexive** (the current
+event is included in its own temporal aggregate — spec §6: evaluation at
+position i reads positions j <= i; the APW-1 correct policy decides the
+4 × $100 burst as 2 ALLOW / 2 DENY).
 
-Reproduce: `rot replay --oracle dogwood --gate` (writes
-`out/reference-replay.md`).
+**APW-4 is a relabeled class.** Under Dogwood's semantics the "correct"
+policy enforces a **per-recipient** (partitioned) cap — each recipient is
+charged ≤ 3 — not a *global* distinct-recipient cap. ROTN's model checks the
+**global distinct** class, which is a real bug class. The reference therefore
+admits a cross-recipient burst (4 ALLOW / 0 DENY) that the model's proof
+forbids; that is a **documented semantic difference, not a model defect**, and
+is waived in [`gate/waivers.yaml`](../gate/waivers.yaml) (owner + expiry; an
+expired waiver fails the gate). The gate reports it as **LABELED-DIVERGENCE —
+a pass with a warning**, never a silent PASS.
+
+Reproduce (v2 bidirectional gate, the default for `--gate`):
+
+    rot replay --oracle dogwood --gate --bidirectional \
+        --profile dogwood-ref@4ec5e2c --out out/gate
+
+This writes `out/gate/report.json` + `out/gate/report.md` (spec §6 schema).
+The legacy one-sided gate is still available as `rot replay --oracle dogwood
+--gate --onesided` (writes `out/reference-replay/reference-replay.md`) for
+back-compat.
+
 
 
 ---
@@ -204,10 +225,11 @@ python -m unittest discover -s tests -p 'test_apw*.py' -v
 rot check --policy samples/apw1-buggy.dw   # VIOLATED, witness {"completed":0,"inflight":3}
 rot check --policy samples/apw1-correct.dw # PROVEN
 
-# The reference-interpreter agreement (the credibility backbone): replay each
-# gate-class counterexample against Dogwood's reference interpreter and gate on
-# "ROTN = VIOLATED, reference = admitted" (writes out/reference-replay.md):
-rot replay --oracle dogwood --gate
+# The bidirectional reference gate (the credibility backbone, WS4): every
+# verdict is replayed against Dogwood's reference interpreter, both directions
+# (violations real, proofs hold). Writes out/gate/report.{json,md}:
+rot replay --oracle dogwood --gate --bidirectional \
+    --profile dogwood-ref@4ec5e2c --out out/gate
 ```
 
 ## What this is (and isn't)
