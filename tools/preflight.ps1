@@ -18,7 +18,7 @@
 
 $ErrorActionPreference = 'SilentlyContinue'
 $tools = 'C:\tools'
-$repo  = 'c:\Users\jeren\Documents\KAMANU\ROTN'
+$repo  = Split-Path $PSScriptRoot -Parent
 $rustup = "$env:USERPROFILE\.cargo\bin\rustup.exe"
 $results = [System.Collections.Generic.List[object]]::new()
 

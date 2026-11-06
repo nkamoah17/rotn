@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $aws = 'C:\Program Files\Amazon\AWSCLIV2\aws.exe'
-$outdir = 'C:\Users\jeren\Documents\KAMANU\ROTN\agentcore_repro\out'
+$outdir = Join-Path $PSScriptRoot '..\agentcore_repro\out'
 
 function Run($name, $cli) {
     $log = Join-Path $outdir ('_iamprobe_' + $name + '.log')

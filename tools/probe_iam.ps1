@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Continue'
 $aws = 'C:\Program Files\Amazon\AWSCLIV2\aws.exe'
-$u = 'nkamoah17'
-$outdir = 'C:\Users\jeren\Documents\KAMANU\ROTN\agentcore_repro\out'
+$u = $env:ROTN_PROBE_USER
+$outdir = Join-Path $PSScriptRoot '..\agentcore_repro\out'
 
 function Run($name, $args) {
     $log = Join-Path $outdir ('_iam_' + $name + '.log')

@@ -20,7 +20,7 @@
       "eventResource": "callerResource"
     },
     "rendered": "e4-policy.rendered.dw",
-    "rendered_arn": "arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-e0umswk6ss",
+    "rendered_arn": "arn:aws:bedrock-agentcore:us-east-1:<ACCOUNT_ID>:gateway/<GATEWAY_ID>",
     "rendered_sha256": "05ac4cf641db29accde9522ed880dbfd0e46c59e02bfe4c134149bbbfb07d8e9",
     "template": "agentcore_repro/policies/spendcap-correct-agentcore.dw",
     "template_sha256": "smoke",

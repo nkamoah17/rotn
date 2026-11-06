@@ -1,0 +1,474 @@
+{
+    "events": [
+        {
+            "logStreamName": "2026/11/05/[$LATEST]5e5db6482c4b42ca918f67089d579957",
+            "timestamp": 1793845108305,
+            "message": "INIT_START Runtime Version: python:3.12.mainlinev2.v82\tRuntime Version ARN: arn:aws:lambda:us-east-1::runtime:a8b19198a828662ade07d066a1dce047429a5869166346747ab7d57435583a29\n",
+            "ingestionTime": 1793845116666,
+            "eventId": "40004082685940374398355905566752130449420003833632063488"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]d96386dea7914352a923ca542135bd08",
+            "timestamp": 1793845108307,
+            "message": "INIT_START Runtime Version: python:3.12.mainlinev2.v82\tRuntime Version ARN: arn:aws:lambda:us-east-1::runtime:a8b19198a828662ade07d066a1dce047429a5869166346747ab7d57435583a29\n",
+            "ingestionTime": 1793845114932,
+            "eventId": "40004082685984975888752966810939382865109653668628135936"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]baa1e8e2fc064feb9e1415e66984eefe",
+            "timestamp": 1793845108313,
+            "message": "INIT_START Runtime Version: python:3.12.mainlinev2.v82\tRuntime Version ARN: arn:aws:lambda:us-east-1::runtime:a8b19198a828662ade07d066a1dce047429a5869166346747ab7d57435583a29\n",
+            "ingestionTime": 1793845113549,
+            "eventId": "40004082686118780359944150548116307958598145766599229440"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]5e5db6482c4b42ca918f67089d579957",
+            "timestamp": 1793845108393,
+            "message": "START RequestId: f1d12f7f-c411-4031-b5db-0a94f24cef58 Version: $LATEST\n",
+            "ingestionTime": 1793845116666,
+            "eventId": "40004082687902839975826600403207273657413059646158340097"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]5e5db6482c4b42ca918f67089d579957",
+            "timestamp": 1793845108394,
+            "message": "SETTLE txId=rot-306def820a18 amount=100 status=SETTLED\n",
+            "ingestionTime": 1793845116666,
+            "eventId": "40004082687925140721025131026348809375685708007664320514"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]5e5db6482c4b42ca918f67089d579957",
+            "timestamp": 1793845108395,
+            "message": "END RequestId: f1d12f7f-c411-4031-b5db-0a94f24cef58\n",
+            "ingestionTime": 1793845116666,
+            "eventId": "40004082687947441466223661649490345093958356369170300931"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]5e5db6482c4b42ca918f67089d579957",
+            "timestamp": 1793845108396,
+            "message": "REPORT RequestId: f1d12f7f-c411-4031-b5db-0a94f24cef58\tDuration: 1.99 ms\tBilled Duration: 87 ms\tMemory Size: 128 MB\tMax Memory Used: 33 MB\tInit Duration: 84.19 ms\t\nXRAY TraceId: 1-6aebe773-755070f3401e483b3c1db9b9\tSampled: true\t\n",
+            "ingestionTime": 1793845116666,
+            "eventId": "40004082687969742211422192272631880812231004730676281348"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]d96386dea7914352a923ca542135bd08",
+            "timestamp": 1793845108399,
+            "message": "START RequestId: b79c97c5-6aa5-4574-a8c3-a83f85d9d814 Version: $LATEST\n",
+            "ingestionTime": 1793845114932,
+            "eventId": "40004082688036644447017784139960668946193302927178334209"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]d96386dea7914352a923ca542135bd08",
+            "timestamp": 1793845108400,
+            "message": "SETTLE txId=rot-21c39914a00c amount=100 status=SETTLED\n",
+            "ingestionTime": 1793845114932,
+            "eventId": "40004082688058945192216314763102204664465951288684314626"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]d96386dea7914352a923ca542135bd08",
+            "timestamp": 1793845108401,
+            "message": "END RequestId: b79c97c5-6aa5-4574-a8c3-a83f85d9d814\n",
+            "ingestionTime": 1793845114932,
+            "eventId": "40004082688081245937414845386243740382738599650190295043"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]baa1e8e2fc064feb9e1415e66984eefe",
+            "timestamp": 1793845108403,
+            "message": "START RequestId: a3bc46d2-4ec8-47b2-a545-30151119dc22 Version: $LATEST\n",
+            "ingestionTime": 1793845113549,
+            "eventId": "40004082688125847427811906630854522603136498302137466881"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]baa1e8e2fc064feb9e1415e66984eefe",
+            "timestamp": 1793845108404,
+            "message": "SETTLE txId=rot-1e0ff80a5e18 amount=100 status=SETTLED\n",
+            "ingestionTime": 1793845113549,
+            "eventId": "40004082688148148173010437253996058321409146663643447298"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]baa1e8e2fc064feb9e1415e66984eefe",
+            "timestamp": 1793845108406,
+            "message": "END RequestId: a3bc46d2-4ec8-47b2-a545-30151119dc22\n",
+            "ingestionTime": 1793845113549,
+            "eventId": "40004082688192749663407498500279129757954443386655408131"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]baa1e8e2fc064feb9e1415e66984eefe",
+            "timestamp": 1793845108406,
+            "message": "REPORT RequestId: a3bc46d2-4ec8-47b2-a545-30151119dc22\tDuration: 1.85 ms\tBilled Duration: 89 ms\tMemory Size: 128 MB\tMax Memory Used: 33 MB\tInit Duration: 86.53 ms\t\nXRAY TraceId: 1-6aebe773-0269f9097ebf0eb71044ec6b\tSampled: true\t\n",
+            "ingestionTime": 1793845113549,
+            "eventId": "40004082688192749663407498500279129757954443386655408132"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]d96386dea7914352a923ca542135bd08",
+            "timestamp": 1793845108415,
+            "message": "REPORT RequestId: b79c97c5-6aa5-4574-a8c3-a83f85d9d814\tDuration: 2.01 ms\tBilled Duration: 91 ms\tMemory Size: 128 MB\tMax Memory Used: 33 MB\tInit Duration: 88.54 ms\t\nXRAY TraceId: 1-6aebe773-6fc27b8d28a7fa0a54f5787a\tSampled: true\t\n",
+            "ingestionTime": 1793845114932,
+            "eventId": "40004082688393456370194274110225240438555676711274020868"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]6c3bcab3a5a14000bb1cbf95c8152fa4",
+            "timestamp": 1793846667514,
+            "message": "INIT_START Runtime Version: python:3.12.mainlinev2.v82\tRuntime Version ARN: arn:aws:lambda:us-east-1::runtime:a8b19198a828662ade07d066a1dce047429a5869166346747ab7d57435583a29\n",
+            "ingestionTime": 1793846673699,
+            "eventId": "40004117457462994654090285339855731006204525663213060096"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]a77896cfb060485b803b71510c777349",
+            "timestamp": 1793846667572,
+            "message": "INIT_START Runtime Version: python:3.12.mainlinev2.v82\tRuntime Version ARN: arn:aws:lambda:us-east-1::runtime:a8b19198a828662ade07d066a1dce047429a5869166346747ab7d57435583a29\n",
+            "ingestionTime": 1793846668962,
+            "eventId": "40004117458756437875605061476338101285794580951369842688"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]6c3bcab3a5a14000bb1cbf95c8152fa4",
+            "timestamp": 1793846667606,
+            "message": "START RequestId: 0a1e9457-4082-4dd6-83a9-4df7160f70a3 Version: $LATEST\n",
+            "ingestionTime": 1793846673699,
+            "eventId": "40004117459514663212355102668877017087288174921763258369"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]6c3bcab3a5a14000bb1cbf95c8152fa4",
+            "timestamp": 1793846667607,
+            "message": "SETTLE txId=rot-98f5c2047d09 amount=100 status=SETTLED\n",
+            "ingestionTime": 1793846673699,
+            "eventId": "40004117459536963957553633292018552805560823283269238786"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]6c3bcab3a5a14000bb1cbf95c8152fa4",
+            "timestamp": 1793846667608,
+            "message": "END RequestId: 0a1e9457-4082-4dd6-83a9-4df7160f70a3\n",
+            "ingestionTime": 1793846673699,
+            "eventId": "40004117459559264702752163915160088523833471644775219203"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]6c3bcab3a5a14000bb1cbf95c8152fa4",
+            "timestamp": 1793846667624,
+            "message": "REPORT RequestId: 0a1e9457-4082-4dd6-83a9-4df7160f70a3\tDuration: 1.91 ms\tBilled Duration: 91 ms\tMemory Size: 128 MB\tMax Memory Used: 33 MB\tInit Duration: 88.75 ms\t\nXRAY TraceId: 1-6aebed8b-5d41a0025b8a907407f24651\tSampled: true\t\n",
+            "ingestionTime": 1793846673699,
+            "eventId": "40004117459916076625928653885424660016195845428870905860"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]a77896cfb060485b803b71510c777349",
+            "timestamp": 1793846667676,
+            "message": "START RequestId: a5156e30-f8a4-4335-b381-d825fb93392d Version: $LATEST\n",
+            "ingestionTime": 1793846668962,
+            "eventId": "40004117461075715376252246283057815986150010547991805953"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]a77896cfb060485b803b71510c777349",
+            "timestamp": 1793846667676,
+            "message": "SETTLE txId=rot-d9f266491322 amount=100 status=SETTLED\n",
+            "ingestionTime": 1793846668962,
+            "eventId": "40004117461075715376252246283057815986150010547991805954"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]a77896cfb060485b803b71510c777349",
+            "timestamp": 1793846667679,
+            "message": "END RequestId: a5156e30-f8a4-4335-b381-d825fb93392d\n",
+            "ingestionTime": 1793846668962,
+            "eventId": "40004117461142617611847838152482423140967955632509747203"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]a77896cfb060485b803b71510c777349",
+            "timestamp": 1793846667679,
+            "message": "REPORT RequestId: a5156e30-f8a4-4335-b381-d825fb93392d\tDuration: 2.07 ms\tBilled Duration: 102 ms\tMemory Size: 128 MB\tMax Memory Used: 32 MB\tInit Duration: 99.54 ms\t\nXRAY TraceId: 1-6aebed8b-4f56c5ec64d4a0b850f2d7a4\tSampled: true\t\n",
+            "ingestionTime": 1793846668962,
+            "eventId": "40004117461142617611847838152482423140967955632509747204"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]a77896cfb060485b803b71510c777349",
+            "timestamp": 1793846903173,
+            "message": "START RequestId: f69c0889-5d02-494e-823f-ff222d47d922 Version: $LATEST\n",
+            "ingestionTime": 1793846912192,
+            "eventId": "40004122712834307394618404539341607367859777605821464576"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]a77896cfb060485b803b71510c777349",
+            "timestamp": 1793846903174,
+            "message": "SETTLE txId=rot-eae1d6fe9269 amount=100 status=SETTLED\n",
+            "ingestionTime": 1793846912192,
+            "eventId": "40004122712856608139816935162483143086132425967327444993"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]6c3bcab3a5a14000bb1cbf95c8152fa4",
+            "timestamp": 1793846903177,
+            "message": "START RequestId: 5d1412d5-ceae-4f9a-9b30-06a6c231de19 Version: $LATEST\n",
+            "ingestionTime": 1793846912194,
+            "eventId": "40004122712923510375412527031910014344566695620718297088"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]6c3bcab3a5a14000bb1cbf95c8152fa4",
+            "timestamp": 1793846903186,
+            "message": "SETTLE txId=rot-d6ac905ccd61 amount=100 status=SETTLED\n",
+            "ingestionTime": 1793846912194,
+            "eventId": "40004122713124217082199302640183835809020530874272120833"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]a77896cfb060485b803b71510c777349",
+            "timestamp": 1793846903192,
+            "message": "END RequestId: f69c0889-5d02-494e-823f-ff222d47d922\n",
+            "ingestionTime": 1793846912192,
+            "eventId": "40004122713258021553390486379030786015040096474435092482"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]a77896cfb060485b803b71510c777349",
+            "timestamp": 1793846903192,
+            "message": "REPORT RequestId: f69c0889-5d02-494e-823f-ff222d47d922\tDuration: 17.95 ms\tBilled Duration: 18 ms\tMemory Size: 128 MB\tMax Memory Used: 33 MB\t\nXRAY TraceId: 1-6aebee76-38ff0d6d1f0619492286f846\tSampled: true\t\n",
+            "ingestionTime": 1793846912192,
+            "eventId": "40004122713258021553390486379030786015040096474435092483"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]6c3bcab3a5a14000bb1cbf95c8152fa4",
+            "timestamp": 1793846903227,
+            "message": "END RequestId: 5d1412d5-ceae-4f9a-9b30-06a6c231de19\n",
+            "ingestionTime": 1793846912194,
+            "eventId": "40004122714038547635339058188986800258199113696017317890"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]6c3bcab3a5a14000bb1cbf95c8152fa4",
+            "timestamp": 1793846903227,
+            "message": "REPORT RequestId: 5d1412d5-ceae-4f9a-9b30-06a6c231de19\tDuration: 49.48 ms\tBilled Duration: 50 ms\tMemory Size: 128 MB\tMax Memory Used: 33 MB\t\nXRAY TraceId: 1-6aebee76-1de61e836893e9ae1681b20c\tSampled: true\t\n",
+            "ingestionTime": 1793846912194,
+            "eventId": "40004122714038547635339058188986800258199113696017317891"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]6c3bcab3a5a14000bb1cbf95c8152fa4",
+            "timestamp": 1793847318363,
+            "message": "START RequestId: d84e114b-045a-4d56-b497-07f6446a93e8 Version: $LATEST\n",
+            "ingestionTime": 1793847327379,
+            "eventId": "40004131971880706372547827175486530316764953544477245440"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]6c3bcab3a5a14000bb1cbf95c8152fa4",
+            "timestamp": 1793847318369,
+            "message": "SETTLE txId=rot-c7214eaafd3d amount=100 status=SETTLED\n",
+            "ingestionTime": 1793847327379,
+            "eventId": "40004131972014510843739010914335744626400843713513127937"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]6c3bcab3a5a14000bb1cbf95c8152fa4",
+            "timestamp": 1793847318390,
+            "message": "END RequestId: d84e114b-045a-4d56-b497-07f6446a93e8\n",
+            "ingestionTime": 1793847327379,
+            "eventId": "40004131972482826492908154000307994710126459305138716674"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]6c3bcab3a5a14000bb1cbf95c8152fa4",
+            "timestamp": 1793847318390,
+            "message": "REPORT RequestId: d84e114b-045a-4d56-b497-07f6446a93e8\tDuration: 26.64 ms\tBilled Duration: 27 ms\tMemory Size: 128 MB\tMax Memory Used: 33 MB\t\nXRAY TraceId: 1-6aebf016-70ee9831618162bb08b8bfd7\tSampled: true\t\n",
+            "ingestionTime": 1793847327379,
+            "eventId": "40004131972482826492908154000307994710126459305138716675"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]6c3bcab3a5a14000bb1cbf95c8152fa4",
+            "timestamp": 1793847326937,
+            "message": "START RequestId: b7a51023-9d1a-4e4f-90db-5fc5297fffeb Version: $LATEST\n",
+            "ingestionTime": 1793847327379,
+            "eventId": "40004132163087295704749389991013778786452005096753332228"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]6c3bcab3a5a14000bb1cbf95c8152fa4",
+            "timestamp": 1793847326938,
+            "message": "SETTLE txId=rot-6143552408a3 amount=100 status=SETTLED\n",
+            "ingestionTime": 1793847327379,
+            "eventId": "40004132163109596449947920614155314504724653458259312645"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]6c3bcab3a5a14000bb1cbf95c8152fa4",
+            "timestamp": 1793847326949,
+            "message": "END RequestId: b7a51023-9d1a-4e4f-90db-5fc5297fffeb\n",
+            "ingestionTime": 1793847327379,
+            "eventId": "40004132163354904647131757468712207405723785434825097222"
+        },
+        {
+            "logStreamName": "2026/11/05/[$LATEST]6c3bcab3a5a14000bb1cbf95c8152fa4",
+            "timestamp": 1793847326949,
+            "message": "REPORT RequestId: b7a51023-9d1a-4e4f-90db-5fc5297fffeb\tDuration: 11.02 ms\tBilled Duration: 12 ms\tMemory Size: 128 MB\tMax Memory Used: 33 MB\t\nXRAY TraceId: 1-6aebf01e-6b291ee905baaa8775de3f2a\tSampled: true\t\n",
+            "ingestionTime": 1793847327379,
+            "eventId": "40004132163354904647131757468712207405723785434825097223"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947281419,
+            "message": "INIT_START Runtime Version: python:3.12.mainlinev2.v82\tRuntime Version ARN: arn:aws:lambda:us-east-1::runtime:a8b19198a828662ade07d066a1dce047429a5869166346747ab7d57435583a29\n",
+            "ingestionTime": 1793947284438,
+            "eventId": "40006361222521828820346760247088119291378579248968040448"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947281525,
+            "message": "START RequestId: 5930fd49-a68c-4ae5-ab6f-f5779681380a Version: $LATEST\n",
+            "ingestionTime": 1793947284438,
+            "eventId": "40006361224885707811391006300090905428279305568601964545"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947281526,
+            "message": "SETTLE txId=rot-38dd302c2c96 amount=100 status=SETTLED\n",
+            "ingestionTime": 1793947284438,
+            "eventId": "40006361224908008556589536923232441146551953930107944962"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947281528,
+            "message": "END RequestId: 5930fd49-a68c-4ae5-ab6f-f5779681380a\n",
+            "ingestionTime": 1793947284438,
+            "eventId": "40006361224952610046986598169515512583097250653119905795"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947281528,
+            "message": "REPORT RequestId: 5930fd49-a68c-4ae5-ab6f-f5779681380a\tDuration: 2.18 ms\tBilled Duration: 104 ms\tMemory Size: 128 MB\tMax Memory Used: 33 MB\tInit Duration: 101.12 ms\t\nXRAY TraceId: 1-6aed7691-45d67f1b4d50dee548b28abe\tSampled: true\t\n",
+            "ingestionTime": 1793947284438,
+            "eventId": "40006361224952610046986598169515512583097250653119905796"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947284627,
+            "message": "START RequestId: e2d468c4-1b45-472a-befb-55b4ad07f753 Version: $LATEST\n",
+            "ingestionTime": 1793947293641,
+            "eventId": "40006361294062619417232999296260186508329443434131161088"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947284627,
+            "message": "SETTLE txId=rot-aa7d906473df amount=100 status=SETTLED\n",
+            "ingestionTime": 1793947293641,
+            "eventId": "40006361294062619417232999296260186508329443434131161089"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947284629,
+            "message": "END RequestId: e2d468c4-1b45-472a-befb-55b4ad07f753\n",
+            "ingestionTime": 1793947293641,
+            "eventId": "40006361294107220907630060542543257944874740157143121922"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947284637,
+            "message": "REPORT RequestId: e2d468c4-1b45-472a-befb-55b4ad07f753\tDuration: 1.52 ms\tBilled Duration: 2 ms\tMemory Size: 128 MB\tMax Memory Used: 33 MB\t\nXRAY TraceId: 1-6aed7694-7d7fc54d2fd8c24d141234d0\tSampled: true\t\n",
+            "ingestionTime": 1793947293641,
+            "eventId": "40006361294285626869218305527675543691055927049190965251"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947287195,
+            "message": "START RequestId: aeb8cf63-30ca-4d40-b595-f690b8a061cd Version: $LATEST\n",
+            "ingestionTime": 1793947293641,
+            "eventId": "40006361351330933087059639523723911032490435781488869380"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947287196,
+            "message": "SETTLE txId=rot-50502e73e0ee amount=100 status=SETTLED\n",
+            "ingestionTime": 1793947293641,
+            "eventId": "40006361351353233832258170146865446750763084142994849797"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947287197,
+            "message": "END RequestId: aeb8cf63-30ca-4d40-b595-f690b8a061cd\n",
+            "ingestionTime": 1793947293641,
+            "eventId": "40006361351375534577456700770006982469035732504500830214"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947287197,
+            "message": "REPORT RequestId: aeb8cf63-30ca-4d40-b595-f690b8a061cd\tDuration: 1.55 ms\tBilled Duration: 2 ms\tMemory Size: 128 MB\tMax Memory Used: 33 MB\t\nXRAY TraceId: 1-6aed7696-10c810711352d3193aeb9c3e\tSampled: true\t\n",
+            "ingestionTime": 1793947293641,
+            "eventId": "40006361351375534577456700770006982469035732504500830215"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947321563,
+            "message": "START RequestId: cb3fd0ad-c2a3-44a0-bc9e-ad2e32183b8a Version: $LATEST\n",
+            "ingestionTime": 1793947330577,
+            "eventId": "40006362117762944070160095696676361384679982107602386944"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947321564,
+            "message": "SETTLE txId=rot-99b8c9e92fc3 amount=100 status=SETTLED\n",
+            "ingestionTime": 1793947330577,
+            "eventId": "40006362117785244815358626319817897102952630469108367361"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947321578,
+            "message": "END RequestId: cb3fd0ad-c2a3-44a0-bc9e-ad2e32183b8a\n",
+            "ingestionTime": 1793947330577,
+            "eventId": "40006362118097455248138055043799397158769707530192093186"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947321578,
+            "message": "REPORT RequestId: cb3fd0ad-c2a3-44a0-bc9e-ad2e32183b8a\tDuration: 13.92 ms\tBilled Duration: 14 ms\tMemory Size: 128 MB\tMax Memory Used: 33 MB\t\nXRAY TraceId: 1-6aed76b9-4020b1c6189288cb3a7a44f0\tSampled: true\t\n",
+            "ingestionTime": 1793947330577,
+            "eventId": "40006362118097455248138055043799397158769707530192093187"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947321582,
+            "message": "START RequestId: b59a7798-bae0-4bf3-8818-aeb592d99de9 Version: $LATEST\n",
+            "ingestionTime": 1793947330577,
+            "eventId": "40006362118186658228932177536365540031860300976216014852"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947321583,
+            "message": "SETTLE txId=rot-ac13aaccec03 amount=100 status=SETTLED\n",
+            "ingestionTime": 1793947330577,
+            "eventId": "40006362118208958974130708159507075750132949337721995269"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947321597,
+            "message": "END RequestId: b59a7798-bae0-4bf3-8818-aeb592d99de9\n",
+            "ingestionTime": 1793947330577,
+            "eventId": "40006362118521169406910136883488575805950026398805721094"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947321597,
+            "message": "REPORT RequestId: b59a7798-bae0-4bf3-8818-aeb592d99de9\tDuration: 1.47 ms\tBilled Duration: 2 ms\tMemory Size: 128 MB\tMax Memory Used: 33 MB\t\nXRAY TraceId: 1-6aed76b9-7bc2b862514cc05b10002193\tSampled: true\t\n",
+            "ingestionTime": 1793947330577,
+            "eventId": "40006362118521169406910136883488575805950026398805721095"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]03d38cab435a4dedb14bfe6da5718bf5",
+            "timestamp": 1793947321681,
+            "message": "INIT_START Runtime Version: python:3.12.mainlinev2.v82\tRuntime Version ARN: arn:aws:lambda:us-east-1::runtime:a8b19198a828662ade07d066a1dce047429a5869166346747ab7d57435583a29\n",
+            "ingestionTime": 1793947322096,
+            "eventId": "40006362120394432003586709217124480488107413187488710656"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947322167,
+            "message": "START RequestId: 497e04e3-aab9-4e3b-b488-ec00dc42ed7c Version: $LATEST\n",
+            "ingestionTime": 1793947330577,
+            "eventId": "40006362131232594170072592074163935221359592457214558216"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947322168,
+            "message": "SETTLE txId=rot-0927f809165a amount=100 status=SETTLED\n",
+            "ingestionTime": 1793947330577,
+            "eventId": "40006362131254894915271122697305470939632240818720538633"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947322170,
+            "message": "END RequestId: 497e04e3-aab9-4e3b-b488-ec00dc42ed7c\n",
+            "ingestionTime": 1793947330577,
+            "eventId": "40006362131299496405668183943588542376177537541732499466"
+        },
+        {
+            "logStreamName": "2026/11/06/[$LATEST]c290a9abfe4a40e2b6e30cff51eef4b3",
+            "timestamp": 1793947322170,
+            "message": "REPORT RequestId: 497e04e3-aab9-4e3b-b488-ec00dc42ed7c\tDuration: 1.64 ms\tBilled Duration: 2 ms\tMemory Size: 128 MB\tMax Memory Used: 33 MB\t\nXRAY TraceId: 1-6aed76b9-4294dc3f45c1c917230b240d\tSampled: true\t\n",
+            "ingestionTime": 1793947330577,
+            "eventId": "40006362131299496405668183943588542376177537541732499467"
+        }
+    ],
+    "searchedLogStreams": []
+}

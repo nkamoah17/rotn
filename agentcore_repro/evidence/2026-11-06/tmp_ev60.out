@@ -12,7 +12,7 @@
 [08:36:30] $ "C:\Program Files\Amazon\AWSCLIV2\aws.EXE" bedrock-agentcore-control get-policy --policy-engine-id rot_spendcap_engine-6zh9t9jdgm --policy-id ...
 [08:36:31]     policy rotspendcap-8yb75y72a8 (findings): UPDATING (waiting...)
 [08:36:36] $ "C:\Program Files\Amazon\AWSCLIV2\aws.EXE" bedrock-agentcore-control get-policy --policy-engine-id rot_spendcap_engine-6zh9t9jdgm --policy-id ...
-[08:36:41] validation findings -> C:\Users\jeren\Documents\KAMANU\ROTN\agentcore_repro\out\validation-findings.json (status=ACTIVE, 0 reason(s))
+[08:36:41] validation findings -> <REPO_ROOT>\agentcore_repro\out\validation-findings.json (status=ACTIVE, 0 reason(s))
   policy terminal status: ACTIVE
 
 -- re-firing 3 x $100 in fresh session 3061a2b8-2696-48c7-91a6-d497a94704c9 (path /mcp, tool TransferTarget___transfer)

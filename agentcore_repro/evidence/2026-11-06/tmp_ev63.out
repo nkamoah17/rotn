@@ -1,6 +1,6 @@
 ====================================================================
 63_test_single300 -- E3: ONE $300 transfer, ONE fresh session
-  gateway : arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-ld9tskotbe
+  gateway : arn:aws:bedrock-agentcore:us-east-1:<ACCOUNT_ID>:gateway/rot-spendcap-gw-ld9tskotbe
   session : b89d9c56-e8b9-49c2-95cd-74789b121de5
   path    : /mcp   tool: TransferTarget___transfer
   policy  : policies\spendcap-correct-agentcore.dw  (fixed twin, sha256 88c22ae1f83a998c)

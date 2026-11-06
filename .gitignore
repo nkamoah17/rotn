@@ -86,6 +86,9 @@ twopc-java/debug/
 /tmp_[A-Za-z0-9_]*.txt
 /tmp_[A-Za-z0-9_]*.json
 /tmp_[A-Za-z0-9_]*.ps1
+/tmp_[A-Za-z0-9_]*.out
+/tmp_[A-Za-z0-9_]*.err
+
 *.bak
 /baseline_a.txt
 /baseline_b.txt
@@ -113,6 +116,8 @@ twopc-java/debug/
 /out_apw*/
 /tmp_*/
 /test_out.txt
+# --- Prior-run evidence bundles (log dumps; same class as out/, not source) ---
+agentcore_repro/out-prior-runs-*/
 
 # --- CI output (JUnit / SARIF artifacts) ---
 /ci/

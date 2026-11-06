@@ -87,8 +87,8 @@ def _candidate_lib_dirs():
     env_home = os.environ.get("ROTN_JOERN_HOME") or os.environ.get("JOERN_HOME")
     if env_home:
         cands.append((os.path.join(env_home, "lib"), "env"))
-    # Known local install on this machine.
-    cands.append((r"C:\Users\jeren\Documents\wrought\joern\joern-cli\lib", "known"))
+    # Known local install on this machine (path redacted).
+    cands.append((r"<HOME>\Documents\wrought\joern\joern-cli\lib", "known"))
     # Generic locations.
     home = os.path.expanduser("~")
     cands.append((os.path.join(home, ".cache", "joern", "lib"), "generic"))

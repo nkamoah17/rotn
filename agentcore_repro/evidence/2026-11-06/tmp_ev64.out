@@ -1,10 +1,10 @@
 [08:54:23] policy  : policies\spendcap-buggy-agentcore.dw  (buggy twin, rendered ARN)
 [08:54:23] schema  : out/e4-schema.cedarschema (AgentCore local artifact)
 [08:54:23] validate: dogwood validate --policy-schema <schema> <policy>
-[08:54:23] $ C:\tools\dogwood\target\debug\dogwood.exe validate --policy-schema C:\Users\jeren\Documents\KAMANU\ROTN\agentcore_repro\out\e4-schema.cedarschema C:\Users\jeren\Documents\KAMANU\ROTN\agentcore_repro\out\e4-policy.rendered.dw
+[08:54:23] $ C:\tools\dogwood\target\debug\dogwood.exe validate --policy-schema <REPO_ROOT>\agentcore_repro\out\e4-schema.cedarschema <REPO_ROOT>\agentcore_repro\out\e4-policy.rendered.dw
 [08:54:23] validate(as-is): FAILED (rc=2)
 [08:54:23] adapt   : `eventResource` -> `callerResource` (the reference event schema declares: callerPrincipal, callerResource, input.amount, requestId, sessionId)
-[08:54:23] $ C:\tools\dogwood\target\debug\dogwood.exe validate --policy-schema C:\Users\jeren\Documents\KAMANU\ROTN\agentcore_repro\out\e4-schema.cedarschema C:\Users\jeren\Documents\KAMANU\ROTN\agentcore_repro\out\e4-policy-adapted.dw
+[08:54:23] $ C:\tools\dogwood\target\debug\dogwood.exe validate --policy-schema <REPO_ROOT>\agentcore_repro\out\e4-schema.cedarschema <REPO_ROOT>\agentcore_repro\out\e4-policy-adapted.dw
 [08:54:23] validate(adapted): OK (rc=0)
 [08:54:23] replay  : rot replay --oracle dogwood --events events.jsonl --policy e4-policy.rendered.dw  (into e4-as-is)
 [08:54:23] $ "C:\Program Files\Python36\python.exe" -m rot replay --oracle dogwood ...

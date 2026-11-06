@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Continue'
 $aws = 'C:\Program Files\Amazon\AWSCLIV2\aws.exe'
-$outdir = 'C:\Users\jeren\Documents\KAMANU\ROTN\agentcore_repro\out'
+$outdir = Join-Path $PSScriptRoot '..\agentcore_repro\out'
 foreach ($op in @('list-gateways', 'list-policy-engines')) {
     $log = (Join-Path $outdir ('_clean_' + $op + '.log'))
     if (Test-Path $log) { Remove-Item $log -Force }

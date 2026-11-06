@@ -8,8 +8,8 @@
         "bedrock-agentcore:ManageResourceScopedPolicy"
       ],
       "Resource": [
-        "arn:aws:bedrock-agentcore:us-east-1:626756230713:gateway/rot-spendcap-gw-e0umswk6ss",
-        "arn:aws:bedrock-agentcore:us-east-1:626756230713:policy-engine/rot_spendcap_engine-rzhlj_2hg9"
+        "arn:aws:bedrock-agentcore:us-east-1:<ACCOUNT_ID>:gateway/<GATEWAY_ID>",
+        "arn:aws:bedrock-agentcore:us-east-1:<ACCOUNT_ID>:policy-engine/<POLICY_ENGINE_ID>"
       ]
     }
   ]
